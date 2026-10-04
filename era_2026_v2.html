@@ -13796,6 +13796,96 @@ function systemsEnsure() {
     refreshMapView = function () { _rmv.apply(this, arguments); try { grpRefresh(); } catch (e) { } };
 }
 
+// =====================================================================
+//  TOOLTIPS — hover anything in the top bar, the resource strip or the zoom buttons to see what it is
+// =====================================================================
+const TIPS = {
+    nation: 'Your nation\nClick to show your country in the intel panel.',
+    'res:Approval': 'Approval\nHow much of the public backs your government (0–100%). Low approval raises coup risk and loses elections; a good economy, safety and public services raise it.',
+    'res:GDP': 'GDP (nominal)\nThe value of everything your economy produces in a year, in US dollars.',
+    'res:Growth': 'GDP growth\nProjected real growth this year. The breakdown is under National Overview → Economy.',
+    'res:Treasury': 'Treasury\nCash the government can spend right now. Every order is paid from here.',
+    'res:Population': 'Population\nPeople living in your country.',
+    'res:Per capita': 'GDP per capita\nGDP divided by population: the average income level.',
+    'res:Sites': 'Sites\nYour strategic sites (power plants, bases, factories…) and the projects being built.',
+    'ai-ind': 'AI engine\nConnect an AI (built-in, Claude, ChatGPT or Gemini) to write diplomacy, reports and treaty texts. Off means the offline staff engine.',
+    'front-btn': 'Map view\nSwitch between the political map, front lines (wars) and internal control (militias, autonomous regions, breakaway states).',
+    'coup-btn': 'Coup risk\nThe chance the army moves against your government. Click for the coup panel and loyalty measures.',
+    'war-btn': 'War & peace\nThe wars you are fighting and how they are going. Click for the war panel.',
+    'report-btn': 'Situation report\nYour advisor\'s summary of the economy, the military, diplomacy and threats.',
+    'act:toggleCommandCenter': 'Orders (Command Center)\nType orders in plain English, then press Execute.',
+    'act:openSociety': 'Government\nBudget, economy, war & casualties, non-state actors, politics, treaties & UN and world rankings.',
+    'act:openSaveMenu': 'Save / Load\nSave your campaign or load an earlier one.',
+    'act:openHelp': 'How to play\nWhere to find things, and example orders you can click to use. Shortcut: ?',
+    'gear-btn': 'Settings\nInterface size, map style, map layers and graphics quality.',
+    date: 'Date\nToday\'s date in the game. Click to jump ahead to a date.',
+    'speed-indicator': 'Game speed\nHow fast time passes: 1×, 5× or 10×, or paused.',
+    'diff-badge': 'Difficulty\nChosen when you started the campaign. It changes costs, odds of success and how hard the world pushes back.',
+    'gs-pause': 'Pause / resume\nStop or restart the clock. Shortcut: Space',
+    'act:speedDown': 'Slower\nLower the game speed. Shortcut: −',
+    pips: 'Game speed\nClick a dot: 1×, 5× or 10×.',
+    'act:speedUp': 'Faster\nRaise the game speed. Shortcut: +',
+    'mz-in': 'Zoom in\nShortcut: + or the mouse wheel',
+    'mz-lvl': 'Zoom level\nHigher numbers show more detail: cities, provinces, bases.',
+    'mz-out': 'Zoom out\nShortcut: − or the mouse wheel',
+    'act:mapHome': 'Whole world\nZoom out to see every country.',
+    'act:mapMine': 'My country\nFly to your own country.',
+    'mz-find-btn': 'Find\nSearch for a country, city or armed group and jump to it. Shortcut: F'
+};
+function tipKey(el) {
+    if (el.id && TIPS[el.id]) return el.id;
+    if (el.classList.contains('gs-nation')) return 'nation';
+    if (el.classList.contains('gs-date')) return 'date';
+    if (el.classList.contains('gs-pips') || el.classList.contains('gs-pip')) return 'pips';
+    if (el.classList.contains('gs-res')) { const l = el.querySelector('.gs-res-lbl'); if (l && TIPS['res:' + l.textContent.trim()]) return 'res:' + l.textContent.trim(); }
+    const oc = (el.getAttribute('onclick') || '').match(/^\s*(\w+)\(/); if (oc && TIPS['act:' + oc[1]]) return 'act:' + oc[1];
+    return null;
+}
+(function () {
+    const box = document.createElement('div'); box.id = 'ui-tip';
+    const st = document.createElement('style');
+    st.textContent = `#ui-tip { position: fixed; z-index: 9999; max-width: 300px; padding: 7px 10px; pointer-events: none; display: none; font-size: 11.5px; line-height: 1.45; color: #e7dcc0;
+            background: linear-gradient(180deg, rgba(34,33,24,.97), rgba(20,19,13,.97)); border: 1px solid #9c8040; box-shadow: 0 6px 20px rgba(0,0,0,.55); border-radius: 3px; white-space: pre-line; }
+        #ui-tip b { display: block; font-family: 'Oswald','Arial Narrow',Arial,sans-serif; letter-spacing: .08em; text-transform: uppercase; font-size: 11px; color: #f3d98a; margin-bottom: 2px; }`;
+    document.head.appendChild(st); document.body.appendChild(box);
+    const ZONES = '#time-pill, #gs-resbar, #map-zoom';
+    let cur = null, timer = null;
+    const hide = () => { clearTimeout(timer); timer = null; cur = null; box.style.display = 'none'; };
+    const textOf = el => {
+        const k = tipKey(el);
+        if (el.hasAttribute('title')) { el.dataset.tip = el.getAttribute('title'); el.removeAttribute('title'); }   // ours replaces the slow browser tooltip
+        if (k) {
+            // the war and coup buttons carry live status text; it goes under the explanation
+            const live = ['war-btn', 'coup-btn'].includes(k) && el.dataset.tip && el.dataset.tip.length > 20 ? '\n' + el.dataset.tip : '';
+            return TIPS[k] + live;
+        }
+        return el.dataset.tip || '';
+    };
+    const show = el => {
+        const t = textOf(el); if (!t) return hide();
+        const [head, ...rest] = t.split('\n');
+        box.innerHTML = `<b>${esc(head)}</b>${esc(rest.join('\n'))}`; box.style.display = 'block';
+        const r = el.getBoundingClientRect(), bw = box.offsetWidth, bh = box.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+        let x, y;
+        if (el.closest('#map-zoom')) { x = r.right + 8; y = r.top + r.height / 2 - bh / 2; }       // the zoom column: to the right
+        else { x = r.left + r.width / 2 - bw / 2; y = r.bottom + 8; }                               // the top bar: underneath
+        box.style.left = Math.max(6, Math.min(W - bw - 6, x)) + 'px'; box.style.top = Math.max(6, Math.min(H - bh - 6, y)) + 'px';
+    };
+    document.addEventListener('mouseover', e => {
+        const t = e.target; if (!t || !t.closest) return;
+        const zone = t.closest(ZONES); if (!zone) { if (cur) hide(); return; }
+        let el = t.closest('[title], [data-tip], button, .gs-res, .gs-nation, .gs-date, .gs-pips, .gs-rchip');
+        if (el && !zone.contains(el)) el = null;
+        if (!el || (!tipKey(el) && !el.hasAttribute('title') && !el.dataset.tip)) { if (cur) hide(); return; }
+        if (el === cur) return;
+        cur = el; clearTimeout(timer);
+        timer = setTimeout(() => { if (cur === el && document.body.contains(el)) show(el); }, box.style.display === 'block' ? 0 : 250);
+    });
+    document.addEventListener('mousedown', hide, true);
+    document.addEventListener('keydown', hide, true);
+    window.addEventListener('blur', hide);
+})();
+
     </script>
 </body>
 </html>
