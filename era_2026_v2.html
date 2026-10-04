@@ -487,8 +487,6 @@
         .war-occ { width: 26px; height: 26px; border: 2px dashed; border-radius: 50%; background: rgba(10,12,8,.7); display: flex; align-items: center; justify-content: center; }
         .px-label { display: flex; align-items: center; gap: 4px; background: rgba(10,12,8,.82); border: 1px solid; padding: 1px 5px; font-family: 'Oswald', sans-serif; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; width: max-content; margin: 0 auto; cursor: pointer; }
         body.map-only #ui-layer, body.map-only .gs-topbar { visibility: hidden !important; }
-        .tile-dark { filter: grayscale(1) brightness(.34) contrast(1.15); }
-        .tile-light { filter: grayscale(1) brightness(1.22) contrast(.82); }
         #maponly-restore { position: fixed; top: 10px; right: 10px; z-index: 3000; display: none; }
         /* Map zoom buttons — on the right edge, in the gap between the right-hand panels (JS picks the spot) */
         #zoom-ctrl { position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 1001; display: flex; flex-direction: column; gap: 4px; transition: right .2s, top .2s; }
@@ -1753,8 +1751,7 @@
         });
         
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { noWrap: true, bounds: [[-90, -180], [90, 180]], maxNativeZoom: 17, keepBuffer: GFX().keep, updateWhenZooming: false, updateWhenIdle: !GFX().anim, detectRetina: GFX().retina }).addTo(map);
-        // place names only: the game draws every border itself, so a second, different set of borders from the tiles would not line up
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png', {subdomains: 'abcd', opacity: 0.9, noWrap: true, bounds: [[-90, -180], [90, 180]], maxNativeZoom: 13, keepBuffer: GFX().keep, updateWhenZooming: false, updateWhenIdle: !GFX().anim }).addTo(map);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {opacity: 0.85, noWrap: true, bounds: [[-90, -180], [90, 180]], maxNativeZoom: 13, keepBuffer: GFX().keep, updateWhenZooming: false, updateWhenIdle: !GFX().anim }).addTo(map);
 
         // ---- Click guard: zooming/panning (wheel, double-click, drag, pinch) must never select a country ----
         let mapBusyUntil = 0, mapMoving = false, pendingCountryClick = null;
@@ -11819,10 +11816,9 @@ const MAPS = { base: 'satellite', mode: 'none', tiles: [], orig: null, inited: f
 try { MAPS.base = localStorage.getItem('era_base') || 'satellite'; MAPS.mode = localStorage.getItem('era_mode') || 'none'; } catch (e) { }
 const MAP_BASES = {
     satellite: { label: 'Satellite', border: 'rgba(222,196,130,0.28)', bg: '#030712' },
-    // bases without borders of their own (the game draws all borders), with place names on top
-    dark: { label: 'Dark political', border: 'rgba(200,210,230,0.35)', bg: '#0b1020', cls: 'tile-dark', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png'] },
-    atlas: { label: 'Light atlas', border: 'rgba(40,50,70,0.55)', bg: '#dfe6ee', cls: 'tile-light', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', 'https://{s}.basemaps.cartocdn.com/rastertiles/light_only_labels/{z}/{x}/{y}.png'] },
-    terrain: { label: 'Terrain', border: 'rgba(250,240,200,0.5)', bg: '#1b2a2f', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png'] }
+    dark: { label: 'Dark political', border: 'rgba(200,210,230,0.35)', bg: '#0b1020', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'] },
+    atlas: { label: 'Light atlas', border: 'rgba(40,50,70,0.55)', bg: '#dfe6ee', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}'] },
+    terrain: { label: 'Terrain', border: 'rgba(250,240,200,0.5)', bg: '#1b2a2f', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'] }
 };
 const MAP_MODES = {
     none: { label: 'No overlay' },
@@ -11904,7 +11900,7 @@ function mapSetBase(b) {
     if (b === 'satellite') MAPS.orig.forEach(l => { if (!map.hasLayer(l)) l.addTo(map); });
     else {
         MAPS.orig.forEach(l => { try { map.removeLayer(l); } catch (e) { } });
-        B.urls.forEach((u, i) => { const l = L.tileLayer(u, { subdomains: 'abcd', noWrap: true, maxNativeZoom: b === 'terrain' ? 13 : i === 0 && B.cls ? 8 : 16, opacity: i === 1 ? 0.9 : 1, keepBuffer: GFX().keep, updateWhenZooming: false, className: i === 0 && B.cls ? B.cls : '' }).addTo(map); l.bringToBack && i === 0 && l.bringToBack(); MAPS.tiles.push(l); });
+        B.urls.forEach((u, i) => { const l = L.tileLayer(u, { noWrap: true, maxNativeZoom: b === 'terrain' ? 13 : 16, opacity: i === 1 ? 0.9 : 1, keepBuffer: GFX().keep, updateWhenZooming: false }).addTo(map); l.bringToBack && i === 0 && l.bringToBack(); MAPS.tiles.push(l); });
     }
     document.getElementById('map').style.background = B.bg; document.body.classList.toggle('base-light', b === 'atlas');
     mapApplyMode(); const s = document.getElementById('mm-base'); if (s) s.value = b;
@@ -11953,15 +11949,15 @@ const PERF = { under: null, fps: 60, samples: 0, acc: 0, auto: false, last: perf
 try { PERF.auto = localStorage.getItem('era_autoperf_done') === '1'; } catch (e) { }
 
 // 1. never show a black hole where tiles have not arrived yet: a cheap low-zoom copy sits underneath
-function perfUnderlay(url, cls) {
+function perfUnderlay(url) {
     try { if (PERF.under) map.removeLayer(PERF.under); } catch (e) { }
-    PERF.under = L.tileLayer(url, { noWrap: true, maxNativeZoom: 4, maxZoom: 13, zIndex: 0, keepBuffer: 1, updateWhenZooming: false, className: 'tile-underlay' + (cls ? ' ' + cls : ''), bounds: [[-90, -180], [90, 180]] }).addTo(map);
+    PERF.under = L.tileLayer(url, { noWrap: true, maxNativeZoom: 4, maxZoom: 13, zIndex: 0, keepBuffer: 1, updateWhenZooming: false, className: 'tile-underlay', bounds: [[-90, -180], [90, 180]] }).addTo(map);
     try { PERF.under.bringToBack(); } catch (e) { }
 }
 perfUnderlay('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 {
     const _sb = mapSetBase;
-    mapSetBase = function (b) { _sb(b); try { const B = MAP_BASES[b]; perfUnderlay(b === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : B.urls[0], B.cls); } catch (e) { } };
+    mapSetBase = function (b) { _sb(b); try { const B = MAP_BASES[b]; perfUnderlay(b === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : B.urls[0]); } catch (e) { } };
 }
 
 // 2. DOM virtualisation for the ~900 airports & bases: only markers in view are on the map
