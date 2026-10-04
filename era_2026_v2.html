@@ -12722,7 +12722,8 @@ const TREATY_TYPES = {
     alliance: { label: 'Military alliance', need: 64, rel: 30, icon: '⚔', desc: 'Mutual defense plus joint planning. Allies are expected to fight beside each other.' },
     energy: { label: 'Energy partnership', need: 14, rel: 10, icon: '⚡', desc: 'Long-term oil, gas, power and renewables supply and investment. Growth boost for both, larger when the partner is a big energy exporter.' },
     tech: { label: 'Technology-sharing agreement', need: 30, rel: 12, icon: '🔬', desc: 'Joint research, chips, AI and licences. Lifts your growth (more if the partner is the stronger power); the partner\'s rivals take note.' },
-    intel: { label: 'Intelligence-sharing agreement', need: 40, rel: 14, icon: '🛰', desc: 'Pooled intelligence on terrorism, crime and common threats. Small boost to stability; the partner\'s rivals resent it.' }
+    intel: { label: 'Intelligence-sharing agreement', need: 40, rel: 14, icon: '🛰', desc: 'Pooled intelligence on terrorism, crime and common threats. Small boost to stability; the partner\'s rivals resent it.' },
+    custom: { label: 'Written agreement', need: 20, rel: 10, icon: '✍', desc: 'An agreement whose terms you write yourself.', hidden: true }
 };
 const ENERGY_EXPORTERS = new Set('RUS SAU ARE QAT KWT NOR USA CAN IRQ IRN KAZ DZA NGA AZE OMN LBY VEN AUS TKM AGO BRN GUY'.split(' '));
 // what a signed treaty does beyond the relations boost (also used for accepted offers)
@@ -12733,6 +12734,323 @@ function treatyEffects(type, iso) {
     if (type === 'tech') { state.mods.growth += power(iso) > power(me) ? 0.0008 : 0.0004; state.gmods[iso] = (state.gmods[iso] || 0) + 0.1; rivalsOf(iso).forEach(x => addRel(me, x, -3)); }
     if (type === 'intel') { n.stability = clamp(n.stability + 2, 0, 100); rivalsOf(iso).forEach(x => addRel(me, x, -5)); }
 }
+// ---------- write your own agreement ----------
+// The draft is checked first (does it make sense as an agreement between these two governments, with terms each side can
+// actually deliver?), turned into a clean title + terms, and only then sent. With an AI engine connected the other
+// government's foreign ministry reads it; without one, the offline staff check it with rules.
+const CT_CATS = {
+    trade: { need: 12, re: /\b(trade|tariff|export|import|market access|customs|free trade|goods|duty)\b/i, growth: 0.0006, them: 0.12 },
+    energy: { need: 14, re: /\b(oil|gas|lng|energy|pipeline|electricity|power grid|nuclear power|renewable|solar|wind|refiner|fuel)\b/i, growth: 0.0006, them: 0.1 },
+    technology: { need: 30, re: /\b(technolog|semiconductor|chip|ai\b|artificial intelligence|research|science|satellite|space|cyber|software|5g|licen[cs]e|patent)\b/i, growth: 0.0006, them: 0.1 },
+    intelligence: { need: 40, re: /\b(intelligence|spy|surveillance|counter-?terror|information sharing|signals|espionage)\b/i, growth: 0, them: 0, stab: 2 },
+    security: { need: 45, re: /\b(troops|military|army|navy|air force|bases?|weapons?|arms|defen[cs]e|security|joint exercise|missile|drone)\b/i, growth: 0, them: 0, stab: 1 },
+    migration: { need: 22, re: /\b(migra|refugee|visa|border control|asylum|workers?|labou?r mobility)\b/i, growth: 0.0002, them: 0.05 },
+    health: { need: 10, re: /\b(health|vaccine|medical|hospital|pandemic|disease|medicine)\b/i, growth: 0.0002, them: 0.05, stab: 1 },
+    climate: { need: 10, re: /\b(climate|emission|carbon|forest|environment|pollution|water)\b/i, growth: 0.0001, them: 0.03 },
+    culture: { need: 5, re: /\b(culture|student|education|tourism|exchange program|sport|heritage|language)\b/i, growth: 0.0001, them: 0.02 },
+    finance: { need: 25, re: /\b(loan|credit|investment|invest|fund|currency|swap|debt|bank)\b/i, growth: 0.0006, them: 0.1 }
+};
+const CT_NAME = { trade: 'Trade', energy: 'Energy', technology: 'Technology', intelligence: 'Intelligence', security: 'Security', migration: 'Migration', health: 'Health', climate: 'Climate', culture: 'Cultural', finance: 'Financial', other: 'General' };
+// example ideas the player can click to start from
+const CT_EXAMPLES = ['Cheap oil for them in exchange for lower tariffs on our goods', 'We share intelligence on terrorism and hold joint counter-terror exercises', 'We build a port there and they let our navy use it', 'We invest in their mines in return for a share of their rare earths', 'Visa-free travel and student exchanges between our countries', 'We supply wheat and fertiliser, they supply natural gas'];
+function customTreatyHTML() {
+    const d = state.ctDraft || {}, me = state.playerIso, R = d.review;
+    const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && (!NON_SOVEREIGN.has(i) || nameLayer[WORLD[i][1]]) && WORLD[i][3] > 0.05).sort((a, b) => shortName(a).localeCompare(shortName(b)));
+    let h = `<div class="gs-stat-lbl mb-1 mt-3">✍ Write your own agreement</div>
+        <div class="text-[10.5px] text-slate-500 mb-2">Write your idea in a sentence or two, the way you would say it. Your legal staff turn it into a formal draft at once${aiReady() ? `, then <b>${esc(aiLabel())}</b> rewrites it in full treaty language in the background` : ''}. Send it or clear it.</div>
+        <div class="flex flex-wrap gap-2 items-center mb-2"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn" onchange="ctGrab();state.treatyMsg='';renderSociety()">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
+            <span class="text-[11px] text-slate-400 ml-2">Duration</span><input id="ct-dur-n" type="number" min="1" max="1200" step="1" class="tc-in" style="width:70px;padding:3px 6px;font-size:12px" value="${(d.dur || CT_DUR0).n}" onchange="ctGrab()"><select id="ct-dur-u" class="gs-btn" onchange="ctGrab()"><option value="months" ${(d.dur || CT_DUR0).u === 'months' ? 'selected' : ''}>months</option><option value="years" ${(d.dur || CT_DUR0).u === 'years' ? 'selected' : ''}>years</option></select></div>
+        ${treatyCdBar(d.iso + 'custom', d.iso, 'last agreement')}
+        <textarea id="ct-idea" class="tc-in w-full" rows="2" maxlength="400" placeholder="Your idea, e.g. cheap oil for them in exchange for lower tariffs on our goods" style="resize:vertical;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ctWrite();}">${esc(d.idea || '')}</textarea>
+        <div class="mt-1 mb-2" style="line-height:1.9">${CT_EXAMPLES.map(x => `<button type="button" class="gs-btn" style="padding:2px 6px;font-size:10px;text-transform:none;letter-spacing:0" onclick="ctUseExample(this.textContent)">${esc(x)}</button>`).join(' ')}</div>
+        <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" onclick="ctWrite()">${R && R.valid ? 'Rewrite the draft' : 'Write the draft'}</button></div>`;
+    if (R && !R.valid) h += `<div class="p-2 mb-2 text-[11.5px]" style="border:1px solid #c4553c;color:#f3c7bb"><b>No draft could be written from this idea.</b><br>${esc(R.problem)}</div>`;
+    if (R && R.valid) {
+        h += `${R.changes && R.changes.length ? `<div class="text-[11px] mb-1" style="color:#d8b45a">To make your idea workable, your staff ${R.changes.map(esc).join('; ')}.</div>` : ''}
+            ${ctDocHTML(d, R)}
+            ${ctOutlookHTML(d.iso, R)}
+            <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy || treatyCdLeft(d.iso + 'custom') ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Send to ${esc(shortName(d.iso))}`}</button><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctClear()">Clear</button></div>`;
+    }
+    return h;
+}
+function ctGrab() {
+    state.ctDraft = state.ctDraft || {}; const d = state.ctDraft, v = id => { const e = document.getElementById(id); return e ? e.value : null; };
+    const iso = v('ct-country'), idea = v('ct-idea'), n = v('ct-dur-n'), u = v('ct-dur-u');
+    if (iso !== null) d.iso = iso; if (idea !== null) d.idea = idea.trim(); if (n !== null || u !== null) d.dur = ctDur(n !== null ? n : (d.dur || CT_DUR0).n, u || (d.dur || CT_DUR0).u);
+    return d;
+}
+function ctUseExample(t) { const d = ctGrab(); d.idea = t; ctWrite(); }
+// treaty length chosen by the player: any number of months or years
+const CT_DUR0 = { n: 10, u: 'years' };
+function ctDur(n, u) { u = u === 'months' ? 'months' : 'years'; n = Math.round(+n); if (!(n >= 1)) n = 1; n = Math.min(n, u === 'months' ? 1200 : 100); return { n, u }; }
+function ctDurText(D) { return `${D.n} ${D.n === 1 ? D.u.slice(0, -1) : D.u}`; }
+function ctDurDays(D) { return D.u === 'months' ? Math.round(D.n * 30.44) : Math.round(D.n * 365.25); }
+function ctClear() { const d = ctGrab(); state.ctDraft = { iso: d.iso, dur: d.dur }; renderSociety(); }
+function ctCategory(text) { let best = 'other', hits = 0; Object.keys(CT_CATS).forEach(k => { const m = text.match(new RegExp(CT_CATS[k].re.source, 'gi')); if (m && m.length > hits) { hits = m.length; best = k; } }); return best; }
+// split a plain idea into who-does-what: [{ by: 'A' | 'B' | 'both', what }]
+function ctParseIdea(idea, iso) {
+    const A = state.player, B = shortName(iso), esc2 = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // the two countries' adjectives ("russian", "belarusian") count as the countries themselves
+    const dem = side => { const iso2 = side === 'A' ? state.playerIso : iso; try { return Object.keys(DEMONYMS).filter(k => DEMONYMS[k] === iso2 && !/_/.test(k)); } catch (e) { return []; } };
+    const nameA = [esc2(A)].concat(dem('A').map(esc2)).join('|'), nameB = [esc2(B)].concat(dem('B').map(esc2)).join('|');
+    const subjA = new RegExp(`^(we|us|our (country|government)|${nameA})\\b\\s*`, 'i'), subjB = new RegExp(`^(they|them|you|their (country|government)|${nameB})\\b\\s*`, 'i');
+    const subjBoth = new RegExp(`^(both( countries| sides| parties)?|the two (countries|sides|governments)|our (two )?countries|each side|(we|us|${nameA}) and (they|them|${nameB})|(they|them|${nameB}) and (we|us|${nameA}))\\b\\s*(both\\s+|jointly\\s+|together\\s+)?(agree (that|to)\\s+)?`, 'i');
+    let s = idea.replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '');
+    // "cheap oil for them in exchange for lower tariffs on our goods" / "they give us oil in return for weapons"
+    let m = s.match(/^(.+?)\s+(?:in exchange for|in return for)\s+(.+)$/i), plainFor = false;
+    if (!m) { m = s.match(/^(.+?)\s+(?:for|against)\s+(?!\d)(?!them\b|you\b|us\b|free\b|nothing\b|the next\b|years?\b|months?\b|a period\b)(.+)$/i); plainFor = !!m; }
+    if (m && plainFor && (subjA.test(m[1]) || subjB.test(m[1]))) m = null;      // "we sell them wheat for their gas" is handled by the general split
+    const parts = [];
+    if (m && !/\b(we|they|both)\b.*\b(we|they|both)\b/i.test(s)) {
+        if (subjB.test(m[1])) parts.push({ by: 'B', what: m[1].replace(subjB, '') }, { by: 'A', what: m[2].trim() });
+        else parts.push({ by: 'A', what: m[1].replace(subjA, '').replace(/\b(for|to) (them|you)\b/i, `to ${B}`) }, { by: 'B', what: m[2].trim() });
+    } else {
+        s.split(/\s*(?:;|,|\band then\b|\bin exchange,?\b|\bin return,?\b|\band\b(?=\s+(?:we|they|you|both|the two|our|their|it|becomes?|gives?|sells?|buys?|supplies|supply|lets?|allows?|opens?|builds?|shares?)\b)|\bwhile\b|\bwhereas\b)\s*/i).map(x => x.trim()).filter(x => x.split(' ').length >= 2).forEach(c => {
+            if (subjBoth.test(c)) parts.push({ by: 'both', what: c.replace(subjBoth, '') });
+            else if (subjA.test(c)) parts.push({ by: 'A', what: c.replace(subjA, '') });
+            else if (subjB.test(c)) parts.push({ by: 'B', what: c.replace(subjB, '') });
+            else if (/^(becomes?|gives?|sells?|buys?|supplies|lets?|allows?|opens?|builds?|shares?|hands?|pays?)\b/i.test(c) && parts.length) parts.push({ by: parts[parts.length - 1].by, what: c });   // "...and becomes our colony" keeps the last subject
+            else parts.push({ by: /\b(their|them|they)\b/i.test(c) && !/\b(our|us|we)\b/i.test(c) ? 'A' : 'both', what: c });
+        });
+    }
+    return parts.filter(p => p.what && p.what.trim().split(' ').length >= 1);
+}
+// legal staff: turn plain wording into a formal clause, written from the player's side ("our" = the player, "their" = the partner)
+function ctClause(idea, party, A, B) {
+    let s = idea.trim().replace(/[.]+$/, '');
+    // "gives" → "give", "supplies" → "supply" (the clause reads "X shall give …")
+    s = s.replace(/^(\w+?)(ies|es|s)\b/i, (w, stem, end) => { const l = w.toLowerCase(); if (/^(is|has|was|gas|press|access|process|address|business|bus|this|its|us|plus)$/.test(l)) return w; return end.toLowerCase() === 'ies' ? stem + 'y' : /(ss|sh|ch|x|o)$/i.test(stem) && end.toLowerCase() === 'es' ? stem : end.toLowerCase() === 'es' ? stem + 'e' : stem; });
+    s = s.replace(/^become (.*)$/i, 'coordinate closely with ' + A + ' as $1');
+    // proper case for the two countries and their adjectives; drop the party's own adjective at the start
+    try { Object.keys(DEMONYMS).filter(k => !/_/.test(k) && [state.playerIso, resolveIso(B)].includes(DEMONYMS[k])).forEach(k => { s = s.replace(new RegExp(`\\b${k}\\b`, 'gi'), k[0].toUpperCase() + k.slice(1)); }); } catch (e) { }
+    [A, B].forEach(n => { s = s.replace(new RegExp(`\\b${n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi'), n); });
+    try { const own = Object.keys(DEMONYMS).filter(k => !/_/.test(k) && DEMONYMS[k] === resolveIso(party)); own.forEach(k => { s = s.replace(new RegExp(`^${k}\\s+`, 'i'), ''); }); } catch (e) { }
+    { const w = (s.match(/^(\S+)\s/) || [])[1]; if (w && party.length > 4 && w.toLowerCase().startsWith(party.toLowerCase().slice(0, 5)) && /(an|ese|ish|i)$/i.test(w)) s = s.slice(w.length + 1); }   // misspelt adjectives too ("belarussian")
+    s = s.replace(/\bour (two )?countries\b/gi, 'the two countries').replace(/\bbetween us\b/gi, 'between the Parties').replace(/\beach other\b/gi, 'one another');
+    s = s.replace(/\b(we|us)\b/gi, A).replace(/\bour\b/gi, `${A}'s`).replace(/\b(they|them|you)\b/gi, B).replace(/\b(their|your)\b/gi, `${B}'s`);
+    if (!/^[A-Z][a-z]+ [A-Z]/.test(s) && !s.startsWith(A) && !s.startsWith(B)) s = s[0].toLowerCase() + s.slice(1);
+    if (party !== 'The Parties') s = s.split(`${party}'s`).join('its');
+    if (party === A) s = s.replace(/\bthere\b/gi, `in ${B}`);              // "we build a port there" → "in India"
+    s = s.replace(/\bcheap\b/gi, 'preferentially priced').replace(/\bstuff\b/gi, 'goods');
+    const verb = /^(supply|provide|build|open|invest|share|cut|reduce|lower|allow|let|grant|coordinate|consult|refrain|respect|train|fund|finance|buy|purchase|sell|lift|remove|set up|establish|deliver|export|import|host|send|support|recognise|recognize|cooperate|guarantee|protect|return|offer|extend|exchange|develop|give|pay|transfer|help|assist|accept|admit|waive|ease|expand|increase|hold|conduct|create|introduce|abolish|protect|fight|combat|work)\b/i;
+    s = s.replace(/^let\s+(.+?)\s+(use|access|enter|operate|station|dock|visit|buy|sell|invest|work|travel|study|fish|fly|land|open|build)\b/i, 'allow $1 to $2').replace(/^let\b/i, 'allow');
+    return verb.test(s) ? `${party} shall ${s}.` : `${party} shall provide ${s}.`;
+}
+function ctOfflineDraft(idea, parts, iso, D) {
+    const A = state.player, B = shortName(iso), cat = ctCategory(idea), topic = CT_NAME[cat] === 'General' ? 'Cooperation' : `${CT_NAME[cat]} Cooperation`;
+    const by = k => parts.filter(p => p.by === k).map(p => p.what);
+    const list = (xs, party) => xs.map((x, i) => `${xs.length > 1 ? `(${String.fromCharCode(97 + i)}) ` : ''}${ctClause(x, party, A, B)}`).join('\n');
+    const articles = [{ heading: 'Purpose', text: `The Parties, desiring to strengthen the relations between ${A} and ${B} on the basis of mutual respect and benefit, conclude this Agreement to establish ${topic.toLowerCase()} between them.` }];
+    if (by('both').length) articles.push({ heading: 'Joint undertakings', text: list(by('both'), 'The Parties') });
+    if (by('A').length) articles.push({ heading: `Undertakings of ${A}`, text: list(by('A'), A) });
+    if (by('B').length) articles.push({ heading: `Undertakings of ${B}`, text: list(by('B'), B) });
+    articles.push({ heading: 'Implementation', text: `The Parties shall establish a Joint Commission, meeting at least once a year, to oversee the implementation of this Agreement and agree any detailed arrangements.` },
+        { heading: 'Duration and termination', text: `This Agreement shall remain in force for a period of ${ctDurText(D)} from its entry into force. The Parties may extend it by mutual written agreement before it expires. Either Party may terminate it earlier by giving ${ctDurDays(D) <= 62 ? "seven days'" : ctDurDays(D) <= 366 ? "one month's" : "six months'"} written notice.` },
+        { heading: 'Settlement of disputes', text: `Any dispute concerning the interpretation or application of this Agreement shall be settled amicably through consultation and negotiation between the Parties.` },
+        { heading: 'Entry into force', text: `This Agreement shall enter into force on the date of its signature.` });
+    const FA = ctFormal(state.playerIso), FB = ctFormal(iso);
+    return { valid: true, category: cat, title: `Agreement between the Government of ${FA} and the Government of ${FB} on ${topic}`, preamble: `The Government of ${FA} and the Government of ${FB}, hereinafter referred to as "the Parties",\nDesiring to develop friendly relations and mutually beneficial ${topic.toLowerCase()} between their two countries,\nGuided by the principles of sovereign equality, non-interference and respect for international law,\nHave agreed as follows:`, articles, summary: `${CT_NAME[cat]} agreement for ${ctDurText(D)}.`, note: 'Drafted by your legal staff.' };
+}
+// ---------- fill the gaps: what the other government still needs before it will sign ----------
+// The staff estimate how far the draft is from acceptable for the partner and add balancing clauses,
+// most relevant first, until it should pass. Each costs you something real when the agreement is signed.
+function ctOutlook(iso, R) {
+    const C = CT_CATS[R.category] || { need: 20 }, base = treatyScore('entente', iso), me = state.playerIso;
+    // treatyScore charges 25 for every ally of theirs that dislikes you (right for defence pacts); for a civil agreement
+    // being bound to such allies counts once, and less unless it touches security
+    const cnt = treatyPartners(iso).filter(x => getRel(me, x) < -40).length, sec = R.category === 'security' || R.category === 'intelligence';
+    const sc = base.sc + 25 * cnt - (cnt ? (sec ? 20 : 8) : 0);
+    return { base, need: C.need, score: sc + 5 + (R.bonus || 0) };                 // +5: a tailored agreement is easier to sign than a template pact
+}
+function ctBalance(iso, R) {
+    const me = state.playerIso, A = state.player, B = shortName(iso), n = nationIso(me), them = nationIso(iso);
+    R.bonus = 0; R.added = []; R.costs = {};
+    const O = ctOutlook(iso, R); let gap = O.need + 4 - O.score;                    // aim a little above the bar
+    if (gap <= 0) return R;
+    const rel = getRel(me, iso), bound = O.base.why.some(w => /bound to/.test(w)), poor = them.pop > 0 && them.gdp / them.pop < 15000;
+    const finB = clamp(Math.round(them.gdp * 0.003 / 1e8) / 10, 0.2, 8);              // concessional finance, $bn, scaled to the partner
+    const canPay = n.treasury > finB * 1e9 * 1.5;
+    const menu = [
+        bound && { key: 'third', bonus: 14, heading: 'Relations with third States', text: `This Agreement is not directed against any third State and shall not affect the rights and obligations of either Party under its other international agreements or alliances.` },
+        rel < 20 && { key: 'sovereignty', bonus: 7, heading: 'Respect for sovereignty', text: `Each Party shall respect the sovereignty, territorial integrity and laws of the other. Nothing in this Agreement permits interference in the internal affairs of either Party.` },
+        canPay && { key: 'finance', bonus: poor ? 12 : 7, heading: 'Development financing', text: `${A} shall make available to ${B} concessional financing of up to USD ${finB} billion over the term of this Agreement, for projects agreed by the Joint Commission.`, cost: { treasury: finB * 1e9 } },
+        R.category !== 'trade' && { key: 'market', bonus: 7, heading: 'Market access', text: `${A} shall reduce its customs duties on goods originating in ${B} by 10 percent and simplify customs procedures for them.`, cost: { growth: -0.0001 } },
+        { key: 'assist', bonus: 5, heading: 'Technical assistance', text: `${A} shall provide training and technical assistance to ${B} in fields agreed by the Joint Commission.`, cost: { treasury: 1e8 } },
+        { key: 'review', bonus: 4, heading: 'Review', text: `Either Party may request a review of this Agreement after one year. The Parties shall negotiate in good faith any amendment needed to keep its benefits balanced.` }
+    ].filter(Boolean);
+    if (gap > menu.slice(0, 5).reduce((t, x) => t + x.bonus, 0) + 8) return R;     // hopeless: don't give concessions away for nothing
+    for (const x of menu) {
+        if (gap <= 0 || R.added.length >= 5) break;
+        R.added.push(x); R.bonus += x.bonus; gap -= x.bonus;
+        if (x.cost) Object.keys(x.cost).forEach(k => R.costs[k] = (R.costs[k] || 0) + x.cost[k]);
+    }
+    // put the new clauses before the implementation/duration articles
+    let at = R.articles.findIndex(a => /Implementation|Duration/i.test(a.heading)); if (at < 0) at = R.articles.length;
+    R.articles.splice(at, 0, ...R.added.map(x => ({ heading: x.heading, text: x.text, added: true })));
+    return R;
+}
+function ctOutlookHTML(iso, R) {
+    const O = ctOutlook(iso, R), m = O.score - O.need, B = esc(shortName(iso));
+    const [lbl, col] = m >= 4 ? ['likely to sign', '#93b25f'] : m >= -8 ? ['undecided', '#d8b45a'] : ['unlikely to sign', '#c4553c'];
+    let h = `<div class="text-[11px] mb-1">Outlook: <b style="color:${col}">${B} is ${lbl}</b>`;
+    if (R.added && R.added.length) h += ` · your staff added ${R.added.length} clause${R.added.length > 1 ? 's' : ''} to make it acceptable: ${R.added.map(x => esc(x.heading.toLowerCase())).join(', ')}${R.costs.treasury ? ` (costs ${formatVal(R.costs.treasury)} over the term)` : ''}`;
+    if (m < -8) h += `. Relations (${getRel(state.playerIso, iso)}) are too poor for any balancing clause to close the gap${O.base.why.length ? ': ' + esc(O.base.why.slice(0, 2).join('; ')) : ''}`;
+    return h + '</div>';
+}
+function ctFinish(R) { R.terms = R.articles.map(a => (a.heading ? a.heading + ': ' : '') + a.text.replace(/\n/g, ' ')); return R; }
+// make any idea workable instead of rejecting it: keep the main idea, fix what could not be signed
+function ctAdapt(idea, parts, iso) {
+    const me = state.playerIso, A = state.player, B = shortName(iso), notes = [];
+    let out = parts.map(p => ({ ...p }));
+    const tame = [
+        [/\b(all|the whole) (of )?(their|your|its) (territory|land|country)\b/gi, 'land for agreed joint projects', 'a demand for their whole territory became land for agreed joint projects'],
+        [/\b(all|the whole) (of )?(their|your|its) (money|treasury|gold|reserves)\b/gi, 'an agreed financial contribution', 'a demand for their whole treasury became an agreed financial contribution'],
+        [/\b(all|the whole) (of )?(their|your|its) (oil|gas|resources|minerals)\b/gi, 'an agreed share of their $4', 'a demand for all their $4 became an agreed share'],
+        [/\b(all|the whole) (of )?(their|your|its) (army|military|weapons)\b/gi, 'joint military exercises', 'control of their whole army became joint military exercises'],
+        [/\b(be|becomes?) (our|a|russia's|their) (colony|vassal|province|puppet|protectorate)\b/gi, 'coordinate closely with us on foreign policy', 'becoming a colony or vassal became close foreign-policy coordination'],
+        [/\bunconditional(ly)? surrender\b/gi, 'a negotiated settlement', 'unconditional surrender became a negotiated settlement'],
+        [/\b(abolish|dissolve) (their|your|its) (country|government|army|state)\b/gi, 'reform its institutions with our support', 'abolishing their state became institutional reform with your support'],
+        [/\b(everything|infinite|unlimited|endless)\b/gi, 'agreed quantities', 'unlimited amounts became agreed quantities'],
+        [/\b(\d{4,})\s?%/g, '20%', 'an impossible percentage was capped at 20%'],
+        [/\bfor free\b/gi, 'at preferential prices', '"for free" became preferential prices']
+    ];
+    out.forEach(p => tame.forEach(([re, rep, note]) => { if (re.test(p.what)) { re.lastIndex = 0; const m = p.what.match(re); p.what = p.what.replace(re, (...g) => rep.replace('$4', g[4] || 'resources')); notes.push(note.replace('$4', (m && m[0].split(' ').pop()) || 'resources')); } re.lastIndex = 0; }));
+    // clauses that dispose of a third country's territory are dropped: only the two signatories can bind themselves
+    const others = (typeof detectCountries === 'function' ? detectCountries(idea) : []).map(x => x.iso).filter(x => x && x !== me && x !== iso);
+    if (others.length) {
+        const keep = out.filter(p => !(/\b(cedes?|hands? over|transfers?|annex(es)?|gives?|takes?)\b.*\b(territory|region|province|island|city|land)\b/i.test(p.what) && others.some(o => new RegExp(shortName(o), 'i').test(p.what))));
+        if (keep.length < out.length) { notes.push(`terms about ${others.map(shortName).join(', ')}'s territory were left out, since only the two signatories can bind themselves`); out = keep; }
+    }
+    if (!out.length) { out = [{ by: 'both', what: `cooperate closely in ${CT_NAME[ctCategory(idea)] === 'General' ? 'trade, investment and diplomacy' : CT_NAME[ctCategory(idea)].toLowerCase() + ' matters'}` }]; notes.push('the idea was too short, so it became a general cooperation framework'); }
+    // a list of demands gets something offered in return
+    if (out.every(p => p.by === 'B')) { out.unshift({ by: 'A', what: `grant preferential access to ${A}'s market for goods from ${B}` }); notes.push(`it only asked things of ${B}, so your staff added an offer in return`); }
+    return { parts: out, notes };
+}
+async function ctWrite() {
+    const d = ctGrab(), idea = (d.idea || '').trim() || 'closer cooperation'; if (!d.iso) return; state.treatyMsg = '';
+    // a length written in the idea ("for 18 months", "for 15 years") wins over the duration box
+    const said = idea.match(/\b(\d{1,4})[- ](months?|years?)\b/i);
+    const Y = said ? ctDur(said[1], /^m/i.test(said[2]) ? 'months' : 'years') : (d.dur || CT_DUR0);
+    if (said) d.dur = Y;
+    playClick();
+    // instant draft from the legal staff, made workable rather than rejected…
+    const ad = ctAdapt(idea, ctParseIdea(idea, d.iso), d.iso);
+    d.review = ctFinish(ctBalance(d.iso, ctOfflineDraft(idea, ad.parts, d.iso, Y))); d.review.dur = Y; d.review.changes = ad.notes;
+    const req = d.req = (d.req || 0) + 1;
+    ctEmblem(state.playerIso);
+    d.polishing = aiReady(); renderSociety();
+    if (!d.polishing) return;
+    // …then the AI expands it into full treaty language in the background
+    const B = shortName(d.iso);
+    const sys = `You are the chief legal adviser of ${state.player}'s foreign ministry (${fmtDate(state.date)}). The minister gives a short idea for an agreement with ${B}. Never refuse: work out what ${state.player} is trying to obtain and turn the idea into the most feasible version that ${B} could realistically sign in January 2026, keeping the main idea. Replace anything impossible (terms the parties cannot deliver, binding third countries, disproportionate demands) with the closest workable term, and make sure each side gets something. Write it as a concise formal bilateral treaty.`;
+    const user = `Idea: "${idea}"\nDuration: ${ctDurText(Y)}.\nJSON: {"changes":["each change you made to make it feasible, short; empty if none"],"title":"Agreement between the Government of ${ctFormal(state.playerIso)} and the Government of ${ctFormal(d.iso)} on ...","category":${JSON.stringify(Object.keys(CT_CATS).concat('other'))} (pick one),"articles":[{"heading":"...","text":"..."}] (4 to 6 short articles: each side's undertakings with concrete figures where sensible, implementation, duration, entry into force)}`;
+    const need = (d.review.added || []).map(x => `${x.heading}: ${x.text}`);
+    const j = await callAI(sys + (need.length ? ` ${B} will only sign if the treaty also contains these balancing provisions; include each of them as its own article, in your wording but with the same substance and figures:\n${need.map(x => '- ' + x).join('\n')}` : ''), user, true, { maxTokens: 900 + 120 * need.length });
+    if (d.req !== req || state.ctDraft !== d) return;          // the player moved on
+    d.polishing = false;
+    if (j && typeof j === 'object') {
+        const arts = (Array.isArray(j.articles) ? j.articles : []).map(a => ({ heading: String((a && a.heading) || '').slice(0, 80), text: String((a && a.text) || a || '').slice(0, 900) })).filter(a => a.text).slice(0, 8);
+        const kept = d.review;
+        if (arts.length >= 3) d.review = ctFinish({ dur: Y, bonus: kept.bonus, added: kept.added, costs: kept.costs, valid: true, category: CT_CATS[j.category] ? j.category : kept.category, title: String(j.title || '').slice(0, 200) || kept.title, preamble: kept.preamble, articles: arts, summary: kept.summary, note: `Drafted by ${aiLabel()}.`, changes: (Array.isArray(j.changes) ? j.changes : []).map(x => String(x).slice(0, 200)).filter(Boolean).slice(0, 5) });
+    }
+    if (!document.getElementById('soc-modal').classList.contains('hidden')) renderSociety();
+}
+// ---------- what makes the draft look like the real thing ----------
+const CT_FORMAL = { RUS: 'the Russian Federation', BLR: 'the Republic of Belarus', USA: 'the United States of America', GBR: 'the United Kingdom of Great Britain and Northern Ireland', FRA: 'the French Republic', DEU: 'the Federal Republic of Germany', CHN: "the People's Republic of China", IND: 'the Republic of India', JPN: 'Japan', KOR: 'the Republic of Korea', PRK: "the Democratic People's Republic of Korea", ITA: 'the Italian Republic', ESP: 'the Kingdom of Spain', TUR: 'the Republic of Türkiye', IRN: 'the Islamic Republic of Iran', SAU: 'the Kingdom of Saudi Arabia', ARE: 'the United Arab Emirates', EGY: 'the Arab Republic of Egypt', ISR: 'the State of Israel', PAK: 'the Islamic Republic of Pakistan', BRA: 'the Federative Republic of Brazil', MEX: 'the United Mexican States', ARG: 'the Argentine Republic', CAN: 'Canada', AUS: 'Australia', UKR: 'Ukraine', POL: 'the Republic of Poland', KAZ: 'the Republic of Kazakhstan', UZB: 'the Republic of Uzbekistan', AZE: 'the Republic of Azerbaijan', ARM: 'the Republic of Armenia', GEO: 'Georgia', SRB: 'the Republic of Serbia', HUN: 'Hungary', GRC: 'the Hellenic Republic', NLD: 'the Kingdom of the Netherlands', BEL: 'the Kingdom of Belgium', SWE: 'the Kingdom of Sweden', NOR: 'the Kingdom of Norway', CHE: 'the Swiss Confederation', IDN: 'the Republic of Indonesia', VNM: 'the Socialist Republic of Vietnam', THA: 'the Kingdom of Thailand', MYS: 'Malaysia', PHL: 'the Republic of the Philippines', ZAF: 'the Republic of South Africa', NGA: 'the Federal Republic of Nigeria', ETH: 'the Federal Democratic Republic of Ethiopia', DZA: "the People's Democratic Republic of Algeria", MAR: 'the Kingdom of Morocco', IRQ: 'the Republic of Iraq', SYR: 'the Syrian Arab Republic', JOR: 'the Hashemite Kingdom of Jordan', QAT: 'the State of Qatar', KWT: 'the State of Kuwait', VEN: 'the Bolivarian Republic of Venezuela', CUB: 'the Republic of Cuba', AFG: 'the Islamic Emirate of Afghanistan', MNG: 'Mongolia', TWN: 'the Republic of China (Taiwan)' };
+function ctFormal(iso) { return CT_FORMAL[iso] || shortName(iso); }
+const CT_LANG = { RUS: 'Russian', BLR: 'Belarusian and Russian', UKR: 'Ukrainian', KAZ: 'Kazakh and Russian', CHN: 'Chinese', TWN: 'Chinese', JPN: 'Japanese', KOR: 'Korean', PRK: 'Korean', IND: 'Hindi and English', PAK: 'Urdu and English', IRN: 'Persian', AFG: 'Pashto and Dari', TUR: 'Turkish', AZE: 'Azerbaijani', ARM: 'Armenian', GEO: 'Georgian', FRA: 'French', DEU: 'German', AUT: 'German', ITA: 'Italian', ESP: 'Spanish', PRT: 'Portuguese', BRA: 'Portuguese', POL: 'Polish', NLD: 'Dutch', GRC: 'Greek', SRB: 'Serbian', HUN: 'Hungarian', ROU: 'Romanian', SWE: 'Swedish', NOR: 'Norwegian', FIN: 'Finnish', DNK: 'Danish', ISR: 'Hebrew', IDN: 'Indonesian', VNM: 'Vietnamese', THA: 'Thai', MNG: 'Mongolian', UZB: 'Uzbek', ETH: 'Amharic' };
+['SAU', 'ARE', 'EGY', 'IRQ', 'SYR', 'JOR', 'LBN', 'QAT', 'KWT', 'OMN', 'BHR', 'YEM', 'LBY', 'TUN', 'DZA', 'MAR', 'SDN', 'PSE', 'GAZ'].forEach(i => CT_LANG[i] = 'Arabic');
+['MEX', 'ARG', 'COL', 'VEN', 'CHL', 'PER', 'ECU', 'BOL', 'PRY', 'URY', 'CUB', 'DOM', 'GTM', 'HND', 'SLV', 'NIC', 'CRI', 'PAN'].forEach(i => CT_LANG[i] = 'Spanish');
+function ctLangs(a, b) { const L = [...new Set([CT_LANG[a] || 'English', CT_LANG[b] || 'English'].join(' and ').split(' and '))]; return L.length === 1 ? `the ${L[0]} language` : `the ${L.slice(0, -1).join(', ')} and ${L[L.length - 1]} languages, all texts being equally authentic`; }
+// the national emblem / coat of arms, from Wikipedia (falls back to the flag when offline)
+const EMBLEM_CACHE = {};
+const EMBLEM_TITLE = { USA: 'Great Seal of the United States', GBR: 'Royal coat of arms of the United Kingdom', IND: 'State Emblem of India', CHN: 'National Emblem of China', JPN: 'Imperial Seal of Japan', FRA: 'National emblem of France', TUR: 'Presidential Seal of Turkey', KOR: 'Emblem of South Korea', PRK: 'Emblem of North Korea', TWN: 'National Emblem of the Republic of China', GAZ: 'Coat of arms of Palestine', PSE: 'Coat of arms of Palestine' };
+async function ctEmblem(iso) {
+    if (!iso || iso in EMBLEM_CACHE) return EMBLEM_CACHE[iso]; EMBLEM_CACHE[iso] = null;
+    const nm = shortName(iso), titles = EMBLEM_TITLE[iso] ? [EMBLEM_TITLE[iso]] : [`Coat of arms of ${nm}`, `Emblem of ${nm}`, `National emblem of ${nm}`, `Coat of arms of the ${nm}`];
+    for (const t of titles) {
+        try {
+            const r = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.replace(/ /g, '_'))}`); if (!r.ok) continue;
+            const j = await r.json(); const u = (j.thumbnail && j.thumbnail.source) || (j.originalimage && j.originalimage.source);
+            if (u && j.type !== 'disambiguation') { EMBLEM_CACHE[iso] = u; try { if (state.ctDraft && state.ctDraft.review && !document.getElementById('soc-modal').classList.contains('hidden')) renderSociety(); } catch (e) { } return u; }
+        } catch (e) { }
+    }
+    return null;
+}
+function ctEmblemImg(iso, size, style) {
+    const u = EMBLEM_CACHE[iso], t = nationIso(iso);
+    if (u) return `<img src="${u}" alt="" referrerpolicy="no-referrer" style="width:${size}px;height:${size}px;object-fit:contain;${style || ''}">`;
+    return t && t.iso2 ? `<img src="${FLAG_OVERRIDE && FLAG_OVERRIDE[t.iso2] ? FLAG_OVERRIDE[t.iso2] : `https://flagcdn.com/w80/${t.iso2}.png`}" alt="" style="width:${Math.round(size * 0.9)}px;height:${Math.round(size * 0.6)}px;object-fit:cover;${style || ''}">` : '';
+}
+// a round ink stamp of the player's foreign ministry, with the emblem in the middle
+function ctSeal(iso, size) {
+    const id = 'sealpath' + iso, ring = `MINISTRY OF FOREIGN AFFAIRS · ${ctFormal(iso).replace(/^the /i, '').toUpperCase()} · `;
+    return `<div style="position:relative;width:${size}px;height:${size}px;transform:rotate(-11deg);opacity:.88;mix-blend-mode:multiply;flex:none">
+        <svg viewBox="0 0 200 200" width="${size}" height="${size}" style="position:absolute;inset:0"><defs><path id="${id}" d="M100,100 m-74,0 a74,74 0 1,1 148,0 a74,74 0 1,1 -148,0"/></defs>
+            <circle cx="100" cy="100" r="96" fill="none" stroke="#8d1b1b" stroke-width="5"/><circle cx="100" cy="100" r="88" fill="none" stroke="#8d1b1b" stroke-width="1.6"/><circle cx="100" cy="100" r="60" fill="none" stroke="#8d1b1b" stroke-width="1.6"/>
+            <text fill="#8d1b1b" font-family="Georgia,serif" font-size="${ring.length > 60 ? 9.5 : 12}" font-weight="700" letter-spacing="1"><textPath href="#${id}" textLength="460">${esc(ring)}</textPath></text></svg>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">${ctEmblemImg(iso, Math.round(size * 0.5), 'filter:sepia(.35) saturate(.85)')}</div></div>`;
+}
+function ctDocHTML(d, R) {
+    const me = state.playerIso, them = d.iso, nm = nationIso(me), place = (capitalOf(me) || {}).label || state.player;
+    const signer = (nm.hog && !/^Government of/.test(nm.hog) ? nm.hog : nm.hos) || state.player;
+    return `<div class="mb-2" style="border:1px solid #857348;background:#f6efdc;background-image:radial-gradient(rgba(120,95,40,.06) 1px,transparent 1px);background-size:4px 4px;color:#1d1a12;padding:22px 30px;font-family:Georgia,'Times New Roman',serif;font-size:12.5px;line-height:1.55;max-height:520px;overflow-y:auto;box-shadow:inset 0 0 40px rgba(120,95,40,.18)">
+        <div style="display:flex;justify-content:center;margin-bottom:6px">${ctEmblemImg(me, 64, 'display:block')}</div>
+        <div style="text-align:center;font-weight:700;font-size:13.5px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px">${esc(R.title)}</div>
+        <div style="text-align:center;font-size:10.5px;color:#6b6250;margin-bottom:12px">Draft · ${esc(fmtDate(state.date))}</div>
+        ${R.preamble ? `<div style="font-style:italic;margin-bottom:10px;white-space:pre-line">${esc(R.preamble)}</div>` : ''}
+        ${R.articles.map((a, i) => `<div style="margin-bottom:8px${a.added ? ';border-left:3px solid #b8954a;padding-left:6px' : ''}"><div style="text-align:center;font-weight:700">Article ${i + 1}</div>${a.heading ? `<div style="text-align:center;font-style:italic;margin-bottom:2px">${esc(a.heading)}</div>` : ''}<div style="white-space:pre-line;text-align:justify">${esc(a.text)}</div></div>`).join('')}
+        <div style="margin-top:12px;text-align:justify">Done at ${esc(place)} on ${esc(fmtDate(state.date))}, in two originals, each in ${esc(ctLangs(me, them))}.</div>
+        <div style="display:flex;justify-content:space-between;gap:20px;margin-top:22px;font-size:11.5px">
+            <div style="flex:1;position:relative"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">For the Government of<br><b>${esc(ctFormal(me))}</b></div>
+                <div style="display:flex;align-items:flex-end;gap:6px;margin-top:6px"><div style="flex:1"><div style="font-family:'Brush Script MT','Segoe Script','Lucida Handwriting',cursive;font-size:22px;color:#1c2b5a;height:30px;line-height:30px">${esc(signer)}</div><div style="border-top:1px solid #1d1a12;font-size:10px;padding-top:2px">${esc(signer)}<br><span style="color:#6b6250">Head of Government of ${esc(ctFormal(me))}</span></div></div>${ctSeal(me, 92)}</div></div>
+            <div style="flex:1;text-align:right"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.04em">For the Government of<br><b>${esc(ctFormal(them))}</b></div>
+                <div style="margin-top:38px;border-top:1px solid #1d1a12;font-size:10px;padding-top:2px;color:#6b6250">awaiting signature</div></div></div>
+        <div style="font-size:10px;color:#6b6250;margin-top:12px">${d.polishing ? `${esc(aiLabel())} is rewriting this in full treaty language… you can already send this version.` : esc(R.note || '')}</div></div>`;
+}
+function ctLeft(days) { days = Math.max(0, days); return days >= 730 ? `${Math.round(days / 365.25)} years` : days >= 60 ? `${Math.round(days / 30.44)} months` : `${days} days`; }
+// agreements end when their term runs out
+function ctExpireTick() {
+    (state.treaties || []).forEach(t => {
+        if (t.status !== 'active' || !t.expires || state.dayIndex < t.expires) return;
+        t.status = 'expired';
+        if (t.parties.includes(state.playerIso)) { logEvent(`📜 The <b>${esc(t.name)}</b> has expired after ${esc(ctDurText(t.dur))}. Write a new agreement to continue it.`, 'neutral'); const o = t.parties.find(x => x !== state.playerIso); if (o) queueMessage(o, `The ${t.name} has now expired. We are open to discussing a new agreement.`); }
+    });
+}
+{ const _d = dailyTick; dailyTick = function (catchUp) { _d(catchUp); try { ctExpireTick(); } catch (e) { } }; }
+async function ctSend() {
+    const d = ctGrab(), R = d.review, me = state.playerIso, iso = d.iso; if (!R || !R.valid || !iso) return;
+    if (treatyCdLeft(iso + 'custom')) { renderSociety(); return; }
+    playClick(); d.busy = 'send'; renderSociety();
+    const C = CT_CATS[R.category] || { need: 20, growth: 0.0002, them: 0.05 };
+    const O = ctOutlook(iso, R), base = O.base, sc = O.score; let accept = sc >= C.need, reply = null;
+    if (aiReady()) {
+        const ties = treatiesOf(me).filter(t => t.parties.includes(iso)).map(t => t.name);
+        const sys = `You are the government of ${shortName(iso)} on ${fmtDate(state.date)}, deciding whether to sign an agreement proposed by ${state.player}. Relations are ${getRel(me, iso)} on a -100..100 scale (${relLabel(getRel(me, iso))[0].toLowerCase()})${ties.length ? `; you are already bound to ${state.player} by: ${ties.join(', ')}` : ''}. Behave as the real government would, given the real relationship between the two countries. Decide as that government realistically would in January 2026, weighing its interests, alliances, rivals and domestic politics.`;
+        const user = `Agreement: ${R.title}\n${R.terms.map(t => '- ' + t).join('\n').slice(0, 3500)}\nReturn JSON: {"accept": true or false, "reply": "two sentences from ${shortName(iso)}'s leader to ${state.player}"}`;
+        const j = await callAI(sys, user, true, { maxTokens: 300 });
+        if (j && typeof j.accept === 'boolean') { accept = j.accept ? sc > C.need - 30 : sc >= C.need + 30; reply = j.accept !== accept ? null : String(j.reply || '').slice(0, 400) || null; }   // don't show a refusal letter on a signed deal
+    }
+    d.busy = null;
+    treatyCdStart(iso + 'custom', accept ? 'signed' : 'refused');
+    if (accept) {
+        state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, articles: R.articles, preamble: R.preamble, summary: R.summary, dur: R.dur, expires: R.dur ? state.dayIndex + ctDurDays(R.dur) : null, day: state.dayIndex, status: 'active' });
+        addRel(me, iso, 10); state.cred = clamp((state.cred || 60) + 2, 0, 100);
+        if (R.costs) { if (R.costs.treasury) nationIso(me).treasury -= R.costs.treasury; if (R.costs.growth) state.mods.growth += R.costs.growth; }
+        if (C.growth) state.mods.growth += C.growth; if (C.them) state.gmods[iso] = (state.gmods[iso] || 0) + C.them; if (C.stab) nationIso(me).stability = clamp(nationIso(me).stability + C.stab, 0, 100);
+        if (R.category === 'security' || R.category === 'intelligence') rivalsOf(iso).forEach(x => addRel(me, x, -4));
+        logEvent(`📜 <b>${esc(R.title)}</b> signed between ${esc(state.player)} and ${esc(shortName(iso))}.`, 'good');
+        state.treatyMsg = `${shortName(iso)} signs the ${R.title}.${reply ? ' "' + reply + '"' : ''}`;
+        queueMessage(iso, reply || `We have signed the ${R.title}. We expect every clause to be honoured.`);
+        state.ctDraft = { iso: d.iso, dur: d.dur };
+    } else {
+        state.treatyMsg = `${shortName(iso)} declines the ${R.title}${reply ? ': "' + reply + '"' : sc > C.need - 15 ? ' for now; it is close. Improve relations or offer more in return' : ''}${!reply && base.why.length ? ` (${base.why.slice(0, 2).join('; ')})` : ''}.`;
+    }
+    renderSociety();
+}
+
+// after answering a proposal (yes or no) a government waits 14 days before looking at the same kind of proposal again
+
 const TREATY_CD = 14;
 function treatyCdStart(key, why) { state.treatyCd[key] = state.dayIndex + TREATY_CD; state.treatyCdFrom = state.treatyCdFrom || {}; state.treatyCdFrom[key] = state.dayIndex; state.treatyCdWhy = state.treatyCdWhy || {}; state.treatyCdWhy[key] = why || 'refused'; }
 function treatyCdLeft(key) { const end = (state.treatyCd || {})[key]; return end && end > state.dayIndex ? end - state.dayIndex : 0; }
@@ -12897,13 +13215,14 @@ function treatiesHTML() {
     state.offers.forEach(o => { h += `<div class="p-2 mb-2" style="border:1px solid #93b25f;background:rgba(147,178,95,.08)">📨 ${flagHTML(nationIso(o.from), 11)} <b>${esc(shortName(o.from))}</b> proposes a ${esc(TREATY_TYPES[o.type].label.toLowerCase())} <span class="text-slate-500">(${o.exp - state.dayIndex} days)</span>
         <div class="mt-1 flex gap-1"><button type="button" class="gs-btn gs-btn-primary" onclick="treatyAcceptOffer('${o.id}')">Accept</button><button type="button" class="gs-btn" onclick="treatyDeclineOffer('${o.id}')">Decline</button></div></div>`; });
     const mine = treatiesOf(me);
-    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}</span></span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
+    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${t.type === 'custom' && t.category ? esc(t.category) + ' agreement' : TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}${t.expires ? ` · ${ctLeft(t.expires - state.dayIndex)} left` : ''}</span>${t.articles && t.articles.length ? `<details class="text-[10.5px] text-slate-400" style="margin-top:2px"><summary style="cursor:pointer">Read the text (${t.articles.length} articles)</summary>${t.articles.map((a, i) => `<div style="margin:3px 0 0 10px"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}</details>` : t.terms && t.terms.length ? `<ul class="text-[10.5px] text-slate-400" style="margin:2px 0 0 16px;list-style:disc">${t.terms.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
     const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 1).sort((a, b) => getRel(me, b) - getRel(me, a)).slice(0, 60);
     h += `<div class="gs-stat-lbl mb-1">Propose a treaty</div><div class="flex flex-wrap gap-2 items-center mb-2"><select id="tr-country" class="gs-btn" onchange="state.trSel={iso:this.value,type:document.getElementById('tr-type').value};state.treatyMsg='';renderSociety()">${cands.map(i => `<option value="${i}" ${(state.trSel || {}).iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
         <select id="tr-type" class="gs-btn" onchange="state.trSel={iso:document.getElementById('tr-country').value,type:this.value};state.treatyMsg='';renderSociety()">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `<option value="${k}" ${(state.trSel || {}).type === k ? 'selected' : ''}>${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" ${(() => { const sel = state.trSel || {}, iso = cands.includes(sel.iso) ? sel.iso : cands[0], type = sel.type || Object.keys(TREATY_TYPES)[0]; return treatyCdLeft(iso + type) ? 'disabled' : ''; })()} onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
     { const sel = state.trSel || {}, iso = cands.includes(sel.iso) ? sel.iso : cands[0], type = sel.type || Object.keys(TREATY_TYPES)[0]; h += treatyCdBar(iso + type, iso, TREATY_TYPES[type].label.toLowerCase()); }
     h += `<div class="text-[10.5px] text-slate-500 mb-2">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `${TREATY_TYPES[k].icon} <b>${TREATY_TYPES[k].label}</b>: ${TREATY_TYPES[k].desc}`).join('<br>')}</div>`;
     if (state.treatyMsg) h += `<div class="p-2 mb-2" style="border:1px solid #d1ad5b;color:#ece2c4">${esc(state.treatyMsg)}</div>`;
+    h += customTreatyHTML();
     const world = state.treaties.filter(t => t.status === 'active' && !t.parties.includes(me)).slice(0, 14);
     h += `<div class="gs-stat-lbl mb-1 mt-3">Other pacts in the world</div>` + world.map(t => `<div class="text-[11px] text-slate-400">${TREATY_TYPES[t.type].icon} ${esc(t.name)} <span class="text-slate-600">· ${TREATY_TYPES[t.type].label}</span></div>`).join('');
     return h;
@@ -13235,7 +13554,7 @@ function systemsEnsure() {
 }
 {
     const _iw = initWorld;
-    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.unscLog = []; state.regimes = {}; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
+    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
     const _as = applySave;
     applySave = function (d) { _as(d); try { ENT.sel = null; NEW_FIELDS.forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; }); systemsEnsure(); if (state.pol && state.pol.over) state.pol.over = null; grpRefresh(true); } catch (e) { console.warn('systems load', e); } };
     const _dt = dailyTick;
