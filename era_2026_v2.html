@@ -10469,8 +10469,119 @@ const TREATY_TYPES = {
     nonaggression: { label: 'Non-aggression pact', need: 8, rel: 8, icon: '🕊', desc: 'Neither side attacks the other. Breaking it costs you credibility everywhere.' },
     entente: { label: 'Strategic partnership', need: 28, rel: 15, icon: '🤝', desc: 'Closer trade, intelligence and diplomatic coordination; small growth boost.' },
     defense: { label: 'Mutual defense pact', need: 48, rel: 22, icon: '🛡', desc: 'If one is attacked the other must respond. Ignoring the call wrecks your credibility.' },
-    alliance: { label: 'Military alliance', need: 64, rel: 30, icon: '⚔', desc: 'Mutual defense plus joint planning. Allies are expected to fight beside each other.' }
+    alliance: { label: 'Military alliance', need: 64, rel: 30, icon: '⚔', desc: 'Mutual defense plus joint planning. Allies are expected to fight beside each other.' },
+    energy: { label: 'Energy partnership', need: 14, rel: 10, icon: '⚡', desc: 'Long-term oil, gas, power and renewables supply and investment. Growth boost for both, larger when the partner is a big energy exporter.' },
+    tech: { label: 'Technology-sharing agreement', need: 30, rel: 12, icon: '🔬', desc: 'Joint research, chips, AI and licences. Lifts your growth (more if the partner is the stronger power); the partner\'s rivals take note.' },
+    intel: { label: 'Intelligence-sharing agreement', need: 40, rel: 14, icon: '🛰', desc: 'Pooled intelligence on terrorism, crime and common threats. Small boost to stability; the partner\'s rivals resent it.' },
+    custom: { label: 'Written agreement', need: 20, rel: 10, icon: '✍', desc: 'An agreement whose terms you write yourself.', hidden: true }
 };
+const ENERGY_EXPORTERS = new Set('RUS SAU ARE QAT KWT NOR USA CAN IRQ IRN KAZ DZA NGA AZE OMN LBY VEN AUS TKM AGO BRN GUY'.split(' '));
+// what a signed treaty does beyond the relations boost (also used for accepted offers)
+function treatyEffects(type, iso) {
+    const me = state.playerIso, n = nationIso(me);
+    if (type === 'entente') { state.gmods[iso] = (state.gmods[iso] || 0) + 0.15; state.mods.growth += 0.0005; }
+    if (type === 'energy') { const big = ENERGY_EXPORTERS.has(iso), mine = ENERGY_EXPORTERS.has(me); state.mods.growth += big && !mine ? 0.0008 : 0.0004; state.gmods[iso] = (state.gmods[iso] || 0) + (mine && !big ? 0.15 : 0.08); }
+    if (type === 'tech') { state.mods.growth += power(iso) > power(me) ? 0.0008 : 0.0004; state.gmods[iso] = (state.gmods[iso] || 0) + 0.1; rivalsOf(iso).forEach(x => addRel(me, x, -3)); }
+    if (type === 'intel') { n.stability = clamp(n.stability + 2, 0, 100); rivalsOf(iso).forEach(x => addRel(me, x, -5)); }
+}
+// ---------- write your own agreement ----------
+// The draft is checked first (does it make sense as an agreement between these two governments, with terms each side can
+// actually deliver?), turned into a clean title + terms, and only then sent. With an AI engine connected the other
+// government's foreign ministry reads it; without one, the offline staff check it with rules.
+const CT_CATS = {
+    trade: { need: 12, re: /\b(trade|tariff|export|import|market access|customs|free trade|goods|duty)\b/i, growth: 0.0006, them: 0.12 },
+    energy: { need: 14, re: /\b(oil|gas|lng|energy|pipeline|electricity|power grid|nuclear power|renewable|solar|wind|refiner|fuel)\b/i, growth: 0.0006, them: 0.1 },
+    technology: { need: 30, re: /\b(technolog|semiconductor|chip|ai\b|artificial intelligence|research|science|satellite|space|cyber|software|5g|licen[cs]e|patent)\b/i, growth: 0.0006, them: 0.1 },
+    intelligence: { need: 40, re: /\b(intelligence|spy|surveillance|counter-?terror|information sharing|signals|espionage)\b/i, growth: 0, them: 0, stab: 2 },
+    security: { need: 45, re: /\b(troops|military|army|navy|air force|bases?|weapons?|arms|defen[cs]e|security|joint exercise|missile|drone)\b/i, growth: 0, them: 0, stab: 1 },
+    migration: { need: 22, re: /\b(migra|refugee|visa|border control|asylum|workers?|labou?r mobility)\b/i, growth: 0.0002, them: 0.05 },
+    health: { need: 10, re: /\b(health|vaccine|medical|hospital|pandemic|disease|medicine)\b/i, growth: 0.0002, them: 0.05, stab: 1 },
+    climate: { need: 10, re: /\b(climate|emission|carbon|forest|environment|pollution|water)\b/i, growth: 0.0001, them: 0.03 },
+    culture: { need: 5, re: /\b(culture|student|education|tourism|exchange program|sport|heritage|language)\b/i, growth: 0.0001, them: 0.02 },
+    finance: { need: 25, re: /\b(loan|credit|investment|invest|fund|currency|swap|debt|bank)\b/i, growth: 0.0006, them: 0.1 }
+};
+const CT_NAME = { trade: 'Trade', energy: 'Energy', technology: 'Technology', intelligence: 'Intelligence', security: 'Security', migration: 'Migration', health: 'Health', climate: 'Climate', culture: 'Cultural', finance: 'Financial', other: 'General' };
+function customTreatyHTML() {
+    const d = state.ctDraft || {}, me = state.playerIso;
+    // any government can be written to, not only the closest partners
+    const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && (!NON_SOVEREIGN.has(i) || nameLayer[WORLD[i][1]]) && WORLD[i][3] > 0.05).sort((a, b) => shortName(a).localeCompare(shortName(b)));
+    let h = `<div class="gs-stat-lbl mb-1 mt-3">✍ Write your own agreement</div>
+        <div class="text-[10.5px] text-slate-500 mb-1">Write the terms in plain words, e.g. <i>"Both countries cut tariffs on farm goods by 20%, and we finance a solar plant in return for a 10-year gas supply."</i> It is checked first: it must be an agreement between your two governments, with concrete terms each side can actually deliver. ${aiReady() ? `Read by: <b>${esc(aiLabel())}</b>.` : 'No AI engine is connected, so the offline staff check it with rules (connect one in AI settings for a full reading).'}</div>
+        <div class="flex flex-wrap gap-2 items-center mb-1"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select></div>
+        <textarea id="ct-text" class="tc-in w-full" rows="3" maxlength="900" placeholder="Terms of the agreement…" style="resize:vertical;font-size:12px">${esc(d.text || '')}</textarea>
+        <div class="flex gap-1 mt-1 mb-2"><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctReview()">${d.busy === 'review' ? 'Checking…' : 'Check the draft'}</button>
+            ${d.review && d.review.valid ? `<button type="button" class="gs-btn gs-btn-primary" ${d.busy ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Propose to ${esc(shortName(d.iso))}`}</button>` : ''}
+            ${d.text ? `<button type="button" class="gs-btn" onclick="ctClear()">Clear</button>` : ''}</div>`;
+    const R = d.review;
+    if (R && !R.valid) h += `<div class="p-2 mb-2 text-[11.5px]" style="border:1px solid #c4553c;color:#f3c7bb"><b>This draft does not work as an agreement yet.</b><br>${esc(R.problem)}</div>`;
+    if (R && R.valid) h += `<div class="p-2 mb-2 text-[11.5px]" style="border:1px solid #93b25f;background:rgba(147,178,95,.06)"><div><b style="color:#d1ad5b">${esc(R.title)}</b> <span class="text-slate-500">· ${esc(CT_NAME[R.category] || 'General')} agreement · ${esc(state.player)} and ${esc(shortName(d.iso))}</span></div>
+        <div class="text-slate-300 my-1">${esc(R.summary)}</div><ul style="margin:0 0 0 16px;list-style:disc">${R.terms.map(t => `<li>${esc(t)}</li>`).join('')}</ul>
+        ${R.note ? `<div class="text-slate-500 mt-1">${esc(R.note)}</div>` : ''}</div>`;
+    return h;
+}
+function ctGrab() { const t = document.getElementById('ct-text'), c = document.getElementById('ct-country'); state.ctDraft = state.ctDraft || {}; const d = state.ctDraft; const text = t ? t.value.trim() : d.text, iso = c ? c.value : d.iso; if (text !== d.text || iso !== d.iso) d.review = null; d.text = text; d.iso = iso; return d; }
+function ctClear() { state.ctDraft = {}; renderSociety(); }
+function ctCategory(text) { let best = 'other', hits = 0; Object.keys(CT_CATS).forEach(k => { const m = text.match(new RegExp(CT_CATS[k].re.source, 'gi')); if (m && m.length > hits) { hits = m.length; best = k; } }); return best; }
+// offline check: is this a coherent, deliverable agreement between these two governments?
+function ctOfflineReview(text, iso) {
+    const me = state.playerIso, words = text.split(/\s+/).filter(Boolean);
+    const bad = msg => ({ valid: false, problem: msg });
+    if (words.length < 6) return bad('It is too short. Say what each side will do, e.g. "We supply X; in return you do Y."');
+    if (/\b(all (of )?(your|their) (money|land|territory|army|weapons|oil|resources)|unconditional surrender|become (our|a) (colony|vassal|province)|abolish (your|their) (country|government|army)|dissolve (your|their)|give (us|me) everything|infinite)\b|\d{4,} ?%/i.test(text)) return bad('Some terms are not something a sovereign government could sign (surrendering its whole territory, army or treasury, or impossible amounts). Make the terms proportionate.');
+    const others = (typeof detectCountries === 'function' ? detectCountries(text) : []).map(x => x.iso).filter(x => x && x !== me && x !== iso);
+    if (/\b(cede|hand over|transfer)\b.*\b(territory|region|province|island|city)\b/i.test(text) && others.length) return bad(`It hands over territory belonging to ${others.map(shortName).join(', ')}, which is not party to this agreement. Only the two signatories can bind themselves.`);
+    const themRe = new RegExp(`\\b(you|they|${shortName(iso).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b.*\\b(must|will|shall)\\b.*\\b(pay|give|cede|hand over|transfer)\\b`, 'i');
+    if (themRe.test(text) && !/\b(in (return|exchange)|we will|we shall|both|each side|mutual|in turn)\b/i.test(text)) return bad('It only lists demands on the other side. Add what you offer in return ("in exchange, we will…").');
+    if (!/\b(will|shall|must|agree|agrees|commit|give|gives|pay|pays|commits|provide|provides|share|supply|reduce|cut|build|invest|exchange|allow|establish|open|grant|fund|finance|train|cooperate|recognise|recognize|lift|remove|send|buy|sell|guarantee|protect|hold|create|set up)\b/i.test(text)) return bad('No concrete commitment found. An agreement needs obligations: who will provide, cut, build, share or allow what.');
+    const category = ctCategory(text);
+    const parts = text.replace(/\s+/g, ' ').split(/(?<=[.!?])\s+|;\s*/).map(x => x.trim().replace(/^[-•*\d.)\s]+/, '')).filter(x => x.split(' ').length >= 3).slice(0, 6);
+    const terms = (parts.length ? parts : [text]).map(x => x.length > 170 ? x.slice(0, 167) + '…' : x).map(x => x[0].toUpperCase() + x.slice(1));
+    const nm = CT_NAME[category];
+    return { valid: true, category, title: `${state.player}–${shortName(iso)} ${nm === 'General' ? 'Cooperation' : nm} Agreement`, summary: `A ${nm.toLowerCase()} agreement between ${state.player} and ${shortName(iso)}.`, terms, note: 'Checked by the offline staff.' };
+}
+async function ctReview() {
+    const d = ctGrab(); if (!d.text || !d.iso) { d.review = { valid: false, problem: 'Choose a country and write the terms first.' }; renderSociety(); return; }
+    playClick(); d.busy = 'review'; renderSociety();
+    let R = null;
+    if (aiReady()) {
+        const them = d.iso;
+        const sys = `You are the treaty office of ${shortName(them)}'s foreign ministry on ${fmtDate(state.date)}. A draft bilateral agreement from ${state.player} arrives. Check whether it makes sense as an international agreement between these two governments: coherent wording, concrete terms, obligations each side can actually deliver given who they are (geography, economy, alliances, sanctions, the real situation in January 2026), no terms binding third countries, nothing absurd, contradictory or game-breaking. Do not judge whether ${shortName(them)} would sign it, only whether it is a valid, sensible draft. If valid, restate it cleanly.`;
+        const user = `Draft agreement between ${state.player} (proposer) and ${shortName(them)}:\n---\n${d.text}\n---\nReturn JSON: {"valid": true or false, "problem": "if not valid: one or two sentences saying exactly what to fix", "title": "formal short title", "category": one of ${JSON.stringify(Object.keys(CT_CATS).concat('other'))}, "summary": "one sentence", "terms": ["3 to 6 clear clauses, each naming which side does what"]}`;
+        const j = await callAI(sys, user, true, { maxTokens: 700 });
+        if (j && typeof j.valid === 'boolean') R = j.valid ? { valid: true, title: String(j.title || '').slice(0, 90) || `${state.player}–${shortName(them)} Agreement`, category: CT_CATS[j.category] ? j.category : ctCategory(d.text), summary: String(j.summary || '').slice(0, 260), terms: (Array.isArray(j.terms) ? j.terms : []).map(x => String(x).slice(0, 200)).filter(Boolean).slice(0, 6), note: `Checked by ${aiLabel()}.` } : { valid: false, problem: String(j.problem || 'The draft does not make sense as an agreement.').slice(0, 400) };
+        if (R && R.valid && !R.terms.length) R = null;
+    }
+    if (!R) R = ctOfflineReview(d.text, d.iso);
+    d.review = R; d.busy = null; renderSociety();
+}
+async function ctSend() {
+    const d = ctGrab(), R = d.review, me = state.playerIso, iso = d.iso; if (!R || !R.valid || !iso) return;
+    if ((state.treatyCd[iso + 'custom'] || -99) > state.dayIndex) { state.treatyMsg = `${shortName(iso)} wants more time before it looks at another draft from you.`; renderSociety(); return; }
+    playClick(); d.busy = 'send'; renderSociety();
+    const C = CT_CATS[R.category] || { need: 20, growth: 0.0002, them: 0.05 };
+    const base = treatyScore('entente', iso), sc = base.sc; let accept = sc >= C.need, reply = null;
+    if (aiReady()) {
+        const sys = `You are the government of ${shortName(iso)} on ${fmtDate(state.date)}, deciding whether to sign an agreement proposed by ${state.player}. Relations are ${getRel(me, iso)} on a -100..100 scale. Decide as that government realistically would in January 2026, weighing its interests, alliances, rivals and domestic politics.`;
+        const user = `Agreement: ${R.title}\n${R.terms.map(t => '- ' + t).join('\n')}\nReturn JSON: {"accept": true or false, "reply": "two sentences from ${shortName(iso)}'s leader to ${state.player}"}`;
+        const j = await callAI(sys, user, true, { maxTokens: 300 });
+        if (j && typeof j.accept === 'boolean') { accept = j.accept && sc > C.need - 30; reply = j.accept && !accept ? null : String(j.reply || '').slice(0, 400) || null; }
+    }
+    state.treatyCd[iso + 'custom'] = state.dayIndex + 20; d.busy = null;
+    if (accept) {
+        state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, summary: R.summary, day: state.dayIndex, status: 'active' });
+        addRel(me, iso, 10); state.cred = clamp((state.cred || 60) + 2, 0, 100);
+        if (C.growth) state.mods.growth += C.growth; if (C.them) state.gmods[iso] = (state.gmods[iso] || 0) + C.them; if (C.stab) nationIso(me).stability = clamp(nationIso(me).stability + C.stab, 0, 100);
+        if (R.category === 'security' || R.category === 'intelligence') rivalsOf(iso).forEach(x => addRel(me, x, -4));
+        logEvent(`📜 <b>${esc(R.title)}</b> signed between ${esc(state.player)} and ${esc(shortName(iso))}.`, 'good');
+        state.treatyMsg = `${shortName(iso)} signs the ${R.title}.${reply ? ' "' + reply + '"' : ''}`;
+        queueMessage(iso, reply || `We have signed the ${R.title}. We expect every clause to be honoured.`);
+        state.ctDraft = {};
+    } else {
+        state.treatyMsg = `${shortName(iso)} declines the ${R.title}${reply ? ': "' + reply + '"' : sc > C.need - 15 ? ' for now; it is close. Improve relations or offer more in return' : ''}${!reply && base.why.length ? ` (${base.why.slice(0, 2).join('; ')})` : ''}.`;
+    }
+    renderSociety();
+}
+
 function treatyInit() {
     state.treaties = []; state.obl = []; state.offers = []; state.cred = 60; state.treatyCd = {}; let id = 0;
     const add = (type, parties, name) => state.treaties.push({ id: 't' + (++id), type, parties: parties.filter(x => socEligible(x)), name, day: 0, status: 'active', multi: parties.length > 2 });
@@ -10510,7 +10621,7 @@ function treatyPropose(type, iso) {
         addRel(me, iso, T.rel); state.cred = clamp((state.cred || 60) + 2, 0, 100);
         // rivals of the new partners react
         rivalsOf(iso).forEach(x => { if (type === 'defense' || type === 'alliance') addRel(me, x, -4); });
-        if (type === 'entente') { state.gmods[iso] = (state.gmods[iso] || 0) + 0.15; state.mods.growth += 0.0005; }
+        treatyEffects(type, iso);
         logEvent(`📜 <b>${esc(T.label)}</b> signed between ${esc(state.player)} and ${esc(shortName(iso))}.`, 'good');
         state.treatyMsg = `${shortName(iso)} agrees. The ${T.label.toLowerCase()} is signed.`;
         queueMessage(iso, `Our governments have signed the ${T.label.toLowerCase()}. We expect it to be honoured.`);
@@ -10520,14 +10631,14 @@ function treatyPropose(type, iso) {
 function treatyDenounce(id) {
     const t = state.treaties.find(x => x.id === id); if (!t) return;
     t.status = 'denounced'; const me = state.playerIso; t.parties.filter(x => x !== me).forEach(x => addRel(me, x, -20));
-    state.cred = clamp((state.cred || 60) - (t.type === 'entente' ? 4 : 10), 0, 100);
+    state.cred = clamp((state.cred || 60) - (['defense', 'alliance', 'nonaggression'].includes(t.type) ? 10 : 4), 0, 100);
     logEvent(`📜 ${esc(state.player)} withdraws from the ${esc(t.name)}.`, 'bad'); renderSociety();
 }
 function treatyAcceptOffer(id) {
     const o = state.offers.find(x => x.id === id); if (!o) return; state.offers = state.offers.filter(x => x.id !== id);
     const T = TREATY_TYPES[o.type], me = state.playerIso;
     state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: o.type, parties: [me, o.from], name: `${state.player}–${shortName(o.from)} ${T.label.toLowerCase()}`, day: state.dayIndex, status: 'active' });
-    addRel(me, o.from, T.rel); state.cred = clamp((state.cred || 60) + 2, 0, 100); logEvent(`📜 You accept ${esc(shortName(o.from))}'s offer: ${esc(T.label)} signed.`, 'good'); renderSociety();
+    addRel(me, o.from, T.rel); treatyEffects(o.type, o.from); state.cred = clamp((state.cred || 60) + 2, 0, 100); logEvent(`📜 You accept ${esc(shortName(o.from))}'s offer: ${esc(T.label)} signed.`, 'good'); renderSociety();
 }
 function treatyDeclineOffer(id) { state.offers = state.offers.filter(x => x.id !== id); renderSociety(); }
 
@@ -10651,12 +10762,13 @@ function treatiesHTML() {
     state.offers.forEach(o => { h += `<div class="p-2 mb-2" style="border:1px solid #93b25f;background:rgba(147,178,95,.08)">📨 ${flagHTML(nationIso(o.from), 11)} <b>${esc(shortName(o.from))}</b> proposes a ${esc(TREATY_TYPES[o.type].label.toLowerCase())} <span class="text-slate-500">(${o.exp - state.dayIndex} days)</span>
         <div class="mt-1 flex gap-1"><button type="button" class="gs-btn gs-btn-primary" onclick="treatyAcceptOffer('${o.id}')">Accept</button><button type="button" class="gs-btn" onclick="treatyDeclineOffer('${o.id}')">Decline</button></div></div>`; });
     const mine = treatiesOf(me);
-    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}</span></span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
+    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${t.type === 'custom' && t.category ? esc(t.category) + ' agreement' : TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}</span>${t.terms && t.terms.length ? `<ul class="text-[10.5px] text-slate-400" style="margin:2px 0 0 16px;list-style:disc">${t.terms.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
     const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 1).sort((a, b) => getRel(me, b) - getRel(me, a)).slice(0, 60);
     h += `<div class="gs-stat-lbl mb-1">Propose a treaty</div><div class="flex flex-wrap gap-2 items-center mb-2"><select id="tr-country" class="gs-btn">${cands.map(i => `<option value="${i}">${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
-        <select id="tr-type" class="gs-btn">${Object.keys(TREATY_TYPES).map(k => `<option value="${k}">${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
-    h += `<div class="text-[10.5px] text-slate-500 mb-2">${Object.keys(TREATY_TYPES).map(k => `${TREATY_TYPES[k].icon} <b>${TREATY_TYPES[k].label}</b>: ${TREATY_TYPES[k].desc}`).join('<br>')}</div>`;
+        <select id="tr-type" class="gs-btn">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `<option value="${k}">${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
+    h += `<div class="text-[10.5px] text-slate-500 mb-2">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `${TREATY_TYPES[k].icon} <b>${TREATY_TYPES[k].label}</b>: ${TREATY_TYPES[k].desc}`).join('<br>')}</div>`;
     if (state.treatyMsg) h += `<div class="p-2 mb-2" style="border:1px solid #d1ad5b;color:#ece2c4">${esc(state.treatyMsg)}</div>`;
+    h += customTreatyHTML();
     const world = state.treaties.filter(t => t.status === 'active' && !t.parties.includes(me)).slice(0, 14);
     h += `<div class="gs-stat-lbl mb-1 mt-3">Other pacts in the world</div>` + world.map(t => `<div class="text-[11px] text-slate-400">${TREATY_TYPES[t.type].icon} ${esc(t.name)} <span class="text-slate-600">· ${TREATY_TYPES[t.type].label}</span></div>`).join('');
     return h;
