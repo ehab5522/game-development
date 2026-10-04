@@ -10501,106 +10501,122 @@ const CT_CATS = {
     finance: { need: 25, re: /\b(loan|credit|investment|invest|fund|currency|swap|debt|bank)\b/i, growth: 0.0006, them: 0.1 }
 };
 const CT_NAME = { trade: 'Trade', energy: 'Energy', technology: 'Technology', intelligence: 'Intelligence', security: 'Security', migration: 'Migration', health: 'Health', climate: 'Climate', culture: 'Cultural', finance: 'Financial', other: 'General' };
-// quick ideas the player can click to add (one per line); they can also type their own
-const CT_IDEAS = {
-    offer: ['Discounted oil and gas supplies', 'Market access for their goods', 'Investment in their infrastructure', 'Loans on easy terms', 'Technology and know-how transfer', 'Military training and equipment', 'Intelligence on terrorism and crime', 'Scholarships for their students', 'Visa-free travel for their citizens', 'Diplomatic support at the UN'],
-    ask: ['Lower tariffs on our exports', 'Long-term energy supplies', 'Access to their ports and airfields', 'Investment in our industry', 'Cooperation against terrorism', 'Support for our position at the UN', 'Joint research projects', 'Rights to mine critical minerals', 'Return of migrants who entered illegally', 'Purchases of our weapons']
-};
-function ctLines(s) { return String(s || '').split(/\n|;/).map(x => x.trim().replace(/^[-•*\d.)\s]+/, '').replace(/[.]+$/, '')).filter(x => x.length > 1).slice(0, 8); }
+// example ideas the player can click to start from
+const CT_EXAMPLES = ['Cheap oil for them in exchange for lower tariffs on our goods', 'We share intelligence on terrorism and hold joint counter-terror exercises', 'We build a port there and they let our navy use it', 'We invest in their mines in return for a share of their rare earths', 'Visa-free travel and student exchanges between our countries', 'We supply wheat and fertiliser, they supply natural gas'];
 function customTreatyHTML() {
     const d = state.ctDraft || {}, me = state.playerIso, R = d.review;
     const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && (!NON_SOVEREIGN.has(i) || nameLayer[WORLD[i][1]]) && WORLD[i][3] > 0.05).sort((a, b) => shortName(a).localeCompare(shortName(b)));
-    const chips = side => CT_IDEAS[side].map(x => `<button type="button" class="gs-btn" style="padding:2px 6px;font-size:10px;text-transform:none;letter-spacing:0" onclick="ctAddIdea('${side}', this.textContent)">${esc(x)}</button>`).join(' ');
     let h = `<div class="gs-stat-lbl mb-1 mt-3">✍ Write your own agreement</div>
-        <div class="text-[10.5px] text-slate-500 mb-2">Set the main ideas and ${aiReady() ? `<b>${esc(aiLabel())}</b>` : 'your legal staff'} will write a formal draft for you to send or clear. One idea per line; click a suggestion to add it.${aiReady() ? '' : ' (No AI engine is connected, so the draft is written from standard treaty templates. Connect one in AI settings for a fully written text.)'}</div>
+        <div class="text-[10.5px] text-slate-500 mb-2">Write your idea in a sentence or two, the way you would say it. Your legal staff turn it into a formal draft at once${aiReady() ? `, then <b>${esc(aiLabel())}</b> rewrites it in full treaty language in the background` : ''}. Send it or clear it.</div>
         <div class="flex flex-wrap gap-2 items-center mb-2"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn" onchange="ctGrab()">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
             <span class="text-[11px] text-slate-400 ml-2">Duration</span><select id="ct-years" class="gs-btn" onchange="ctGrab()">${[5, 10, 15, 25].map(y => `<option value="${y}" ${(d.years || 10) === y ? 'selected' : ''}>${y} years</option>`).join('')}</select></div>
-        <div class="grid gap-2" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
-            <div><div class="text-[11px] mb-1" style="color:#93b25f">What ${esc(state.player)} offers</div>
-                <textarea id="ct-offer" class="tc-in w-full" rows="3" maxlength="500" placeholder="e.g. Discounted gas for 10 years" style="resize:vertical;font-size:12px">${esc(d.offer || '')}</textarea>
-                <div class="mt-1" style="line-height:1.9">${chips('offer')}</div></div>
-            <div><div class="text-[11px] mb-1" style="color:#d8b45a">What you ask in return</div>
-                <textarea id="ct-ask" class="tc-in w-full" rows="3" maxlength="500" placeholder="e.g. Lower tariffs on our wheat" style="resize:vertical;font-size:12px">${esc(d.ask || '')}</textarea>
-                <div class="mt-1" style="line-height:1.9">${chips('ask')}</div></div></div>
-        <div class="flex gap-1 mt-2 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy ? 'disabled' : ''} onclick="ctWrite()">${d.busy === 'write' ? 'Writing the draft…' : R && R.valid ? 'Rewrite the draft' : 'Write the draft'}</button></div>`;
-    if (R && !R.valid) h += `<div class="p-2 mb-2 text-[11.5px]" style="border:1px solid #c4553c;color:#f3c7bb"><b>No draft could be written from these ideas.</b><br>${esc(R.problem)}</div>`;
+        <textarea id="ct-idea" class="tc-in w-full" rows="2" maxlength="400" placeholder="Your idea, e.g. cheap oil for them in exchange for lower tariffs on our goods" style="resize:vertical;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ctWrite();}">${esc(d.idea || '')}</textarea>
+        <div class="mt-1 mb-2" style="line-height:1.9">${CT_EXAMPLES.map(x => `<button type="button" class="gs-btn" style="padding:2px 6px;font-size:10px;text-transform:none;letter-spacing:0" onclick="ctUseExample(this.textContent)">${esc(x)}</button>`).join(' ')}</div>
+        <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" onclick="ctWrite()">${R && R.valid ? 'Rewrite the draft' : 'Write the draft'}</button></div>`;
+    if (R && !R.valid) h += `<div class="p-2 mb-2 text-[11.5px]" style="border:1px solid #c4553c;color:#f3c7bb"><b>No draft could be written from this idea.</b><br>${esc(R.problem)}</div>`;
     if (R && R.valid) {
         h += `<div class="mb-2" style="border:1px solid #857348;background:#f3ecd9;color:#1d1a12;padding:14px 18px;font-family:Georgia,'Times New Roman',serif;font-size:12.5px;line-height:1.5;max-height:420px;overflow-y:auto">
             <div style="text-align:center;font-weight:700;font-size:14px;margin-bottom:6px">${esc(R.title)}</div>
             ${R.preamble ? `<div style="font-style:italic;margin-bottom:8px">${esc(R.preamble)}</div>` : ''}
             ${R.articles.map((a, i) => `<div style="margin-bottom:6px"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}
             <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:11.5px"><div>For the Government of<br><b>${esc(state.player)}</b></div><div style="text-align:right">For the Government of<br><b>${esc(shortName(d.iso))}</b></div></div>
-            <div style="font-size:10px;color:#6b6250;margin-top:8px">${esc(R.note || '')}</div></div>
+            <div style="font-size:10px;color:#6b6250;margin-top:8px">${d.polishing ? `${esc(aiLabel())} is rewriting this in full treaty language… you can already send this version.` : esc(R.note || '')}</div></div>
             <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Send to ${esc(shortName(d.iso))}`}</button><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctClear()">Clear</button></div>`;
     }
     return h;
 }
 function ctGrab() {
     state.ctDraft = state.ctDraft || {}; const d = state.ctDraft, v = id => { const e = document.getElementById(id); return e ? e.value : null; };
-    const nv = { iso: v('ct-country'), offer: v('ct-offer'), ask: v('ct-ask'), years: v('ct-years') };
-    if (nv.iso !== null) d.iso = nv.iso; if (nv.offer !== null) d.offer = nv.offer.trim(); if (nv.ask !== null) d.ask = nv.ask.trim(); if (nv.years !== null) d.years = +nv.years || 10;
+    const iso = v('ct-country'), idea = v('ct-idea'), years = v('ct-years');
+    if (iso !== null) d.iso = iso; if (idea !== null) d.idea = idea.trim(); if (years !== null) d.years = +years || 10;
     return d;
 }
-function ctAddIdea(side, text) { const d = ctGrab(); d[side] = (d[side] ? d[side].replace(/\s+$/, '') + '\n' : '') + text; renderSociety(); }
+function ctUseExample(t) { const d = ctGrab(); d.idea = t; ctWrite(); }
 function ctClear() { const d = ctGrab(); state.ctDraft = { iso: d.iso, years: d.years }; renderSociety(); }
 function ctCategory(text) { let best = 'other', hits = 0; Object.keys(CT_CATS).forEach(k => { const m = text.match(new RegExp(CT_CATS[k].re.source, 'gi')); if (m && m.length > hits) { hits = m.length; best = k; } }); return best; }
-// do the ideas make sense as terms these two governments could sign?
-function ctCheckIdeas(offers, asks, iso) {
-    const me = state.playerIso, all = offers.concat(asks).join('. ');
-    if (!offers.length && !asks.length) return 'Add at least one idea: what you offer and what you ask in return.';
-    if (!offers.length) return 'You only ask for things. Add what you offer in return; no government signs a list of demands.';
-    if (/\b(all (of )?(your|their|its) (money|land|territory|army|weapons|oil|resources|gold)|unconditional surrender|(become|be) (our|a) (colony|vassal|province|puppet)|abolish (your|their|its) (country|government|army|state)|dissolve (your|their|its)|everything|infinite|unlimited)\b|\d{4,} ?%/i.test(all)) return 'Some ideas are not something a sovereign government could sign (giving up its whole territory, army or treasury, or impossible amounts). Make them proportionate.';
-    const others = (typeof detectCountries === 'function' ? detectCountries(all) : []).map(x => x.iso).filter(x => x && x !== me && x !== iso);
-    if (/\b(cede|hand over|transfer|annex|give)\b.*\b(territory|region|province|island|city|land)\b/i.test(all) && others.length) return `It deals with territory belonging to ${others.map(shortName).join(', ')}, which is not party to this agreement. Only the two signatories can bind themselves.`;
+// split a plain idea into who-does-what: [{ by: 'A' | 'B' | 'both', what }]
+function ctParseIdea(idea, iso) {
+    const A = state.player, B = shortName(iso), esc2 = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    let s = ' ' + idea.replace(/\s+/g, ' ').trim().replace(/[.!]+$/, '') + ' ';
+    // "cheap oil for them in exchange for lower tariffs on our goods" / "we invest in their mines in return for rare earths"
+    let m = s.match(/^\s*(.+?)\s+(?:in exchange for|in return for)\s+(.+?)\s*$/i) || s.match(/^\s*(.+?)\s+(?:for|against)\s+(?!\d)(?!them\b)(?!you\b)(.+?)\s*$/i);
+    const parts = [], dropSubj = x => x.replace(new RegExp(`^(we|us|our (country|government)|${esc2(A)})\\b\\s*`, 'i'), '').trim();
+    if (m && !/\b(we|they|both)\b.*\b(we|they|both)\b/i.test(s)) {
+        parts.push({ by: 'A', what: dropSubj(m[1]).replace(/\b(for|to) (them|you)\b/i, `to ${B}`) }, { by: 'B', what: m[2].trim() });
+    } else {
+        s.split(/\s*(?:;|,|\band then\b|\bin exchange,?\b|\bin return,?\b|\band\b(?=\s+(?:we|they|you|both|the two|our|their|it)\b)|\bwhile\b|\bwhereas\b)\s*/i).map(x => x.trim()).filter(x => x.split(' ').length >= 2).forEach(c => {
+            const subjA = new RegExp(`^(we|us|our (country|government)|${esc2(A)})\\b\\s*`, 'i'), subjB = new RegExp(`^(they|them|you|their (country|government)|${esc2(B)})\\b\\s*`, 'i'), subjBoth = /^(both( countries| sides| parties)?|the two (countries|sides|governments)|our (two )?countries|each side)\b\s*/i;
+            if (subjA.test(c)) parts.push({ by: 'A', what: c.replace(subjA, '') });
+            else if (subjB.test(c)) parts.push({ by: 'B', what: c.replace(subjB, '') });
+            else if (subjBoth.test(c)) parts.push({ by: 'both', what: c.replace(subjBoth, '') });
+            else parts.push({ by: /\b(their|them|they)\b/i.test(c) && !/\b(our|us|we)\b/i.test(c) ? 'A' : 'both', what: c });
+        });
+    }
+    return parts.filter(p => p.what && p.what.split(' ').length >= 1);
+}
+// does the idea make sense as terms these two governments could sign?
+function ctCheckIdea(idea, parts, iso) {
+    const me = state.playerIso;
+    if (!idea || idea.split(/\s+/).length < 3) return 'Write a little more: what should the agreement do? e.g. "cheap oil for them in exchange for lower tariffs on our goods".';
+    if (/\b(all (of )?(your|their|its) (money|land|territory|army|weapons|oil|resources|gold)|unconditional surrender|(become|be) (our|a) (colony|vassal|province|puppet)|abolish (your|their|its) (country|government|army|state)|dissolve (your|their|its)|everything|infinite|unlimited)\b|\d{4,} ?%/i.test(idea)) return 'Part of this is not something a sovereign government could sign (giving up its whole territory, army or treasury, or impossible amounts). Make it proportionate.';
+    const others = (typeof detectCountries === 'function' ? detectCountries(idea) : []).map(x => x.iso).filter(x => x && x !== me && x !== iso);
+    if (/\b(cede|hand over|transfer|annex|give)\b.*\b(territory|region|province|island|city|land)\b/i.test(idea) && others.length) return `It deals with territory belonging to ${others.map(shortName).join(', ')}, which is not party to this agreement. Only the two signatories can bind themselves.`;
+    if (parts.length && parts.every(p => p.by === 'B') && !/\b(mutual|both|each other|together|joint)\b/i.test(idea)) return 'It only asks things of them. Say what you give in return; no government signs a list of demands.';
     return null;
 }
-// offline legal staff: turn short ideas into formal clauses
-// ideas are always written from the player's side: "our" = the player, "their" = the partner
+// legal staff: turn plain wording into a formal clause, written from the player's side ("our" = the player, "their" = the partner)
 function ctClause(idea, party, A, B) {
     let s = idea.trim().replace(/[.]+$/, '');
+    s = s.replace(/\bour (two )?countries\b/gi, 'the two countries').replace(/\bbetween us\b/gi, 'between the Parties').replace(/\beach other\b/gi, 'one another');
     s = s.replace(/\b(we|us)\b/gi, A).replace(/\bour\b/gi, `${A}'s`).replace(/\b(they|them|you)\b/gi, B).replace(/\b(their|your)\b/gi, `${B}'s`);
     if (!/^[A-Z][a-z]+ [A-Z]/.test(s) && !s.startsWith(A) && !s.startsWith(B)) s = s[0].toLowerCase() + s.slice(1);
-    s = s.split(`${party}'s`).join('its');                  // "Turkey shall open Turkey's ports" → "its ports"
-    const verb = /^(supply|provide|build|open|invest|share|cut|reduce|lower|allow|grant|train|fund|finance|buy|purchase|sell|lift|remove|set up|establish|deliver|export|import|host|send|support|recognise|recognize|cooperate|guarantee|protect|return|offer|extend|exchange|develop|grant|give|pay|transfer|help|assist|accept|admit|waive|ease|expand|increase)\b/i;
+    if (party !== 'The Parties') s = s.split(`${party}'s`).join('its');
+    if (party === A) s = s.replace(/\bthere\b/gi, `in ${B}`);              // "we build a port there" → "in India"
+    s = s.replace(/\bcheap\b/gi, 'preferentially priced').replace(/\bstuff\b/gi, 'goods');
+    const verb = /^(supply|provide|build|open|invest|share|cut|reduce|lower|allow|let|grant|train|fund|finance|buy|purchase|sell|lift|remove|set up|establish|deliver|export|import|host|send|support|recognise|recognize|cooperate|guarantee|protect|return|offer|extend|exchange|develop|give|pay|transfer|help|assist|accept|admit|waive|ease|expand|increase|hold|conduct|create|introduce|abolish|protect|fight|combat|work)\b/i;
+    s = s.replace(/^let\s+(.+?)\s+(use|access|enter|operate|station|dock|visit|buy|sell|invest|work|travel|study|fish|fly|land|open|build)\b/i, 'allow $1 to $2').replace(/^let\b/i, 'allow');
     return verb.test(s) ? `${party} shall ${s}.` : `${party} shall provide ${s}.`;
 }
-function ctOfflineDraft(offers, asks, iso, years) {
-    const A = state.player, B = shortName(iso), cat = ctCategory(offers.concat(asks).join(' ')), topic = CT_NAME[cat] === 'General' ? 'Cooperation' : `${CT_NAME[cat]} Cooperation`;
-    const list = (xs, party) => xs.map((x, i) => `(${String.fromCharCode(97 + i)}) ${ctClause(x, party, A, B)}`).join('\n');
-    const articles = [
-        { heading: 'Purpose', text: `The Parties, desiring to strengthen the relations between ${A} and ${B} on the basis of mutual respect and benefit, conclude this Agreement to establish ${topic.toLowerCase()} between them.` },
-        { heading: `Undertakings of ${A}`, text: list(offers, A) }
-    ];
-    if (asks.length) articles.push({ heading: `Undertakings of ${B}`, text: list(asks, B) });
+function ctOfflineDraft(idea, parts, iso, years) {
+    const A = state.player, B = shortName(iso), cat = ctCategory(idea), topic = CT_NAME[cat] === 'General' ? 'Cooperation' : `${CT_NAME[cat]} Cooperation`;
+    const by = k => parts.filter(p => p.by === k).map(p => p.what);
+    const list = (xs, party) => xs.map((x, i) => `${xs.length > 1 ? `(${String.fromCharCode(97 + i)}) ` : ''}${ctClause(x, party, A, B)}`).join('\n');
+    const articles = [{ heading: 'Purpose', text: `The Parties, desiring to strengthen the relations between ${A} and ${B} on the basis of mutual respect and benefit, conclude this Agreement to establish ${topic.toLowerCase()} between them.` }];
+    if (by('both').length) articles.push({ heading: 'Joint undertakings', text: list(by('both'), 'The Parties') });
+    if (by('A').length) articles.push({ heading: `Undertakings of ${A}`, text: list(by('A'), A) });
+    if (by('B').length) articles.push({ heading: `Undertakings of ${B}`, text: list(by('B'), B) });
     articles.push({ heading: 'Implementation', text: `The Parties shall establish a Joint Commission, meeting at least once a year, to oversee the implementation of this Agreement and agree any detailed arrangements.` },
         { heading: 'Duration and termination', text: `This Agreement shall remain in force for ${years} years and shall be renewed automatically for further periods of five years unless either Party gives six months' written notice of termination.` },
         { heading: 'Settlement of disputes', text: `Any dispute concerning the interpretation or application of this Agreement shall be settled amicably through consultation and negotiation between the Parties.` },
         { heading: 'Entry into force', text: `This Agreement shall enter into force on the date of its signature.` });
-    return { valid: true, category: cat, title: `Agreement between the Government of ${A} and the Government of ${B} on ${topic}`, preamble: `The Government of ${A} and the Government of ${B}, hereinafter "the Parties", have agreed as follows:`, articles, summary: `${CT_NAME[cat]} agreement for ${years} years.`, note: 'Drafted by your legal staff from standard treaty templates.' };
+    return { valid: true, category: cat, title: `Agreement between the Government of ${A} and the Government of ${B} on ${topic}`, preamble: `The Government of ${A} and the Government of ${B}, hereinafter "the Parties", have agreed as follows:`, articles, summary: `${CT_NAME[cat]} agreement for ${years} years.`, note: 'Drafted by your legal staff.' };
 }
+function ctFinish(R) { R.terms = R.articles.map(a => (a.heading ? a.heading + ': ' : '') + a.text.replace(/\n/g, ' ')); return R; }
 async function ctWrite() {
-    const d = ctGrab(), offers = ctLines(d.offer), asks = ctLines(d.ask), years = d.years || 10;
-    if (!d.iso) return;
-    const problem = ctCheckIdeas(offers, asks, d.iso);
-    if (problem) { d.review = { valid: false, problem }; renderSociety(); return; }
-    playClick(); d.busy = 'write'; d.review = null; renderSociety();
-    let R = null;
-    if (aiReady()) {
-        const B = shortName(d.iso);
-        const sys = `You are the chief legal adviser of the foreign ministry of ${state.player} on ${fmtDate(state.date)}. Turn the minister's main ideas into a formal bilateral agreement with ${B}, written like a real intergovernmental treaty. First check that the ideas make sense together as an agreement between these two governments in January 2026: terms each side can actually deliver given geography, economy, alliances and sanctions; nothing binding third countries; nothing absurd or self-contradictory. If they do not, say why instead of drafting.`;
-        const user = `${state.player} offers:\n${offers.map(x => '- ' + x).join('\n')}\n${B} would provide:\n${asks.length ? asks.map(x => '- ' + x).join('\n') : '- (nothing specific)'}\nDuration: ${years} years.\nReturn JSON: {"valid": true or false, "problem": "if not valid: what to change, in one or two sentences", "title": "formal title, e.g. Agreement between the Government of X and the Government of Y on ...", "category": one of ${JSON.stringify(Object.keys(CT_CATS).concat('other'))}, "preamble": "one formal sentence", "articles": [{"heading": "short heading", "text": "formal clause text naming the Parties"}] (5 to 8 articles, including the substantive undertakings of each side, implementation, duration of ${years} years, dispute settlement and entry into force), "summary": "one plain sentence"}`;
-        const j = await callAI(sys, user, true, { maxTokens: 1600 });
-        if (j && typeof j.valid === 'boolean') {
-            if (!j.valid) R = { valid: false, problem: String(j.problem || 'These ideas do not make sense as an agreement between the two governments.').slice(0, 400) };
-            else {
-                const arts = (Array.isArray(j.articles) ? j.articles : []).map(a => ({ heading: String((a && a.heading) || '').slice(0, 80), text: String((a && a.text) || a || '').slice(0, 900) })).filter(a => a.text).slice(0, 10);
-                if (arts.length >= 3) R = { valid: true, category: CT_CATS[j.category] ? j.category : ctCategory(offers.concat(asks).join(' ')), title: String(j.title || '').slice(0, 160) || `Agreement between ${state.player} and ${B}`, preamble: String(j.preamble || '').slice(0, 400), articles: arts, summary: String(j.summary || '').slice(0, 260), note: `Drafted by ${aiLabel()}.` };
-            }
+    const d = ctGrab(), idea = (d.idea || '').trim(), years = d.years || 10; if (!d.iso) return;
+    const yrs = idea.match(/\b(\d{1,2})[- ]years?\b/i); const Y = yrs ? clamp(+yrs[1], 1, 50) : years;
+    const parts = ctParseIdea(idea, d.iso), problem = ctCheckIdea(idea, parts, d.iso);
+    playClick();
+    if (problem) { d.review = { valid: false, problem }; d.polishing = false; renderSociety(); return; }
+    // instant draft from the legal staff…
+    d.review = ctFinish(ctOfflineDraft(idea, parts, d.iso, Y)); const req = d.req = (d.req || 0) + 1;
+    d.polishing = aiReady(); renderSociety();
+    if (!d.polishing) return;
+    // …then the AI expands it into full treaty language in the background
+    const B = shortName(d.iso);
+    const sys = `You are the chief legal adviser of ${state.player}'s foreign ministry (${fmtDate(state.date)}). The minister gives a short idea for an agreement with ${B}. Work out what ${state.player} is trying to obtain and what it offers, and expand the idea into a concise formal bilateral treaty. If the idea cannot make sense between these two governments in January 2026 (terms they cannot deliver, binding third countries, absurd), say why instead.`;
+    const user = `Idea: "${idea}"\nDuration: ${Y} years.\nJSON: {"valid":true|false,"problem":"if invalid, one sentence","title":"Agreement between the Government of ${state.player} and the Government of ${B} on ...","category":${JSON.stringify(Object.keys(CT_CATS).concat('other'))} (pick one),"preamble":"one sentence","articles":[{"heading":"...","text":"..."}] (4 to 6 short articles: each side's undertakings with concrete figures where sensible, implementation, duration, entry into force)}`;
+    const j = await callAI(sys, user, true, { maxTokens: 900 });
+    if (d.req !== req || state.ctDraft !== d) return;          // the player moved on
+    d.polishing = false;
+    if (j && typeof j.valid === 'boolean') {
+        if (!j.valid) d.review = { valid: false, problem: String(j.problem || 'This idea does not make sense as an agreement between the two governments.').slice(0, 400) };
+        else {
+            const arts = (Array.isArray(j.articles) ? j.articles : []).map(a => ({ heading: String((a && a.heading) || '').slice(0, 80), text: String((a && a.text) || a || '').slice(0, 900) })).filter(a => a.text).slice(0, 8);
+            if (arts.length >= 3) d.review = ctFinish({ valid: true, category: CT_CATS[j.category] ? j.category : d.review.category, title: String(j.title || '').slice(0, 160) || d.review.title, preamble: String(j.preamble || '').slice(0, 400), articles: arts, summary: d.review.summary, note: `Drafted by ${aiLabel()}.` });
         }
     }
-    if (!R) R = ctOfflineDraft(offers, asks, d.iso, years);
-    R.terms = R.articles.map(a => (a.heading ? a.heading + ': ' : '') + a.text.replace(/\n/g, ' '));
-    d.review = R; d.busy = null; renderSociety();
+    if (!document.getElementById('soc-modal').classList.contains('hidden')) renderSociety();
 }
 async function ctSend() {
     const d = ctGrab(), R = d.review, me = state.playerIso, iso = d.iso; if (!R || !R.valid || !iso) return;
