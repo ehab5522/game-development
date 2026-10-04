@@ -11786,10 +11786,11 @@ function socCard(ind, iso, big) {
 function renderSociety() {
     const body = document.getElementById('soc-body'); if (!body) return;
     const iso = state.playerIso, s = socOf(iso), n = nationIso(iso);
-    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['actors', 'Non-state actors'], ['politics', 'Politics'], ['treaties', 'Treaties & UN'], ['world', 'World rankings']];
+    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['actors', 'Non-state actors'], ['politics', 'Politics'], ['treaties', 'Treaties & UN'], ['orgs', 'Organizations'], ['world', 'World rankings']];
     let h = `<div class="flex flex-wrap gap-1 mb-3">${tabs.map(([k, l]) => `<button type="button" class="gs-btn ${socTab === k ? 'gs-btn-primary' : ''}" onclick="socSetTab('${k}')">${l}</button>`).join('')}</div>`;
     if (socTab === 'politics') h += politicsHTML();
-    else if (socTab === 'treaties') h += treatiesHTML() + reactHTML() + unHTML();
+    else if (socTab === 'treaties') h += warsAlliesHTML() + treatiesHTML() + reactHTML() + unHTML();
+    else if (socTab === 'orgs') h += orgsHTML();
     else if (socTab === 'actors') h += proxiesHTML();
     else if (socTab === 'overview') {
         const gr = getGrowth(iso);
@@ -12368,6 +12369,8 @@ const PROXY_DEFS = [
         leader: 'Iván Archivaldo Guzmán', title: 'Leader, Los Chapitos faction (rival: La Mayiza)', gov: 'Criminal organisation, split into factions', hq: 'Culiacán', ideology: 'Drug trafficking', founded: 1989, em: 'SC', wiki: 'Iván Archivaldo Guzmán Salazar' },
     { id: 'eln', name: 'ELN & FARC dissidents', short: 'ELN/FARC dissidents', kind: 'guerrilla groups', host: ['COL'], patrons: ['VEN'], conf: null, S: 40, fighters: 6000, popShare: 0.03, aims: 'Guerrilla control around Catatumbo, Cauca and the Venezuelan border.', cities: ['Tibú'], base: [8.65, -72.73], color: '#65a30d',
         leader: 'Antonio García', title: 'ELN commander (FARC dissidents: Iván Mordisco)', gov: 'Guerrilla commands', hq: 'Arauca / Catatumbo', ideology: 'Marxist guerrilla / criminal economy', founded: 1964, em: 'ELN', wiki: 'Antonio García (guerrilla)' },
+    { id: 'pmf', name: 'Islamic Resistance in Iraq', short: 'Iraqi militias', kind: 'militia coalition', host: ['IRQ'], patrons: ['IRN'], conf: null, S: 45, fighters: 50000, popShare: 0.02, color: '#4d7c0f', aims: "Iran-aligned militias (Kata'ib Hezbollah, Harakat al-Nujaba and others) inside Iraq's Popular Mobilization Forces; they attack US forces and Israel and press for a full US withdrawal.", cities: ['Jurf al-Sakhar', 'Baghdad'], base: [32.9, 44.1],
+        leader: 'Abu Hussein al-Hamidawi', title: "Secretary-General of Kata'ib Hezbollah", gov: 'Militias inside the state security forces', hq: 'Jurf al-Sakhar', ideology: 'Shia Islamism, part of the Axis of Resistance', founded: 2023, em: 'IRI', wiki: "Kata'ib Hezbollah" },
     { id: 'trnc', name: 'Northern Cyprus (TRNC)', short: 'N. Cyprus', kind: 'breakaway state', host: ['CYN'], state: 'CYN', patrons: ['TUR'], conf: null, S: 30, fighters: 3500, popShare: 1, aims: 'Turkish-Cypriot state in the north of Cyprus since 1974, protected by Turkish troops.', cities: ['North Nicosia', 'Kyrenia'], base: [35.2, 33.5],
         leader: 'Tufan Erhürman', title: 'President of Northern Cyprus (unrecognised)', gov: 'Parliamentary republic recognised only by Türkiye', hq: 'North Nicosia', ideology: 'Turkish-Cypriot statehood', founded: 1983, em: 'TR', wiki: 'Tufan Erhürman' },
     { id: 'somaliland', name: 'Somaliland', short: 'Somaliland', kind: 'breakaway state', host: ['SOL'], state: 'SOL', patrons: [], conf: null, S: 40, fighters: 20000, popShare: 1, aims: 'Self-declared independent republic since 1991; unrecognised.', cities: ['Hargeisa', 'Berbera'], base: [9.56, 44.06],
@@ -12379,7 +12382,7 @@ const PROXY_ALIASES = { hamas: ['hamas'], rsf: ['rsf', 'rapid support forces', '
     sweida: ['suwayda', 'sweida', 'as suwayda', 'druze', 'syrian druze', 'jabal bashan', 'druze national guard', 'hijri'], krg: ['krg', 'kurdistan regional government', 'kurdistan region', 'iraqi kurdistan', 'peshmerga'],
     aa: ['arakan army'], kia: ['kia', 'kachin independence army', 'kachin'], uwsa: ['wa state', 'united wa state army', 'uwsa'], lna: ['lna', 'haftar', 'libyan national army'], polisario: ['polisario'], tplf: ['tplf', 'tigray authorities'],
     transnistria: ['transnistria'], abkhazia: ['abkhazia'], sossetia: ['south ossetia'], vivansanm: ['viv ansanm', 'haitian gangs', 'haiti gangs', 'barbecue'], sinaloa: ['sinaloa cartel', 'sinaloa'], eln: ['eln', 'farc dissidents'],
-    trnc: ['trnc'], somaliland: [] };
+    trnc: ['trnc'], somaliland: [], pmf: ['iraqi militias', 'islamic resistance in iraq', 'kataib hezbollah', 'kata ib hezbollah', 'pmf', 'popular mobilization forces', 'nujaba'] };
 const PROXY_FLAVOR = ['{s} fighters ambush a convoy near {c}.', '{s} drones strike {h} positions around {c}.', '{s} imposes taxes on traders in {c}.', '{s} announces a new offensive near {c}.', 'Aid agencies report {s} checkpoints blocking supplies to {c}.', '{s} recruits hundreds of new fighters in {c}.'];
 // the area each group governs on the control map: "host|key" → group
 const GROUP_AT = {}, GROUP_HOSTS = new Set();
@@ -13159,6 +13162,12 @@ function treatyDeclineOffer(id) { const o = state.offers.find(x => x.id === id);
 // aggressor/victim logic — called when a new war starts
 function treatyOnWar(c, aggressor, victim) {
     if (!state.treaties) return; const me = state.playerIso;
+    // when you are the one attacked, your allies wait for you to call on them (Government → Treaties & UN, or an alliance's collective-defence clause)
+    if (victim === me) {
+        const n = allyCandidates(c).length;
+        if (n) logEvent(`<b>You have been attacked.</b> ${n} treaty partner${n === 1 ? '' : 's'} and fellow alliance members can be called on for help — Government → Treaties &amp; UN.`, 'bad');
+        return;
+    }
     const side = c.sideA.includes(victim) ? 'backA' : 'backB';
     state.treaties.filter(t => t.status === 'active' && ['defense', 'alliance'].includes(t.type) && t.parties.includes(victim) && !t.parties.includes(aggressor)).forEach(t => {
         t.parties.filter(x => x !== victim && x !== aggressor).forEach(m => {
@@ -13801,7 +13810,10 @@ function reactWeekly() {
     state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me))).forEach(c => {
         (c.sideA.includes(me) ? c.sideB : c.sideA).filter(i => WORLD[i] && i !== me).forEach(i => {
             R.g[i] = Math.max(R.g[i] || 0, 50);
-            if (Math.random() < (R.war[i] ? 0.6 : 0.4) * clamp(power(i) / Math.max(1, power(me)) + 0.3, 0.3, 1.2)) scheduleRetaliation(i, 1);
+            // allies fighting on your side wear the enemy down and blunt its attacks
+            const allies = ((c.sideA.includes(me) ? c.backA : c.backB) || []).filter(x => WORLD[x]), help = allies.reduce((a, x) => a + clamp(power(x) / Math.max(1, power(i)), 0.1, 1.5), 0) + ((state.allyJoined || {})[c.id] || 0) * 0.1;
+            if (help > 0) { const n = nationIso(i); n.stability = clamp(n.stability - Math.min(3, help), 0, 100); n.gdp *= 1 - Math.min(0.003, 0.0008 * help); }
+            if (Math.random() < (R.war[i] ? 0.6 : 0.4) * clamp(power(i) / Math.max(1, power(me)) + 0.3, 0.3, 1.2) / (1 + 0.4 * help)) scheduleRetaliation(i, 1);
         });
     });
     updateEconomyUI();
@@ -13815,6 +13827,383 @@ function reactHTML() {
     if (R.log.length) h += `<div class="text-[11px]">${R.log.slice(0, 6).map(l => `<div class="border-t border-slate-800 py-0.5"><span class="text-slate-600">${esc(l.date)}</span> ${l.txt}</div>`).join('')}</div>`;
     return h;
 }
+
+// =====================================================================
+//  INTERNATIONAL ORGANIZATIONS & ALLIANCES — real memberships on 1 January 2026
+//  Each one works: you can apply to join or leave, use its tools as a member (collective defence, common
+//  sanctions, development loans, mediation, summits…), it reacts when one of its members is attacked, and it
+//  meets on the real summit calendar. The Axis of Resistance is an informal alliance of Iran and armed groups.
+// =====================================================================
+const EUROPE = 'ALB AND AUT BEL BIH BGR BLR CHE CYP CZE DEU DNK ESP EST FIN FRA GBR GEO GRC HRV HUN IRL ISL ITA LIE LTU LUX LVA MCO MDA MKD MLT MNE NLD NOR POL PRT ROU RUS SMR SRB SVK SVN SWE TUR UKR XKX'.split(' ');
+const AFRICA = 'DZA AGO BEN BWA BFA BDI CPV CMR CAF TCD COM COG COD CIV DJI EGY GNQ ERI SWZ ETH GAB GMB GHA GIN GNB KEN LSO LBR LBY MDG MWI MLI MRT MUS MAR MOZ NAM NER NGA RWA STP SEN SYC SLE SOM ZAF SSD SDN TZA TGO TUN UGA ZMB ZWE ESH'.split(' ');
+const AMERICAS = 'ATG ARG BHS BRB BLZ BOL BRA CAN CHL COL CRI CUB DMA DOM ECU SLV GRD GTM GUY HTI HND JAM MEX NIC PAN PRY PER KNA LCA VCT SUR TTO USA URY VEN'.split(' ');
+const UN_NONMEMBERS = new Set(['TWN', 'XKX', 'VAT', 'ESH', 'CYN', 'SOL', 'GAZ', 'PSE']);   // Holy See and Palestine are observer states
+const ORG_DEFS = [
+    { id: 'un', short: 'UN', name: 'United Nations', type: 'Global', color: '#4b92db', founded: 1945, hq: 'New York', desc: '193 member states. The General Assembly passes (non-binding) resolutions; the Security Council (5 permanent members with a veto + 10 elected) can impose sanctions and authorise force.',
+        members: () => Object.keys(WORLD).filter(i => socEligible(i) && !NON_SOVEREIGN.has(i) && !UN_NONMEMBERS.has(i)), join: { how: 'unsc' }, perks: ['General Assembly votes on resolutions you propose', 'Security Council: resolutions, sanctions, ceasefires, peacekeepers'], acts: ['ga'] },
+    { id: 'nato', short: 'NATO', name: 'North Atlantic Treaty Organization', type: 'Military alliance', color: '#2e6fd8', founded: 1949, hq: 'Brussels', desc: 'Collective defence: under Article 5 an armed attack on one member is an attack on all. Next summit: Ankara, July 2026.',
+        members: () => BLOCS.NATO.slice(), join: { region: EUROPE.concat(['USA', 'CAN']), how: 'consensus', days: 240 }, defence: 0.72, treaty: 'North Atlantic Treaty (NATO)', bloc: 'NATO', perks: ['Article 5: call every member to your defence', 'Members +25 relations with each other'], acts: ['call'] },
+    { id: 'eu', short: 'EU', name: 'European Union', type: 'Political & economic union', color: '#1d4ed8', founded: 1993, hq: 'Brussels', desc: 'Single market, customs union and common foreign policy. Sanctions need every member to agree, so one government can block them.',
+        members: () => BLOCS.EU.slice(), join: { region: EUROPE, regimes: ['democracy'], how: 'consensus', days: 365 }, bloc: 'EU', growth: 0.0015, perks: ['Single market: growth +0.15 pts while a member', 'Common EU sanctions (unanimous vote)'], acts: ['eusanction'] },
+    { id: 'brics', short: 'BRICS', name: 'BRICS', type: 'Economic bloc', color: '#c2410c', founded: 2009, hq: 'rotating (India chairs in 2026)', desc: 'Brazil, Russia, India, China and South Africa, enlarged with Egypt, Ethiopia, Iran, the UAE and Indonesia. Its New Development Bank lends to members.',
+        members: () => BLOCS.BRICS.slice(), join: { how: 'consensus', days: 180 }, bloc: 'BRICS', perks: ['New Development Bank loans', 'Annual summit (India, 2026)'], acts: ['ndb', 'summit'] },
+    { id: 'au', short: 'AU', name: 'African Union', type: 'Continental union', color: '#16a34a', founded: 2002, hq: 'Addis Ababa', desc: '55 members including the Sahrawi Republic. It suspends governments that take power in coups (Mali, Burkina Faso, Niger, Guinea, Sudan, Madagascar, Guinea-Bissau) and runs peace missions such as AUSSOM in Somalia.',
+        members: () => AFRICA.filter(i => WORLD[i]), suspended: ['MLI', 'BFA', 'NER', 'GIN', 'SDN', 'MDG', 'GNB'], join: { region: AFRICA, how: 'majority', days: 90 }, perks: ['Ask the AU to mediate African conflicts', 'Suspends members after coups'], acts: ['mediate', 'summit'] },
+    { id: 'arab', short: 'LAS', name: 'Arab League', type: 'Regional organization', color: '#047857', founded: 1945, hq: 'Cairo', desc: '22 Arab states (Palestine is represented by the State of Palestine). Holds emergency summits on regional crises.',
+        members: () => 'DZA BHR COM DJI EGY IRQ JOR KWT LBN LBY MRT MAR OMN PSE QAT SAU SOM SDN SYR TUN ARE YEM'.split(' ').filter(i => WORLD[i]), join: { region: 'DZA BHR COM DJI EGY IRQ JOR KWT LBN LBY MRT MAR OMN PSE QAT SAU SOM SDN SYR TUN ARE YEM GAZ'.split(' '), how: 'majority', days: 60 }, perks: ['Emergency summits that rally Arab states against a country'], acts: ['arabsummit'] },
+    { id: 'gcc', short: 'GCC', name: 'Gulf Cooperation Council', type: 'Regional alliance', color: '#0f766e', founded: 1981, hq: 'Riyadh', desc: 'Six Gulf monarchies with a joint defence pact (Peninsula Shield Force) and a customs union.',
+        members: () => BLOCS.GCC.slice(), join: { region: ['SAU', 'ARE', 'QAT', 'KWT', 'BHR', 'OMN', 'YEM', 'IRQ', 'JOR'], how: 'consensus', days: 240 }, defence: 0.6, treaty: 'Gulf Cooperation Council defense pact', bloc: 'GCC', perks: ['Joint defence: call members to your aid'], acts: ['call', 'summit'] },
+    { id: 'asean', short: 'ASEAN', name: 'Association of Southeast Asian Nations', type: 'Regional organization', color: '#2563eb', founded: 1967, hq: 'Jakarta', desc: '11 members since Timor-Leste joined in October 2025. Works by consensus; Myanmar\'s junta is barred from summits.',
+        members: () => BLOCS.ASEAN.slice(), join: { region: ['BRN', 'KHM', 'IDN', 'LAO', 'MYS', 'MMR', 'PHL', 'SGP', 'THA', 'VNM', 'TLS', 'PNG'], how: 'consensus', days: 180 }, bloc: 'ASEAN', perks: ['Regional trade and summits'], acts: ['summit'] },
+    { id: 'sco', short: 'SCO', name: 'Shanghai Cooperation Organisation', type: 'Security organization', color: '#b91c1c', founded: 2001, hq: 'Beijing', desc: 'China, Russia, India, Pakistan, Iran, Belarus and four Central Asian states: security and counter-terrorism cooperation.',
+        members: () => ['CHN', 'RUS', 'IND', 'PAK', 'IRN', 'KAZ', 'KGZ', 'TJK', 'UZB', 'BLR'], join: { how: 'consensus', days: 180 }, perks: ['Security consultations and summits'], acts: ['summit'] },
+    { id: 'csto', short: 'CSTO', name: 'Collective Security Treaty Organization', type: 'Military alliance', color: '#991b1b', founded: 1992, hq: 'Moscow', desc: 'Russia-led mutual defence pact with Belarus, Kazakhstan, Kyrgyzstan and Tajikistan (Armenia froze its participation in 2024).',
+        members: () => BLOCS.CSTO.slice(), join: { region: ['RUS', 'BLR', 'KAZ', 'KGZ', 'TJK', 'ARM', 'AZE', 'UZB', 'TKM', 'MDA', 'GEO', 'UKR'], how: 'consensus', days: 180 }, defence: 0.62, treaty: 'Collective Security Treaty (CSTO)', bloc: 'CSTO', perks: ['Collective defence: call members to your aid'], acts: ['call'] },
+    { id: 'aes', short: 'AES', name: 'Alliance of Sahel States', type: 'Confederation & defence pact', color: '#a16207', founded: 2023, hq: 'Niamey', desc: 'Mali, Burkina Faso and Niger: military governments that left ECOWAS in January 2025 and pledged to defend each other.',
+        members: () => BLOCS.AES.slice(), join: { region: ['MLI', 'BFA', 'NER', 'TCD', 'GIN', 'CAF'], how: 'consensus', days: 120 }, defence: 0.7, treaty: 'Alliance of Sahel States (AES)', bloc: 'AES', perks: ['Mutual defence: call members to your aid'], acts: ['call'] },
+    { id: 'g7', short: 'G7', name: 'Group of Seven', type: 'Economic forum', color: '#64748b', founded: 1975, hq: '— (France chairs in 2026)', desc: 'The largest advanced democracies. 2026 summit: Évian, France, in June.',
+        members: () => ['USA', 'JPN', 'DEU', 'GBR', 'FRA', 'ITA', 'CAN'], join: { how: 'closed' }, perks: ['Annual summit with the other leaders'], acts: ['summit'] },
+    { id: 'g20', short: 'G20', name: 'Group of Twenty', type: 'Economic forum', color: '#475569', founded: 1999, hq: '— (United States chairs in 2026)', desc: '19 major economies plus the EU and the African Union. 2026 summit in the United States in December.',
+        members: () => ['ARG', 'AUS', 'BRA', 'CAN', 'CHN', 'FRA', 'DEU', 'IND', 'IDN', 'ITA', 'JPN', 'KOR', 'MEX', 'RUS', 'SAU', 'ZAF', 'TUR', 'GBR', 'USA'], join: { how: 'closed' }, perks: ['Annual summit with the world\'s largest economies'], acts: ['summit'] },
+    { id: 'opec', short: 'OPEC+', name: 'OPEC+', type: 'Oil producers', color: '#854d0e', founded: 1960, hq: 'Vienna', desc: 'OPEC\'s 12 members plus Russia, Kazakhstan, Mexico, Oman, Azerbaijan and other producers agree production quotas that move world oil prices.',
+        members: () => ['SAU', 'IRQ', 'IRN', 'KWT', 'ARE', 'VEN', 'NGA', 'LBY', 'DZA', 'GAB', 'GNQ', 'COG', 'RUS', 'KAZ', 'MEX', 'OMN', 'AZE', 'BHR', 'BRN', 'MYS', 'SDN', 'SSD'].filter(i => WORLD[i]), join: { how: 'majority', days: 60, need: i => ENERGY_EXPORTERS.has(i) }, perks: ['Push for output cuts (higher oil prices) or increases'], acts: ['opec'] },
+    { id: 'oas', short: 'OAS', name: 'Organization of American States', type: 'Regional organization', color: '#0e7490', founded: 1948, hq: 'Washington', desc: 'States of the Americas (Nicaragua left in 2023; Cuba does not take part).',
+        members: () => AMERICAS.filter(i => WORLD[i] && !['NIC', 'CUB'].includes(i)), join: { region: AMERICAS, how: 'majority', days: 60 }, perks: ['Regional summits and election observers'], acts: ['summit'] },
+    { id: 'ecowas', short: 'ECOWAS', name: 'Economic Community of West African States', type: 'Regional bloc', color: '#15803d', founded: 1975, hq: 'Abuja', desc: '12 West African states after Mali, Burkina Faso and Niger left in January 2025.',
+        members: () => ['BEN', 'CPV', 'CIV', 'GMB', 'GHA', 'GIN', 'GNB', 'LBR', 'NGA', 'SEN', 'SLE', 'TGO'], join: { region: ['BEN', 'CPV', 'CIV', 'GMB', 'GHA', 'GIN', 'GNB', 'LBR', 'NGA', 'SEN', 'SLE', 'TGO', 'MLI', 'BFA', 'NER', 'MRT'], how: 'majority', days: 60 }, perks: ['Free movement and trade; regional summits'], acts: ['summit'] },
+    { id: 'mercosur', short: 'MERCOSUR', name: 'Mercosur', type: 'Trade bloc', color: '#0369a1', founded: 1991, hq: 'Montevideo', desc: 'South American customs union: Argentina, Brazil, Paraguay, Uruguay and Bolivia (Venezuela suspended).',
+        members: () => ['ARG', 'BRA', 'PRY', 'URY', 'BOL'], join: { region: ['ARG', 'BRA', 'PRY', 'URY', 'BOL', 'CHL', 'COL', 'ECU', 'PER', 'VEN', 'GUY', 'SUR'], how: 'consensus', days: 180 }, growth: 0.0005, perks: ['Customs union: growth +0.05 pts while a member'], acts: ['summit'] },
+    { id: 'axis', short: 'AXIS', name: 'Axis of Resistance', type: 'Informal alliance', color: '#15803d', founded: 2003, hq: 'Tehran (IRGC Quds Force)', informal: true,
+        desc: 'Iran and the armed movements it backs: Hezbollah, the Houthis, Hamas and the Iraqi militias. Weakened by the 2024–25 wars and the fall of Assad in Syria (December 2024), but its members still answer attacks on one another.',
+        members: () => ['IRN', 'GAZ'], groups: ['hezbollah', 'houthi', 'hamas', 'pmf'], join: { how: 'axis' }, defence: 0.7, perks: ['Members hit back when one of them is attacked', 'Call the Axis: its groups attack your enemy'], acts: ['call', 'axis'] }
+];
+const ORG = id => ORG_DEFS.find(o => o.id === id);
+// 'the European Union' but 'BRICS', 'OPEC+', 'Mercosur'
+const orgThe = (o, cap) => ['brics', 'opec', 'mercosur'].includes(o.id) ? o.name : (cap ? 'The ' : 'the ') + o.name;
+// live membership (it changes when you join, leave, are suspended or expelled)
+function orgState() {
+    if (!state.orgs) { state.orgs = {}; ORG_DEFS.forEach(o => { state.orgs[o.id] = { members: o.members(), suspended: (o.suspended || []).slice() }; }); }
+    ORG_DEFS.forEach(o => { if (!state.orgs[o.id]) state.orgs[o.id] = { members: o.members(), suspended: (o.suspended || []).slice() }; });
+    return state.orgs;
+}
+function orgMembers(id, active) { const S = orgState()[id]; if (!S) return []; return active ? S.members.filter(i => !S.suspended.includes(i)) : S.members.slice(); }
+function inOrg(id, iso, active = true) { return orgMembers(id, active).includes(iso); }
+function orgsOf(iso) { return ORG_DEFS.filter(o => inOrg(o.id, iso, false)); }
+// membership changes feed back into relations (BLOCS) and the defence treaties
+function orgSync() {
+    const me = state.playerIso, S = orgState();
+    ORG_DEFS.forEach(o => {
+        if (o.bloc && BLOCS[o.bloc]) { const arr = BLOCS[o.bloc]; arr.length = 0; S[o.id].members.forEach(i => arr.push(i)); }
+        if (o.treaty && state.treaties) { const t = state.treaties.find(x => x.name === o.treaty && x.status === 'active'); if (t) t.parties = S[o.id].members.filter(i => socEligible(i)); }
+    });
+    try { Object.keys(BASE_REL_CACHE).forEach(k => { if (k.includes(me)) delete BASE_REL_CACHE[k]; }); } catch (e) { }
+}
+function orgCdLeft(key) { const d = ((state.orgCd || {})[key] || 0) - state.dayIndex; return d > 0 ? d : 0; }
+function orgCdSet(key, days) { state.orgCd = state.orgCd || {}; state.orgCd[key] = state.dayIndex + days; }
+
+// ---------- joining and leaving ----------
+function orgCanApply(o) {
+    const me = state.playerIso, j = o.join || {};
+    if (inOrg(o.id, me, false)) return [false, 'You are a member'];
+    if (j.how === 'closed') return [false, 'Membership by invitation only'];
+    if ((state.orgApp || []).some(a => a.id === o.id)) return [false, 'Application under review'];
+    if (j.region && !j.region.includes(me)) return [false, 'Only open to countries of the region'];
+    if (j.regimes && !j.regimes.includes(regimeOf(me))) return [false, `Only open to ${j.regimes.join(' / ')}s`];
+    if (j.need && !j.need(me)) return [false, 'Only open to major oil producers'];
+    if (j.how === 'axis' && !(getRel(me, 'IRN') > 40 && getRel(me, 'ISR') < -40)) return [false, 'Needs close ties with Iran and hostility to Israel'];
+    return [true, ''];
+}
+function orgApply(id) {
+    const o = ORG(id), [ok] = orgCanApply(o); if (!ok) return;
+    playClick(); const days = (o.join && o.join.days) || 30;
+    (state.orgApp = state.orgApp || []).push({ id, due: state.dayIndex + days });
+    logEvent(`${esc(state.player)} applies to join ${orgThe(o).replace(o.name, '<b>' + esc(o.name) + '</b>')}. Members will decide within ${days} days.`, 'neutral'); renderSociety();
+}
+function orgDecide(a) {
+    const o = ORG(a.id), me = state.playerIso, how = (o.join || {}).how, M = orgMembers(o.id, true).filter(i => i !== me);
+    let ok = false, blockers = [];
+    if (how === 'unsc') { blockers = UNSC_P5.filter(p => p !== me && getRel(p, me) < -20); ok = !blockers.length && M.filter(i => getRel(i, me) > -20).length >= M.length * 2 / 3; }   // Security Council recommendation (no veto), then two thirds of the General Assembly
+    else if (how === 'axis') ok = getRel('IRN', me) > 40;
+    else if (how === 'consensus') { blockers = M.filter(i => getRel(i, me) < (o.defence ? 5 : -10)); ok = !blockers.length; }
+    else { const yes = M.filter(i => getRel(i, me) > -15).length; ok = yes >= M.length * (2 / 3); blockers = ok ? [] : M.filter(i => getRel(i, me) <= -15); }
+    if (ok) orgJoin(o.id, true);
+    else { logEvent(`${orgThe(o, true).replace(o.name, '<b>' + esc(o.name) + '</b>')} rejects ${esc(state.player)}'s application${blockers.length ? ` — blocked by ${blockers.slice(0, 4).map(shortName).map(esc).join(', ')}${blockers.length > 4 ? ' and others' : ''}` : ''}.`, 'bad'); }
+}
+function orgJoin(id, announce) {
+    const o = ORG(id), me = state.playerIso, S = orgState()[id];
+    if (!S.members.includes(me)) S.members.push(me); S.suspended = S.suspended.filter(i => i !== me);
+    orgMembers(id, true).forEach(i => { if (i !== me) addRel(me, i, o.defence ? 10 : 6); });
+    if (o.growth) state.mods.growth += o.growth;
+    orgSync();
+    if (announce) logEvent(`<b>${esc(state.player)} joins ${esc(orgThe(o))}.</b>`, 'good');
+}
+function orgLeave(id) {
+    const o = ORG(id), me = state.playerIso, S = orgState()[id]; if (!S.members.includes(me)) return;
+    if (!confirm(`Leave ${orgThe(o)}? Its members will resent it.`)) return;
+    playClick(); S.members = S.members.filter(i => i !== me); S.suspended = S.suspended.filter(i => i !== me);
+    orgMembers(id, true).forEach(i => addRel(me, i, o.defence ? -15 : -8));
+    if (o.growth) state.mods.growth -= o.growth * 1.6;            // leaving a single market costs more than joining gained
+    if (o.defence) state.cred = clamp((state.cred || 60) - 6, 0, 100);
+    orgSync();
+    logEvent(`<b>${esc(state.player)} leaves ${esc(orgThe(o))}.</b>${o.growth ? ' Trade with its members becomes harder.' : ''}`, 'bad'); renderSociety();
+}
+function orgSuspend(id, iso, why) {
+    const S = orgState()[id]; if (!S || S.suspended.includes(iso) || !S.members.includes(iso)) return;
+    S.suspended.push(iso); orgSync();
+    logEvent(`${orgThe(ORG(id), true).replace(ORG(id).name, '<b>' + esc(ORG(id).name) + '</b>')} suspends ${esc(shortName(iso))}${why ? ' ' + why : ''}.`, iso === state.playerIso ? 'bad' : 'neutral');
+}
+
+// ---------- the General Assembly ----------
+function gaVote(kind, target, proposer) {
+    const members = orgMembers('un', true); let yes = 0, no = 0, abst = 0;
+    members.forEach(m => {
+        if (m === target) { no++; return; } if (m === proposer) { yes++; return; }
+        let sc = getRel(m, proposer) * 0.3 - getRel(m, target) * 0.4 + (kind === 'ceasefire' ? 25 : 0);
+        if (treatyPartners(target).includes(m)) sc -= 30;
+        if (sc >= 8) yes++; else if (sc >= -12) abst++; else no++;
+    });
+    return { yes, no, abst, passed: yes > no };
+}
+
+// ---------- calling allies to war (they answer after a few days) ----------
+function warEnemies(c) { const me = state.playerIso; return (c.sideA.includes(me) ? c.sideB : c.sideA).concat(c.sideA.includes(me) ? (c.backB || []) : (c.backA || [])).filter(i => WORLD[i]); }
+function warIsDefender(c) { return !c.playerMade; }   // wars you started are flagged playerMade
+function allyCandidates(c, via) {
+    const me = state.playerIso, mySide = c.sideA.includes(me) ? 'A' : 'B', foes = warEnemies(c), have = new Set(c.sideA.concat(c.sideB, c.backA || [], c.backB || []));
+    const out = {};
+    const add = (iso, how, base) => { if (!iso || iso === me || have.has(iso) || foes.includes(iso) || !WORLD[iso]) return; if (foes.some(f => treatyPartners(iso, ['defense', 'alliance']).includes(f) && !treatyPartners(iso, ['defense', 'alliance']).includes(me))) return; if (!out[iso] || out[iso].base < base) out[iso] = { iso, how, base }; };
+    if (!via) {
+        treatiesOf(me).filter(t => ['defense', 'alliance'].includes(t.type) && !t.multi).forEach(t => t.parties.forEach(x => add(x, t.name, t.type === 'alliance' ? 0.78 : 0.65)));
+        ORG_DEFS.filter(o => o.defence && inOrg(o.id, me)).forEach(o => orgMembers(o.id, true).forEach(x => add(x, o.short, o.defence)));
+    } else { const o = ORG(via); if (o) orgMembers(o.id, true).forEach(x => add(x, o.short, o.defence || 0.5)); }
+    return Object.values(out);
+}
+function allyGroupCandidates(c) {   // the Axis' armed groups answer an Axis member's call
+    const me = state.playerIso; if (!inOrg('axis', me)) return [];
+    return ORG('axis').groups.map(proxyById).filter(p => p && p.status !== 'dissolved' && !(state.allyCalls || []).some(a => a.cid === c.id && a.grp === p.id));
+}
+function allyOdds(c, cand) {
+    const me = state.playerIso, foe = warEnemies(c)[0] || c.sideA[0], def = warIsDefender(c);
+    let p = cand.base * (def ? 1 : 0.4) * clamp(0.55 + getRel(cand.iso, me) / 160, 0.25, 1.25) * clamp((state.cred || 60) / 60, 0.4, 1.3);
+    if (foe && WORLD[foe]) { if (power(cand.iso) < power(foe) * 0.15) p *= 0.55; if (getRel(cand.iso, foe) > 30) p *= 0.35; }
+    try { if (fxDist([capitalOf(cand.iso).lat, capitalOf(cand.iso).lng], [capitalOf(me).lat, capitalOf(me).lng]) > 9000) p *= 0.7; } catch (e) { }
+    return clamp(p, 0.03, 0.95);
+}
+function callAllies(cid, via) {
+    const c = state.conflicts.find(k => k.id === cid); if (!c) return;
+    const key = cid + '|' + (via || 'all'); if (orgCdLeft('call|' + key)) return;
+    const cands = allyCandidates(c, via), groups = via === 'axis' || (!via && inOrg('axis', state.playerIso)) ? allyGroupCandidates(c) : [];
+    if (!cands.length && !groups.length) return;
+    playClick(); orgCdSet('call|' + key, 30); state.allyCalls = state.allyCalls || [];
+    cands.forEach(x => state.allyCalls.push({ cid, ally: x.iso, how: x.how, p: allyOdds(c, x), due: state.dayIndex + rint(3, 10) }));
+    groups.forEach(g => state.allyCalls.push({ cid, grp: g.id, p: 0.75, due: state.dayIndex + rint(2, 6) }));
+    const o = via && ORG(via);
+    logEvent(`${o ? `<b>${esc(state.player)} invokes ${esc(orgThe(o))}'s collective defence</b>` : `<b>${esc(state.player)} calls on its allies</b>`} in the ${esc(c.name)}: ${cands.length + groups.length} answer${cands.length + groups.length === 1 ? '' : 's'} expected within days.`, 'neutral');
+    renderSociety();
+}
+function allyCallsTick() {
+    const me = state.playerIso, pn = nationIso(me), due = (state.allyCalls || []).filter(a => a.due <= state.dayIndex);
+    state.allyCalls = (state.allyCalls || []).filter(a => a.due > state.dayIndex);
+    due.forEach(a => {
+        const c = state.conflicts.find(k => k.id === a.cid); if (!c || c.type !== 'war') return;
+        const side = c.sideA.includes(me) ? 'backA' : 'backB', foes = warEnemies(c), foe = foes[0];
+        if (a.grp) {
+            const g = proxyById(a.grp); if (!g) return;
+            if (Math.random() < a.p) { foes.forEach(f => { const n = nationIso(f); n.stability = clamp(n.stability - 2, 0, 100); n.gdp *= 0.999; }); c.intensity = clamp(c.intensity + 4, 0, 100); if (g.id === 'houthi') state.oilShock = Math.max(state.oilShock || 0, 0.2);
+                (state.allyJoined = state.allyJoined || {})[a.cid] = ((state.allyJoined || {})[a.cid] || 0) + 1;
+                logEvent(`<b>${esc(g.short)}</b> answers the call and opens fire on ${esc(foes.map(shortName).join(' & '))}${g.id === 'houthi' ? ', attacking shipping in the Red Sea' : ''}.`, 'good'); }
+            else logEvent(`${esc(g.short)} holds back from joining the ${esc(c.name)} for now.`, 'neutral');
+            return;
+        }
+        const n = shortName(a.ally), r = Math.random();
+        if (r < a.p) {
+            if (!c[side]) c[side] = []; if (!c[side].includes(a.ally)) c[side].push(a.ally);
+            addRel(me, a.ally, 6); foes.forEach(f => addRel(a.ally, f, -25)); c.intensity = clamp(c.intensity + 5, 0, 100);
+            foes.forEach(f => { const fn = nationIso(f); fn.stability = clamp(fn.stability - 2, 0, 100); });
+            (state.allyJoined = state.allyJoined || {})[a.cid] = ((state.allyJoined || {})[a.cid] || 0) + 1;
+            logEvent(`${flagHTML(nationIso(a.ally), 10)} <b>${esc(n)} joins the war on your side</b>${a.how ? ` (${esc(a.how)})` : ''} against ${esc(foes.map(shortName).join(' & '))}.`, 'good');
+            queueMessage(a.ally, pick([`We stand with you. Our forces are moving.`, `You called and we have answered. ${foe ? shortName(foe) + ' will regret this war.' : ''}`]));
+            state.cred = clamp((state.cred || 60) + 1, 0, 100);
+        } else if (r < a.p + 0.25) {
+            const aid = Math.min(nationIso(a.ally).gdp * 0.0006, pn.gdp * 0.004); pn.treasury += aid;
+            if (foe) { state.sanctionsOn[foe] = (state.sanctionsOn[foe] || 0) + 1; addRel(a.ally, foe, -8); }
+            logEvent(`${flagHTML(nationIso(a.ally), 10)} ${esc(n)} will not send troops, but sends ${formatVal(aid)} in arms and aid${foe ? ` and sanctions ${esc(shortName(foe))}` : ''}.`, 'neutral');
+        } else {
+            addRel(me, a.ally, -3);
+            logEvent(`${flagHTML(nationIso(a.ally), 10)} ${esc(n)} declines to join the ${esc(c.name)}.`, 'bad');
+            queueMessage(a.ally, `We cannot commit our forces to this war. We urge restraint.`);
+        }
+    });
+}
+
+// ---------- organizations react when one of their members is attacked ----------
+function orgOnAttack(target, sev) {
+    const me = state.playerIso, pn = nationIso(me);
+    const isGroup = String(target).startsWith('grp:'), gid = isGroup ? target.slice(4) : null;
+    ORG_DEFS.forEach(o => {
+        const victimIn = isGroup ? (o.groups || []).includes(gid) : inOrg(o.id, target);
+        if (!victimIn || o.id === 'un') return;
+        const meIn = inOrg(o.id, me), cdk = 'react|' + o.id;
+        if (meIn && !o.defence && ['au', 'arab', 'oas', 'ecowas', 'asean'].includes(o.id) && !isGroup) { orgSuspend(o.id, me, `for attacking a fellow member, ${shortName(target)}`); return; }
+        if (orgCdLeft(cdk)) return;
+        if (o.id === 'axis') {
+            orgCdSet(cdk, 20); reactAdd('IRN', 'g', 15 * sev);
+            const g = pick(o.groups.map(proxyById).filter(p => p && p.status !== 'dissolved' && p.id !== gid));
+            if (g) {
+                pn.stability = clamp(pn.stability - 1, 0, 100); pn.gdp *= 1 - 0.0008 * sev; if (g.id === 'houthi') state.oilShock = Math.max(state.oilShock || 0, 0.25);
+                logEvent(`<b>Axis of Resistance:</b> ${esc(g.short)} retaliates for the attack on ${esc(isGroup ? (proxyById(gid) || {}).short || 'its ally' : shortName(target))}${g.id === 'houthi' ? ' with missiles at ships linked to you in the Red Sea' : ' with rockets and drones at your forces and bases in the region'}.`, 'bad');
+            }
+            return;
+        }
+        if (meIn) return;
+        orgCdSet(cdk, 45);
+        if (o.id === 'eu') {
+            const M = orgMembers('eu', true), block = M.filter(m => getRel(m, me) > 45);
+            if (!block.length && sev >= 0.8) { state.sanctionsOnMe += 2; state.mods.growth -= 0.002; M.forEach(m => addRel(me, m, -3)); logEvent(`<b>European Union</b> adopts sanctions on ${esc(state.player)} over the attack on ${esc(shortName(target))} (growth −0.2 pts).`, 'bad'); }
+            else if (block.length) logEvent(`EU sanctions on ${esc(state.player)} are blocked by ${block.slice(0, 2).map(shortName).map(esc).join(' and ')}.`, 'neutral');
+        } else if (o.defence) {
+            orgMembers(o.id, true).forEach(m => reactAdd(m, 'g', 10 * sev));
+            logEvent(`<b>${esc(o.name)}</b> members hold emergency consultations after the attack on ${esc(shortName(target))} and put their forces on alert.`, 'bad');
+        } else {
+            const M = orgMembers(o.id, true).filter(m => getRel(m, me) < 40); M.forEach(m => addRel(me, m, -2));
+            if (M.length) logEvent(`${orgThe(o, true).replace(o.name, '<b>' + esc(o.name) + '</b>')} condemns ${esc(state.player)}'s attack on ${esc(shortName(target))}.`, 'bad');
+        }
+    });
+    // the General Assembly meets in emergency session after a serious attack
+    if (!isGroup && sev >= 1 && !orgCdLeft('react|unga')) {
+        orgCdSet('react|unga', 60); const V = gaVote('condemn', me, target);
+        if (V.passed) { pn.stability = clamp(pn.stability - 1, 0, 100); state.cred = clamp((state.cred || 60) - 2, 0, 100); }
+        logEvent(`<b>UN General Assembly</b> votes on a resolution condemning ${esc(state.player)}: ${V.yes} for, ${V.no} against, ${V.abst} abstaining — ${V.passed ? 'adopted' : 'rejected'}.`, V.passed ? 'bad' : 'neutral');
+    }
+}
+{
+    const _rr = reactRecord;
+    reactRecord = function (o) {
+        _rr(o);
+        try {
+            if (o.cat === 'military' && ['strike', 'invasion', 'blockade'].includes(o.kind)) (o.targets || []).filter(t => t.stance === 'hostile' && t.iso !== state.playerIso).forEach(t => orgOnAttack(t.iso, o.kind === 'invasion' ? 1.6 : 1));
+            if (o.kind === 'proxy' && o.act === 'strike' && ORG('axis').groups.includes(o.proxyId)) orgOnAttack('grp:' + o.proxyId, 1);
+        } catch (e) { console.warn('org react', e); }
+    };
+}
+
+// ---------- member actions ----------
+function orgTargetPick(id) { const el = document.getElementById('org-t-' + id); return el ? el.value : null; }
+function orgAct(id, act) {
+    const o = ORG(id), me = state.playerIso, pn = nationIso(me), key = id + '|' + act; if (orgCdLeft(key)) return;
+    const T = orgTargetPick(id); playClick();
+    if (act === 'ga') {
+        if (!T) return; const kind = (document.getElementById('org-k-un') || {}).value || 'condemn';
+        const V = gaVote(kind, T, me); orgCdSet(key, 30);
+        if (V.passed) { addRel(me, T, -4); state.cred = clamp((state.cred || 60) + 1, 0, 100); if (kind === 'ceasefire') state.conflicts.filter(c => c.sideA.includes(T) || c.sideB.includes(T) || (c.location || []).includes(T)).forEach(c => c.intensity = clamp(c.intensity - 4, 0, 100)); }
+        logEvent(`<b>UN General Assembly</b> ${V.passed ? 'adopts' : 'rejects'} ${esc(state.player)}'s resolution ${kind === 'ceasefire' ? 'calling for a ceasefire involving' : 'condemning'} ${esc(shortName(T))}: ${V.yes} for, ${V.no} against, ${V.abst} abstaining.`, V.passed ? 'good' : 'bad');
+    }
+    else if (act === 'eusanction') {
+        if (!T) return; const M = orgMembers('eu', true).filter(m => m !== me), block = M.filter(m => getRel(m, T) > 25 || getRel(m, me) < -20); orgCdSet(key, 60);
+        if (block.length) logEvent(`EU sanctions on ${esc(shortName(T))} fail: ${block.slice(0, 3).map(shortName).map(esc).join(', ')} ${block.length > 1 ? 'veto' : 'vetoes'} them (decisions need all 27).`, 'bad');
+        else { state.sanctionsOn[T] = (state.sanctionsOn[T] || 0) + 3; nationIso(T).gdp *= 0.996; M.concat([me]).forEach(m => addRel(m, T, -6)); reactAdd(T, 'g', 15); logEvent(`<b>European Union</b> adopts sanctions on ${esc(shortName(T))} proposed by ${esc(state.player)}.`, 'good'); }
+    }
+    else if (act === 'ndb') { const amt = pn.gdp * 0.004; pn.treasury += amt; try { socOf(me).debt += amt; } catch (e) { } orgCdSet(key, 180); logEvent(`The BRICS <b>New Development Bank</b> lends ${formatVal(amt)} to ${esc(state.player)} for infrastructure.`, 'good'); }
+    else if (act === 'mediate') {
+        const c = state.conflicts.filter(k => k.intensity > 25 && (k.location || []).concat(k.sideA, k.sideB).some(i => AFRICA.includes(i))).sort((a, b) => b.intensity - a.intensity).find(k => !T || (k.location || []).concat(k.sideA, k.sideB).includes(T));
+        orgCdSet(key, 60);
+        if (!c) logEvent('There is no African conflict for the AU to mediate.', 'neutral');
+        else if (Math.random() < 0.6) { c.intensity = clamp(c.intensity - 9, 0, 100); state.cred = clamp((state.cred || 60) + 1, 0, 100); logEvent(`<b>African Union</b> mediators, at ${esc(state.player)}'s request, broker talks in the ${esc(c.name)} (intensity −9).`, 'good'); }
+        else logEvent(`African Union mediation in the ${esc(c.name)} makes no progress.`, 'neutral');
+    }
+    else if (act === 'arabsummit') {
+        if (!T) return; const M = orgMembers('arab', true).filter(m => m !== me && getRel(m, T) < 20); orgCdSet(key, 90);
+        M.forEach(m => { addRel(m, T, -5); addRel(m, me, 2); }); reactAdd(T, 'g', 8);
+        logEvent(`<b>Arab League</b> emergency summit called by ${esc(state.player)}: ${M.length} states condemn ${esc(shortName(T))}.`, M.length ? 'good' : 'neutral');
+    }
+    else if (act === 'opec') {
+        const cut = ((document.getElementById('org-k-opec') || {}).value || 'cut') === 'cut', M = orgMembers('opec', true), yes = M.filter(m => getRel(m, me) > -10).length >= M.length / 2; orgCdSet(key, 90);
+        if (!yes) logEvent(`OPEC+ members reject ${esc(state.player)}'s proposal to ${cut ? 'cut' : 'raise'} output.`, 'bad');
+        else if (cut) { state.oilShock = Math.max(state.oilShock || 0, 0.3); if (ENERGY_EXPORTERS.has(me)) state.mods.growth += 0.001; logEvent(`<b>OPEC+</b> agrees to cut output at ${esc(state.player)}'s urging; oil prices jump.`, 'neutral'); }
+        else { state.oilShock = 0; if (ENERGY_EXPORTERS.has(me)) state.mods.growth -= 0.0005; logEvent(`<b>OPEC+</b> agrees to raise output; oil prices ease.`, 'neutral'); }
+    }
+    else if (act === 'summit') {
+        const cost = pn.gdp * 0.00003; pn.treasury = Math.max(0, pn.treasury - cost); orgCdSet(key, 365);
+        orgMembers(id, true).forEach(m => { if (m !== me) addRel(me, m, 4); }); pn.stability = clamp(pn.stability + 1, 0, 100);
+        logEvent(`${esc(state.player)} hosts a <b>${esc(o.name)}</b> summit: relations with members +4, approval +1.`, 'good');
+    }
+    else if (act === 'axis') {
+        if (!T) return; orgCdSet(key, 45); const n = nationIso(T); n.stability = clamp(n.stability - 3, 0, 100); n.gdp *= 0.998; reactAdd(T, 'g', 20); addRel(me, T, -10);
+        if (['ISR', 'USA', 'SAU', 'ARE', 'GBR'].includes(T)) state.oilShock = Math.max(state.oilShock || 0, 0.15);
+        logEvent(`<b>Axis of Resistance</b> pressure campaign on ${esc(shortName(T))}: rocket, drone and shipping attacks by its allied groups.`, 'neutral');
+    }
+    renderSociety();
+}
+
+// ---------- summits on the real 2026 calendar, AU suspensions after coups ----------
+const SUMMITS = [['g7', 6, 'Évian, France'], ['nato', 7, 'Ankara, Türkiye'], ['brics', 9, 'New Delhi, India'], ['sco', 9, 'Bishkek, Kyrgyzstan'], ['asean', 10, 'Manila, Philippines'], ['g20', 12, 'the United States'], ['au', 2, 'Addis Ababa'], ['arab', 5, 'the Arab League\'s host capital'], ['gcc', 12, 'the Gulf']];
+function orgMonthly() {
+    const me = state.playerIso, m = state.date.getMonth() + 1;
+    SUMMITS.filter(s => s[1] === m).forEach(([id, , where]) => {
+        const o = ORG(id); if (!o) return; const mine = inOrg(id, me);
+        if (mine) { orgMembers(id, true).forEach(x => { if (x !== me) addRel(me, x, 2); }); }
+        logEvent(`${mine ? '🤝 ' : ''}<b>${esc(o.name)}</b> summit in ${esc(where)}${mine ? ' — you attend (relations with members +2)' : ''}.`, 'neutral');
+    });
+    // the AU suspends governments that seize power; reinstates them after a return to civilian rule
+    const S = orgState().au;
+    S.members.forEach(i => { const j = regimeOf(i) === 'junta'; if (j && !S.suspended.includes(i) && (i === me || (state.regimes || {})[i])) orgSuspend('au', i, 'after an unconstitutional change of government'); if (!j && S.suspended.includes(i) && (state.regimes || {})[i]) { S.suspended = S.suspended.filter(x => x !== i); logEvent(`The African Union lifts the suspension of ${esc(shortName(i))}.`, 'good'); } });
+    // applications
+    const due = (state.orgApp || []).filter(a => a.due <= state.dayIndex); state.orgApp = (state.orgApp || []).filter(a => a.due > state.dayIndex); due.forEach(orgDecide);
+}
+
+// ---------- UI ----------
+function orgBadge(o, size) { return `<span class="org-badge" style="background:${o.color};font-size:${size || 10}px">${esc(o.short)}</span>`; }
+function orgsHTML() {
+    const me = state.playerIso, mine = ORG_DEFS.filter(o => inOrg(o.id, me, false));
+    const targets = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 0.3).sort((a, b) => shortName(a).localeCompare(shortName(b)));
+    const tsel = (id, def) => `<select id="org-t-${id}" class="gs-btn" style="max-width:170px">${targets.map(i => `<option value="${i}" ${i === def ? 'selected' : ''}>${esc(shortName(i))}</option>`).join('')}</select>`;
+    const rival = rivalsOf(me).sort((a, b) => getRel(me, a) - getRel(me, b))[0] || 'RUS';
+    let h = `<div class="text-[11.5px] text-slate-300 mb-2">Your country belongs to <b>${mine.length}</b> organization${mine.length === 1 ? '' : 's'}: ${mine.map(o => orgBadge(o)).join(' ') || '—'}. Apply to join (members decide), leave, or use each one's tools. Organizations also react when one of their members is attacked — by you or anyone else.</div>`;
+    h += `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">`;
+    ORG_DEFS.forEach(o => {
+        const S = orgState()[o.id], member = S.members.includes(me), susp = S.suspended.includes(me), app = (state.orgApp || []).find(a => a.id === o.id), [can, why] = orgCanApply(o);
+        const status = susp ? '<span style="color:#e0975a">Suspended</span>' : member ? '<span style="color:#93b25f">Member</span>' : app ? `<span style="color:#d8b45a">Applied · decision in ${app.due - state.dayIndex} days</span>` : '<span class="text-slate-500">Not a member</span>';
+        const cd = a => orgCdLeft(o.id + '|' + a), btn = (a, label, extra) => `<button type="button" class="gs-btn" ${cd(a) ? 'disabled' : ''} onclick="orgAct('${o.id}','${a}')">${label}${cd(a) ? ` · ${cd(a)}d` : ''}</button>${extra || ''}`;
+        let acts = '';
+        if (member && !susp) {
+            if (o.acts.includes('ga')) acts += `<div class="flex flex-wrap gap-1 items-center"><select id="org-k-un" class="gs-btn"><option value="condemn">Condemn</option><option value="ceasefire">Ceasefire call on</option></select>${tsel('un', rival)}${btn('ga', 'General Assembly vote')}</div><div class="text-[10px] text-slate-500">Security Council resolutions: use orders, e.g. "Seek UN sanctions on Iran" (see Treaties &amp; UN).</div>`;
+            if (o.acts.includes('eusanction')) acts += `<div class="flex flex-wrap gap-1 items-center">${tsel('eu', rival)}${btn('eusanction', 'Propose EU sanctions')}</div>`;
+            if (o.acts.includes('ndb')) acts += btn('ndb', 'New Development Bank loan');
+            if (o.acts.includes('mediate')) acts += `<div class="flex flex-wrap gap-1 items-center">${tsel('au', 'SDN')}${btn('mediate', 'Ask the AU to mediate')}</div>`;
+            if (o.acts.includes('arabsummit')) acts += `<div class="flex flex-wrap gap-1 items-center">${tsel('arab', 'ISR')}${btn('arabsummit', 'Emergency summit against')}</div>`;
+            if (o.acts.includes('opec')) acts += `<div class="flex flex-wrap gap-1 items-center"><select id="org-k-opec" class="gs-btn"><option value="cut">Cut output (oil up)</option><option value="raise">Raise output (oil down)</option></select>${btn('opec', 'Propose')}</div>`;
+            if (o.acts.includes('axis')) acts += `<div class="flex flex-wrap gap-1 items-center">${tsel('axis', 'ISR')}${btn('axis', 'Pressure campaign on')}</div>`;
+            if (o.acts.includes('summit')) acts += btn('summit', 'Host a summit');
+            if (o.acts.includes('call')) { const wars = state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me))); acts += wars.length ? wars.map(c => { const n = allyCandidates(c, o.id).length + (o.id === 'axis' ? allyGroupCandidates(c).length : 0), k = orgCdLeft('call|' + c.id + '|' + o.id); return `<button type="button" class="gs-btn gs-btn-primary" ${!n || k ? 'disabled' : ''} onclick="callAllies('${c.id}','${o.id}')">${o.id === 'nato' ? 'Invoke Article 5' : o.id === 'axis' ? 'Call the Axis' : 'Invoke collective defence'} · ${esc(c.name)}${k ? ` (${k}d)` : n ? ` (${n})` : ''}</button>`; }).join('') : `<div class="text-[10px] text-slate-500">Collective defence can be invoked when you are at war.</div>`; }
+        }
+        const join = member ? (o.join.how === 'closed' || o.id === 'un' ? '' : `<button type="button" class="gs-btn" onclick="orgLeave('${o.id}')">Leave</button>`) : (can ? `<button type="button" class="gs-btn gs-btn-primary" onclick="orgApply('${o.id}')">Apply to join</button>` : `<span class="text-[10px] text-slate-500">${esc(why)}</span>`);
+        const M = S.members, groups = (o.groups || []).map(proxyById).filter(Boolean);
+        h += `<div class="gs-stat" style="padding:8px 10px;border-left:3px solid ${o.color}"><div class="flex items-center gap-2 mb-1">${orgBadge(o, 11)}<b class="text-[12.5px]">${esc(o.name)}</b>${o.informal ? '<span class="text-[9.5px] text-slate-500">(informal)</span>' : ''}</div>
+            <div class="text-[10.5px] text-slate-400">${esc(o.type)} · founded ${o.founded} · ${esc(o.hq)} · <b>${M.length}</b> members${S.suspended.length ? ` (${S.suspended.length} suspended)` : ''} · ${status}</div>
+            <div class="text-[11px] text-slate-300 my-1">${esc(o.desc)}</div>
+            <ul class="text-[10.5px] text-slate-400" style="margin:0 0 4px 14px;list-style:disc">${o.perks.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+            <div class="flex flex-col gap-1">${acts}</div><div class="mt-1">${join}</div>
+            <details class="text-[10.5px] mt-1"><summary style="cursor:pointer;color:#ab9f80">Members</summary><div style="line-height:1.7">${M.map(i => `<span style="white-space:nowrap;${S.suspended.includes(i) ? 'opacity:.45' : ''}">${flagHTML(nationIso(i), 9)} ${esc(shortName(i))}${S.suspended.includes(i) ? ' (suspended)' : ''}</span>`).join(' · ')}${groups.length ? ' · ' + groups.map(g => `<span style="white-space:nowrap;color:${pxText(g.color)}">◆ ${esc(g.short)}</span>`).join(' · ') : ''}</div></details></div>`;
+    });
+    return h + '</div>';
+}
+function warsAlliesHTML() {
+    const me = state.playerIso, wars = state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me)));
+    if (!wars.length) return '';
+    let h = `<div class="gs-stat-lbl mb-1">Your wars &amp; allies</div><div class="text-[11px] text-slate-400 mb-2">Allies do not join automatically. Call on them and each government answers within days: it may join the war, send arms and money instead, or refuse. Odds depend on the treaty, your relations, your credibility, the enemy's power and the distance — and are much lower if you started the war.</div>`;
+    wars.forEach(c => {
+        const foes = warEnemies(c), mine = (c.sideA.includes(me) ? c.backA : c.backB) || [], cands = allyCandidates(c), groups = inOrg('axis', me) ? allyGroupCandidates(c) : [], k = orgCdLeft('call|' + c.id + '|all'), pend = (state.allyCalls || []).filter(a => a.cid === c.id);
+        const odds = p => p >= 0.6 ? ['likely', '#93b25f'] : p >= 0.35 ? ['possible', '#d8b45a'] : ['unlikely', '#c4553c'];
+        h += `<div class="p-2 mb-2" style="border:1px solid #c4553c88;background:rgba(196,85,60,.06)"><div class="flex justify-between flex-wrap gap-1"><b>⚔ ${esc(c.name)}</b><span class="text-[11px] text-slate-400">${warIsDefender(c) ? 'you were attacked' : 'you started it'} · intensity ${Math.round(c.intensity)}</span></div>
+            <div class="text-[11px] mt-1">Enemy: ${foes.map(i => `${flagHTML(nationIso(i), 10)} ${esc(shortName(i))}`).join(', ')}</div>
+            <div class="text-[11px]">Fighting with you: ${mine.length ? mine.map(i => `${flagHTML(nationIso(i), 10)} ${esc(shortName(i))}`).join(', ') : '<span class="text-slate-500">nobody yet</span>'}${pend.length ? ` · <span style="color:#d8b45a">${pend.length} answer${pend.length === 1 ? '' : 's'} pending</span>` : ''}</div>
+            ${cands.length ? `<div class="text-[10.5px] mt-1 text-slate-400">Can be called: ${cands.slice(0, 14).map(x => { const [l, col] = odds(allyOdds(c, x)); return `${esc(shortName(x.iso))} <span style="color:${col}">${l}</span>`; }).join(' · ')}${cands.length > 14 ? ` +${cands.length - 14}` : ''}${groups.length ? ' · ' + groups.map(g => esc(g.short)).join(', ') : ''}</div>` : ''}
+            <div class="mt-1"><button type="button" class="gs-btn gs-btn-primary" ${!(cands.length + groups.length) || k ? 'disabled' : ''} onclick="callAllies('${c.id}')">Call on your allies${k ? ` · again in ${k} days` : ` (${cands.length + groups.length})`}</button></div></div>`;
+    });
+    return h;
+}
+
+(function () { const st = document.createElement('style'); st.textContent = `.org-badge { display: inline-block; padding: 1px 5px; border-radius: 2px; font-family: 'Oswald','Arial Narrow',Arial,sans-serif; font-weight: 700; letter-spacing: .06em; color: #fff; line-height: 1.5; vertical-align: middle; }`; document.head.appendChild(st); })();
 
 // =====================================================================
 //  UI — Government tabs, non-state actors list, help with clickable orders, map search
@@ -13868,7 +14257,7 @@ function openHelp() {
         <div class="mb-3 text-slate-300">You lead a country from 1 January 2026. Type any order in plain English in the order bar (⚑ Orders), then press <b>Execute</b>. <b>Click an example below</b> to drop it into the order bar, then edit it before you send it.</div>
         ${Object.keys(HELP_ORDERS).map(k => `<div class="gs-stat-lbl mt-2 mb-1">${k}</div><div class="flex flex-wrap gap-1">${HELP_ORDERS[k].map(t => `<button type="button" class="cc-chip" onclick="helpFill('${t.replace(/'/g, "\\'")}')">${esc(t)}</button>`).join('')}</div>`).join('')}
         <div class="gs-stat-lbl mt-4 mb-1">Where to look</div><ul class="text-slate-300" style="list-style:disc;padding-left:18px;line-height:1.6">
-        <li><b>🏛 Government</b> — budget, economy, war &amp; casualties, world rankings, <b>Politics</b> (elections, projected vote, political capital), <b>Treaties &amp; UN</b> (propose pacts, answer allies, Security Council votes) and <b>Non-state actors</b>.</li>
+        <li><b>🏛 Government</b> — budget, economy, war &amp; casualties, world rankings, <b>Politics</b> (elections, projected vote, political capital), <b>Treaties &amp; UN</b> (propose pacts, call on your allies in a war, answer their calls, Security Council votes), <b>Organizations</b> (UN, NATO, EU, BRICS, African Union, Arab League, ASEAN, GCC, SCO, CSTO, G7, G20, OPEC+ and more, plus the informal Axis of Resistance: join, leave, use their tools) and <b>Non-state actors</b>.</li>
         <li><b>🗺 Map view</b> — political map, front lines, or internal control (militias, autonomous regions, breakaway states). <b>Click inside a group's area</b> to see who rules it, like a country.</li>
         <li><b>🔍</b> (under the zoom buttons, or press <b>F</b>) — find any country, city or armed group.</li>
         <li><b>🪖 Coup</b> — coup risk at home and abroad. <b>📑 Report</b> — your advisor's situation report.</li>
@@ -13928,7 +14317,7 @@ function mapFind(q) {
 //  WIRING — new game, saves, schedule
 // =====================================================================
 // saved with the game; a save from before these systems existed starts them fresh
-const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react'];
+const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react', 'orgs', 'orgApp', 'orgCd', 'allyCalls', 'allyJoined'];
 NEW_FIELDS.forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 function systemsEnsure() {
     if (!state.proxies) proxyInit(); else proxyMigrate();
@@ -13936,10 +14325,11 @@ function systemsEnsure() {
     state.obl = state.obl || []; state.offers = state.offers || []; state.treatyCd = state.treatyCd || {}; if (state.cred === undefined) state.cred = 60;
     if (!state.pol) polInit();
     state.regimes = state.regimes || {}; state.unscLog = state.unscLog || [];
+    orgState(); orgSync();
 }
 {
     const _iw = initWorld;
-    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; state.faiths = {}; state.react = null; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
+    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; state.faiths = {}; state.react = null; state.orgs = null; state.orgApp = []; state.orgCd = {}; state.allyCalls = []; state.allyJoined = {}; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
     const _as = applySave;
     applySave = function (d) { _as(d); try { ENT.sel = null; NEW_FIELDS.forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; }); systemsEnsure(); if (state.pol && state.pol.over) state.pol.over = null; grpRefresh(true); } catch (e) { console.warn('systems load', e); } };
     const _dt = dailyTick;
@@ -13951,6 +14341,8 @@ function systemsEnsure() {
             const d = state.dayIndex;
             if (d % 7 === 3) treatyWeekly();
             if (d % 7 === 5) reactWeekly();
+            allyCallsTick();
+            if (state.date.getDate() === 3) orgMonthly();
             if (state.date.getDate() === 2) { proxiesMonthly(); treatyMonthly(); }
             if (state.date.getDate() === 4) polMonthly();
             if (ENT.sel && !catchUp) entSelect(ENT.sel, true);
