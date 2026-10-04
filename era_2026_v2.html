@@ -488,8 +488,8 @@
         .px-label { display: flex; align-items: center; gap: 4px; background: rgba(10,12,8,.82); border: 1px solid; padding: 1px 5px; font-family: 'Oswald', sans-serif; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; width: max-content; margin: 0 auto; cursor: pointer; }
         body.map-only #ui-layer, body.map-only .gs-topbar { visibility: hidden !important; }
         #maponly-restore { position: fixed; top: 10px; right: 10px; z-index: 3000; display: none; }
-        /* Map zoom buttons — right edge, vertically centred; JS nudges them left of any right-side panel */
-        #zoom-ctrl { position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 1001; display: flex; flex-direction: column; gap: 4px; transition: right .2s; }
+        /* Map zoom buttons — on the right edge, in the gap between the right-hand panels (JS picks the spot) */
+        #zoom-ctrl { position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 1001; display: flex; flex-direction: column; gap: 4px; transition: right .2s, top .2s; }
         #zoom-ctrl .gs-btn-sq { width: 34px; height: 34px; font-size: 20px; line-height: 1; letter-spacing: 0; }
         body.fx-cine #zoom-ctrl { opacity: .18; pointer-events: none; }
         body.map-only #maponly-restore { display: block; }
@@ -1209,7 +1209,7 @@
             NPL:["NP","Nepal",45.8,29.6], NLD:["NL","Netherlands",1449.7,18.1], NZL:["NZ","New Zealand",278.6,5.36], NIC:["NI","Nicaragua",24.2,6.81],
             NER:["NE","Niger",24.8,30.2], NGA:["NG","Nigeria",377.4,242.5], PRK:["KP","North Korea",16.4,25.7], MKD:["MK","North Macedonia",21.6,1.81],
             NOR:["NO","Norway",599.4,5.66], OMN:["OM","Oman",117.2,5.41], PAK:["PK","Pakistan",452,266.5], PLW:["PW","Palau",0.38,0.02],
-            PSE:["PS","Palestine",16,5.61], PAN:["PA","Panama",95,4.62], PNG:["PG","Papua New Guinea",34.4,13.1], PRY:["PY","Paraguay",60.5,6.46],
+            PSE:["PS","West Bank",13.6,3.4], GAZ:["PS","Gaza Strip",0.7,2.1], PAN:["PA","Panama",95,4.62], PNG:["PG","Papua New Guinea",34.4,13.1], PRY:["PY","Paraguay",60.5,6.46],
             PER:["PE","Peru",380.9,34.8], PHL:["PH","Philippines",512.2,115.3], POL:["PL","Poland",1134.2,36.2], PRT:["PT","Portugal",380.6,10.7],
             QAT:["QA","Qatar",217.4,3.19], ROU:["RO","Romania",480.8,18.7], RUS:["RU","Russia",2656.5,143.4], RWA:["RW","Rwanda",17.3,14.5],
             KNA:["KN","Saint Kitts and Nevis",1.14,0.05], LCA:["LC","Saint Lucia",2.77,0.18], VCT:["VC","Saint Vincent and the Grenadines",1.24,0.11],
@@ -1288,7 +1288,7 @@
             NIC:["Daniel Ortega & Rosario Murillo","Daniel Ortega & Rosario Murillo"], NER:["Abdourahamane Tiani","Ali Lamine Zeine"], NGA:["Bola Tinubu","Bola Tinubu"],
             PRK:["Kim Jong Un","Pak Thae-song"], MKD:["Gordana Siljanovska-Davkova","Hristijan Mickoski"], NOR:["Haakon VIII","Jonas Gahr Støre"],
             OMN:["Haitham bin Tariq","Haitham bin Tariq"], PAK:["Asif Ali Zardari","Shehbaz Sharif"], PLW:["Surangel Whipps Jr.","Surangel Whipps Jr."],
-            PSE:["Mahmoud Abbas","Mohammad Mustafa"], PAN:["José Raúl Mulino","José Raúl Mulino"], PNG:["Charles III","James Marape"],
+            PSE:["Mahmoud Abbas","Mohammad Mustafa"], GAZ:["Khalil al-Hayya (Hamas)","Hamas leadership council"], PAN:["José Raúl Mulino","José Raúl Mulino"], PNG:["Charles III","James Marape"],
             PRY:["Santiago Peña","Santiago Peña"], PER:["Keiko Fujimori","Keiko Fujimori"], PHL:["Bongbong Marcos","Bongbong Marcos"],
             POL:["Karol Nawrocki","Donald Tusk"], PRT:["António José Seguro","Luís Montenegro"], QAT:["Tamim bin Hamad Al Thani","Mohammed bin Abdulrahman Al Thani"],
             ROU:["Nicușor Dan","Ilie Bolojan"], RUS:["Vladimir Putin","Mikhail Mishustin"], RWA:["Paul Kagame","Justin Nsengiyumva"],
@@ -1358,7 +1358,7 @@
             "the bahamas":"BHS", "bahamas":"BHS", "east timor":"TLS", "timor leste":"TLS", "burma":"MMR", "viet nam":"VNM",
             "lao pdr":"LAO", "lao peoples democratic republic":"LAO", "syrian arab republic":"SYR", "iran islamic republic of":"IRN",
             "brunei darussalam":"BRN", "cape verde":"CPV", "cabo verde":"CPV", "federated states of micronesia":"FSM",
-            "palestine":"PSE", "state of palestine":"PSE", "west bank":"PSE", "gaza":"PSE", "gaza strip":"PSE",
+            "palestine":"PSE", "state of palestine":"PSE", "west bank":"PSE", "gaza":"GAZ", "gaza strip":"GAZ", "palestine west bank":"PSE", "hamas":"GAZ",
             "hong kong sar":"HKG", "hong kong s a r":"HKG", "macao s a r":"MAC", "macau s a r":"MAC", "hong kong sar china":"HKG", "macao sar":"MAC", "macao":"MAC", "falkland islands":"FLK", "falkland islands malvinas":"FLK",
             "turkiye":"TUR", "united republic of tanzania":"TZA", "western sahara":"ESH", "sao tome and principe":"STP",
             "saint kitts and nevis":"KNA", "vatican":"VAT", "holy see":"VAT", "kosovo":"XKX", "northern cyprus":"CYN", "turkish republic of northern cyprus":"CYN",
@@ -1637,6 +1637,32 @@
             }) };
         }
         let RAW_GEO = null, COUNTRY_OPTS = null;
+        // Map corrections for 1 January 2026:
+        //  · Palestine is split: the West Bank (Palestinian Authority, Mahmoud Abbas) and the Gaza Strip (Hamas) are separate nations
+        //  · Akrotiri and Dhekelia are British Sovereign Base Areas, so they belong to the United Kingdom
+        //  · the UN buffer zone on Cyprus is not a country and cannot be selected
+        function geoFixups(data) {
+            const F = data && data.features; if (!F) return data;
+            const byName = n => F.find(f => f.properties && f.properties.name === n);
+            const polysOf = g => !g ? [] : g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+            const ps = byName('Palestine');
+            if (ps) {
+                const parts = polysOf(ps.geometry), isGaza = pl => pl[0].every(c => c[0] < 34.7);
+                const gz = parts.filter(isGaza), wb = parts.filter(pl => !isGaza(pl));
+                if (gz.length && wb.length) {
+                    ps.properties = { ...ps.properties, name: 'West Bank' }; ps.geometry = { type: 'MultiPolygon', coordinates: wb };
+                    F.push({ type: 'Feature', properties: { name: 'Gaza Strip', 'ISO3166-1-Alpha-3': 'GAZ', 'ISO3166-1-Alpha-2': 'PS' }, geometry: { type: 'MultiPolygon', coordinates: gz } });
+                }
+            }
+            const uk = byName('United Kingdom');
+            ['Akrotiri Sovereign Base Area', 'Dhekelia Sovereign Base Area'].forEach(n => {
+                const f = byName(n); if (!f || !uk) return;
+                uk.geometry = { type: 'MultiPolygon', coordinates: polysOf(uk.geometry).concat(polysOf(f.geometry)) };
+                F.splice(F.indexOf(f), 1);
+            });
+            const nm = byName('Cyprus No Mans Area'); if (nm) F.splice(F.indexOf(nm), 1);
+            return data;
+        }
         const countryRenderer = (typeof L !== 'undefined' && L.canvas) ? L.canvas({ padding: GFX().pad, tolerance: 2 }) : undefined;
         setTimeout(() => document.querySelectorAll('input[name="gfx-mode"]').forEach(r => r.checked = r.value === GFX_KEY), 0);
         function setGraphics(k) {
@@ -1705,7 +1731,7 @@
         fetch('https://raw.githubusercontent.com/datasets/geo-countries/master/data/countries.geojson')
             .then(res => res.json())
             .then(data => {
-                RAW_GEO = data;
+                RAW_GEO = geoFixups(data);
                 geojsonLayer = L.geoJSON(simplifyGeo(data), (COUNTRY_OPTS = {
                     style: { color: 'rgba(222,196,130,0.28)', weight: 1, fillColor: 'transparent' },
                     smoothFactor: GFX_KEY === 'high' ? 0.6 : GFX_KEY === 'balanced' ? 1 : 1.5, renderer: countryRenderer,
@@ -2064,7 +2090,7 @@
             "RUS|UKR":-95, "USA|UKR":30, "ISR|IRN":-95, "USA|IRN":-75, "ISR|USA":65, "CHN|TWN":-70, "CHN|USA":-30, "CHN|JPN":-45,
             "CHN|RUS":55, "CHN|PRK":40, "CHN|PAK":60, "IND|PAK":-65, "CHN|IND":-15, "IND|RUS":30, "IND|USA":0, "AFG|PAK":-55,
             "KOR|PRK":-60, "JPN|PRK":-60, "USA|VEN":-85, "CUB|USA":-60, "IRN|SAU":-15, "ARE|SDN":-50, "EGY|SDN":40, "ERI|ETH":-60,
-            "EGY|ETH":-35, "COD|RWA":-55, "KHM|THA":-50, "ARM|AZE":5, "AZE|TUR":70, "GRC|TUR":-10, "SRB|XKX":-60, "ISR|PSE":-80,
+            "EGY|ETH":-35, "COD|RWA":-55, "KHM|THA":-50, "ARM|AZE":5, "AZE|TUR":70, "GRC|TUR":-10, "SRB|XKX":-60, "ISR|PSE":-80, "GAZ|ISR":-95, "GAZ|PSE":-35, "EGY|GAZ":-10, "GAZ|IRN":60, "GAZ|QAT":45, "GAZ|TUR":35,
             "ISR|LBN":-60, "ISR|SYR":-30, "SYR|TUR":40, "ISR|TUR":-50, "ISR|QAT":-30, "QAT|USA":40, "DNK|USA":-5, "GRL|USA":-15,
             "MEX|USA":10, "CAN|USA":5, "BRA|USA":-20, "COL|USA":-35, "USA|ZAF":-30, "NGA|USA":-5, "ARG|USA":50, "SAU|USA":45,
             "PAK|USA":25, "POL|RUS":-60, "EST|RUS":-60, "LTU|RUS":-60, "LVA|RUS":-60, "FIN|RUS":-50, "GEO|RUS":-25, "MDA|RUS":-40,
@@ -2095,7 +2121,7 @@
               backA:['EGY','TUR','SAU'], backB:['ARE'], mediators:['USA','SAU','EGY','ARE'],
               brief:"After the RSF seized El Fasher in October 2025, the army holds Khartoum and the east while the RSF controls Darfur and much of Kordofan. Famine is spreading; the Quad (US, Saudi Arabia, UAE, Egypt) is pushing a humanitarian truce.",
               flavor:["RSF drones strike infrastructure in Port Sudan.","Fighting intensifies around El Obeid in North Kordofan.","UN warns famine is spreading across Darfur and Kordofan.","Quad mediators float a three-month humanitarian truce."] },
-            { id:'gaza', name:'Gaza Ceasefire (Israel–Hamas)', type:'ceasefire', intensity:55, sideA:['ISR'], sideB:[], location:['PSE'], nonState:'Hamas',
+            { id:'gaza', name:'Gaza Ceasefire (Israel–Hamas)', type:'ceasefire', intensity:55, sideA:['ISR'], sideB:[], location:['GAZ'], nonState:'Hamas',
               backA:['USA'], backB:['IRN'], mediators:['USA','QAT','EGY','TUR'],
               brief:"The October 2025 ceasefire holds on paper but Israeli strikes continue. Phase two — Hamas disarmament, an International Stabilization Force and the Trump-chaired Board of Peace — is stalled. Settlement expansion is accelerating in the West Bank.",
               flavor:["Israeli strikes in Gaza kill several people despite the ceasefire.","Talks on the International Stabilization Force stall over troop contributors.","Aid convoys delayed at the Kerem Shalom crossing.","Settler violence reported in the northern West Bank."] },
@@ -2263,7 +2289,7 @@
             "phnom penh":"KHM", kinshasa:"COD", kigali:"RWA", nairobi:"KEN", copenhagen:"DNK", nuuk:"GRL", minsk:"BLR", belgrade:"SRB",
             ottawa:"CAN", "mexico city":"MEX", brasilia:"BRA", "buenos aires":"ARG", bogota:"COL", "kuwait city":"KWT", muscat:"OMN",
             amman:"JOR", sanaa:"YEM", tripoli:"LBY", algiers:"DZA", rabat:"MAR", canberra:"AUS", jakarta:"IDN", bamako:"MLI",
-            hamas:"PSE", gaza:"PSE", "west bank":"PSE", houthi:"YEM", houthis:"YEM", hezbollah:"LBN", taliban:"AFG", "united states":"USA",
+            hamas:"GAZ", gaza:"GAZ", "gaza city":"GAZ", "west bank":"PSE", ramallah:"PSE", houthi:"YEM", houthis:"YEM", hezbollah:"LBN", taliban:"AFG", "united states":"USA",
             america:"USA", usa:"USA", "u s":"USA", uk:"GBR", britain:"GBR", "south korea":"KOR", "north korea":"PRK", congo:"COD", drc:"COD",
             uae:"ARE", emirates:"ARE", "saudi arabia":"SAU", "ivory coast":"CIV", "czech republic":"CZE", burma:"MMR", russia:"RUS", syria:"SYR",
             iran:"IRN", turkiye:"TUR", vatican:"VAT", "holy see":"VAT", m23:"RWA" };
@@ -3558,7 +3584,7 @@
             HKG:2.1, LKA:3.1, NPL:4.0, MNG:6.0, GHA:4.5, CIV:6.4, SEN:3.0, RWA:7.0, UGA:7.5, TZA:6.0, COD:5.0, ZMB:6.0, ZWE:4.5, AGO:2.5,
             MOZ:2.0, BWA:3.0, NER:6.6, MLI:2.5, BFA:4.0, PRK:1.0, KHM:4.5, LAO:3.5, AZE:2.5, ARM:5.0, GEO:6.0, BLR:1.5, SRB:3.0, BGR:2.5,
             HRV:2.7, SVK:1.5, SVN:1.8, LTU:2.5, LVA:1.8, EST:1.5, LUX:1.5, ISL:2.0, CYP:3.0, MLT:4.0, JOR:2.7, BHR:3.0, LBY:4.0, TUN:1.5,
-            SOM:3.5, SSD:-2.0, ERI:3.0, TCD:3.0, CMR:4.0, PSE:-5.0, GRL:1.5, MAC:3.0, TKM:5.0, TJK:6.0, KGZ:5.5 };
+            SOM:3.5, SSD:-2.0, ERI:3.0, TCD:3.0, CMR:4.0, PSE:-5.0, GAZ:-15.0, GRL:1.5, MAC:3.0, TKM:5.0, TJK:6.0, KGZ:5.5 };
         function baseGrowth(iso) {
             if (BASE_GROWTH[iso] !== undefined) return BASE_GROWTH[iso];
             const n = nationIso(iso), pc = n.pop ? n.gdp / n.pop : 0;
@@ -3710,7 +3736,7 @@
             ['Islamabad','PAK',33.68,73.05],['Karachi','PAK',24.86,67.01],['Lahore','PAK',31.55,74.34],['Gwadar','PAK',25.13,62.32],['Kabul','AFG',34.56,69.21],['Dhaka','BGD',23.81,90.41],
             ['Riyadh','SAU',24.71,46.68],['Jeddah','SAU',21.49,39.19],['NEOM','SAU',28.00,35.20],['Dammam','SAU',26.42,50.09],['Dubai','ARE',25.20,55.27],['Abu Dhabi','ARE',24.45,54.38],['Doha','QAT',25.29,51.53],['Kuwait City','KWT',29.38,47.99],['Muscat','OMN',23.59,58.41],['Manama','BHR',26.23,50.59],
             ['Baghdad','IRQ',33.31,44.36],['Basra','IRQ',30.51,47.78],['Erbil','IRQ',36.19,44.01],['Damascus','SYR',33.51,36.28],['Aleppo','SYR',36.20,37.13],['Latakia','SYR',35.52,35.79],['Beirut','LBN',33.89,35.50],
-            ['Jerusalem','ISR',31.77,35.21],['Tel Aviv','ISR',32.09,34.78],['Haifa','ISR',32.79,34.99],['Eilat','ISR',29.56,34.95],['Gaza','PSE',31.50,34.47],['Amman','JOR',31.95,35.93],
+            ['Jerusalem','ISR',31.77,35.21],['Tel Aviv','ISR',32.09,34.78],['Haifa','ISR',32.79,34.99],['Eilat','ISR',29.56,34.95],['Gaza','GAZ',31.50,34.47],['Ramallah','PSE',31.90,35.20],['Amman','JOR',31.95,35.93],
             ['Ankara','TUR',39.93,32.86],['Istanbul','TUR',41.01,28.98],['Izmir','TUR',38.42,27.14],['Cairo','EGY',30.04,31.24],['Alexandria','EGY',31.20,29.92],['Suez','EGY',29.97,32.55],
             ['Khartoum','SDN',15.50,32.56],['Port Sudan','SDN',19.62,37.22],['Addis Ababa','ETH',9.03,38.74],['Asmara','ERI',15.32,38.93],['Djibouti','DJI',11.59,43.15],['Mogadishu','SOM',2.05,45.32],['Nairobi','KEN',-1.29,36.82],['Mombasa','KEN',-4.04,39.67],
             ['Lagos','NGA',6.52,3.38],['Abuja','NGA',9.08,7.40],['Kinshasa','COD',-4.44,15.27],['Goma','COD',-1.68,29.22],['Kigali','RWA',-1.95,30.06],['Johannesburg','ZAF',-26.20,28.05],['Cape Town','ZAF',-33.92,18.42],['Luanda','AGO',-8.84,13.23],['Bamako','MLI',12.64,-8.00],['Dakar','SEN',14.72,-17.47],['Algiers','DZA',36.75,3.06],['Rabat','MAR',34.02,-6.83],['Casablanca','MAR',33.57,-7.59],['Tunis','TUN',36.81,10.18],['Tripoli','LBY',32.89,13.19],['Accra','GHA',5.60,-0.19],['Abidjan','CIV',5.36,-4.01],
@@ -4284,7 +4310,7 @@
             ['Naval Station Norfolk','naval','USA','USA',36.946,-76.303,'active','World\'s largest naval base.'],['Fort Bragg','base','USA','USA',35.140,-79.006],
             ['Fort Hood','base','USA','USA',31.135,-97.776],['Naval Base San Diego','naval','USA','USA',32.684,-117.129],['Nellis Air Force Base','airbase','USA','USA',36.236,-115.034],
             ['Camp Simba (Manda Bay)','base','USA','KEN',-2.252,40.913],['Pine Gap','base','USA','AUS',-23.799,133.737,'active','Joint US–Australian intelligence facility.'],
-            ['RAF Akrotiri','airbase','GBR','CYP',34.590,32.988],['HMNB Clyde (Faslane)','naval','GBR','GBR',56.067,-4.817,'active','Home of the UK\'s Trident submarines.'],
+            ['RAF Akrotiri','airbase','GBR','GBR',34.590,32.988,'active','British Sovereign Base Area (Western SBA) — UK territory on Cyprus.'],['Dhekelia Garrison','base','GBR','GBR',34.990,33.745,'active','British Sovereign Base Area (Eastern SBA) — UK territory on Cyprus.'],['HMNB Clyde (Faslane)','naval','GBR','GBR',56.067,-4.817,'active','Home of the UK\'s Trident submarines.'],
             ['RAF Brize Norton','airbase','GBR','GBR',51.750,-1.584],['Île Longue','naval','FRA','FRA',48.306,-4.510,'active','French ballistic-missile submarine base.'],
             ['Toulon Naval Base','naval','FRA','FRA',43.118,5.917],['French Forces in Djibouti','base','FRA','DJI',11.545,43.150],
             ['Camp de la Paix (Abu Dhabi)','naval','FRA','ARE',24.525,54.395],['Baltiysk Naval Base','naval','RUS','RUS',54.650,19.910,'active','Baltic Fleet HQ (Kaliningrad).'],
@@ -4803,7 +4829,7 @@
             MEX:.789, AZE:.789, COL:.788, BRA:.786, MDA:.785, UKR:.779, ECU:.777, LKA:.776, DOM:.776, GUY:.776, TON:.769, VNM:.766, MDV:.766, TKM:.764, FJI:.763,
             DZA:.763, CUB:.762, PRY:.756, JOR:.754, EGY:.754, LBN:.752, MNG:.747, TUN:.746, ZAF:.741, UZB:.740, BOL:.733, GAB:.733, BWA:.731, IDN:.728, JAM:.720,
             PHL:.720, KGZ:.720, LBY:.721, SUR:.722, BLZ:.721, MAR:.710, VEN:.709, WSM:.708, NIC:.706, BTN:.698, IRQ:.695, TJK:.691, IND:.685, BGD:.685, SLV:.678,
-            EQG:.674, GNQ:.674, PSE:.674, CPV:.668, NAM:.665, GTM:.662, HND:.645, COG:.649, SWZ:.639, STP:.637, TLS:.634, KEN:.628, GHA:.628, NPL:.622, LAO:.621,
+            EQG:.674, GNQ:.674, PSE:.674, GAZ:.55, CPV:.668, NAM:.665, GTM:.662, HND:.645, COG:.649, SWZ:.639, STP:.637, TLS:.634, KEN:.628, GHA:.628, NPL:.622, LAO:.621,
             VUT:.621, AGO:.616, MMR:.609, KHM:.606, COM:.603, ZWE:.598, ZMB:.595, CMR:.588, SLB:.584, UGA:.582, CIV:.582, RWA:.578, PNG:.576, TGO:.571, SYR:.564,
             MRT:.563, NGA:.560, TZA:.555, HTI:.554, LSO:.550, PAK:.544, GMB:.524, DJI:.513, COD:.522, MWI:.517, BEN:.515, SDN:.511, LBR:.510, ERI:.503, GIN:.500,
             AFG:.496, ETH:.497, MOZ:.493, MDG:.487, YEM:.470, SLE:.467, BFA:.459, BDI:.439, MLI:.419, NER:.419, TCD:.416, CAF:.414, SOM:.404, SSD:.388, TWN:.926 };
@@ -4819,7 +4845,7 @@
 
         // Baseline political stability (0–100) for fragile / special cases, Jan 2026 (informed by fragility indices)
         const STAB_BASE = { SOM:12, SSD:12, YEM:14, SYR:24, AFG:22, SDN:12, COD:20, CAF:18, HTI:12, MLI:24, BFA:24, NER:28, MMR:20, LBY:28, IRQ:38, LBN:34, VEN:28,
-            ETH:30, NGA:36, PAK:36, UKR:38, RUS:52, IRN:30, PRK:48, ERI:34, TCD:24, CMR:36, MOZ:38, ZWE:40, GNB:26, GIN:34, BDI:30, PSE:12, ISR:50, CUB:40, NIC:42,
+            ETH:30, NGA:36, PAK:36, UKR:38, RUS:52, IRN:30, PRK:48, ERI:34, TCD:24, CMR:36, MOZ:38, ZWE:40, GNB:26, GIN:34, BDI:30, PSE:24, GAZ:6, ISR:50, CUB:40, NIC:42,
             COL:50, MEX:50, BGD:42, MDG:32, GAB:44, BOL:45, PER:44, ECU:46, HND:42, GTM:46, SLV:55, TUR:52, EGY:48, KEN:48, BLR:46, GEO:50, ARM:52, AZE:52, SRB:55,
             NPL:40, LKA:52, THA:55, KHM:52, PHL:52, IDN:58, IND:56, CHN:64, SAU:62, ARE:72, QAT:74, KWT:66, OMN:70, JOR:56, MAR:58, DZA:52, TUN:46, USA:62, FRA:62, GBR:70,
             DEU:76, KOR:66, TWN:66, BRA:56, ARG:52, ZAF:54, XKX:52, BIH:48, MDA:50, CYN:50, SOL:42, ESH:30 };
@@ -5154,7 +5180,7 @@
                 aiNews('ISR', `Israeli airstrikes hit Hezbollah positions in southern Lebanon.`, 'neutral');
             } },
             { actor: 'ISR', w: 1.5, when: () => !!conflictById('gaza'), run: () => {
-                bump('gaza', rint(2, 6)); aiHit('PSE', 0.004, 0.4);
+                bump('gaza', rint(2, 6)); aiHit('GAZ', 0.004, 0.4);
                 aiNews('ISR', `Israeli strikes in Gaza strain the ceasefire; dozens reported killed.`, 'bad');
             } },
             { actor: 'QAT', w: 1.5, when: () => (conflictById('gaza')?.intensity || 0) > 35, run: () => {
@@ -7006,7 +7032,7 @@
         const REGION_LIST = {
             gulf: ['SAU', 'ARE', 'KWT', 'QAT', 'BHR', 'IRQ', 'IRN'],
             indian: ['IND', 'PAK', 'BGD', 'LKA', 'MDV', 'OMN', 'YEM', 'DJI', 'ERI', 'SOM', 'KEN', 'TZA', 'MOZ', 'MDG', 'MUS', 'SYC', 'SDN', 'ETH', 'MMR', 'SSD', 'UGA', 'RWA', 'BDI', 'MWI', 'ZMB', 'ZWE', 'NPL', 'BTN', 'COM'],
-            med_me: ['EGY', 'ISR', 'PSE', 'LBN', 'SYR', 'JOR', 'CYP', 'TUR', 'LBY', 'TUN', 'DZA', 'MAR', 'MLT'],
+            med_me: ['EGY', 'ISR', 'PSE', 'GAZ', 'LBN', 'SYR', 'JOR', 'CYP', 'TUR', 'LBY', 'TUN', 'DZA', 'MAR', 'MLT'],
             blacksea: ['UKR', 'GEO', 'MDA'],
             russia: ['RUS'],
             inland: ['KAZ', 'UZB', 'TKM', 'KGZ', 'TJK', 'AFG', 'AZE', 'ARM', 'MNG'],
@@ -8380,7 +8406,7 @@
         //  GEOGRAPHY & DISPUTE TYPES — so advice and AI prompts stay realistic
         // =====================================================================
         const BORDER_CACHE = {}, CELL_CACHE = {};
-        const NEIGHBOR_FALLBACK = { CHN: ['RUS', 'MNG', 'KAZ', 'KGZ', 'TJK', 'AFG', 'PAK', 'IND', 'NPL', 'BTN', 'MMR', 'LAO', 'VNM', 'PRK'], USA: ['CAN', 'MEX'], ISR: ['LBN', 'SYR', 'JOR', 'EGY', 'PSE'], LBN: ['ISR', 'SYR'] };
+        const NEIGHBOR_FALLBACK = { CHN: ['RUS', 'MNG', 'KAZ', 'KGZ', 'TJK', 'AFG', 'PAK', 'IND', 'NPL', 'BTN', 'MMR', 'LAO', 'VNM', 'PRK'], USA: ['CAN', 'MEX'], ISR: ['LBN', 'SYR', 'JOR', 'EGY', 'PSE', 'GAZ'], LBN: ['ISR', 'SYR'] };
         function cellsOf(iso) {
             if (CELL_CACHE[iso]) return CELL_CACHE[iso];
             const idx = GEO_INDEX || buildGeoIndex(); if (!idx) return null;
@@ -8665,7 +8691,7 @@ const SOC_DEF_PCT = { USA:3.4, CHN:1.7, RUS:6.3, IND:2.3, GBR:2.3, DEU:2.1, FRA:
 const SOC_INFL = { ARG:30, TUR:33, IRN:40, VEN:120, NGA:22, EGY:14, PAK:6, ETH:18, GHA:15, SYR:30, SDN:70, SSD:50, MMR:25, LBN:15, MWI:28, ZWE:15, RUS:8.5, UKR:10,
     BRA:5, MEX:4, IND:4, CHN:0.3, JPN:2.5, USA:3, GBR:3.3, DEU:2.2, FRA:1.2, ZAF:3, SAU:2, ISR:3.5, KOR:2, CHE:0.2, YEM:20, HTI:25, AFG:5, COD:12, ANG:20, AGO:20 };
 const SOC_UNEMP = { ZAF:32, ESP:11, GRC:9, ITA:6.3, FRA:7.5, TUR:8.5, EGY:6.5, NGA:5, IND:4.5, BRA:6.5, USA:4.2, GBR:4.4, DEU:3.5, JPN:2.5, CHN:5.2, RUS:2.5, SAU:3.5,
-    PSE:40, LBN:15, IRN:9, ARG:7, COL:9, SRB:9, MKD:12, BIH:12, DZA:11, TUN:16, JOR:21, IRQ:15, LKA:5, MAR:13, SYR:25, YEM:17, HTI:15, ARM:12 };
+    PSE:40, GAZ:80, LBN:15, IRN:9, ARG:7, COL:9, SRB:9, MKD:12, BIH:12, DZA:11, TUN:16, JOR:21, IRQ:15, LKA:5, MAR:13, SYR:25, YEM:17, HTI:15, ARM:12 };
 const SOC_DEBT = { JPN:236, ITA:137, USA:123, FRA:113, GBR:101, ESP:101, BEL:105, GRC:150, SGP:170, CAN:107, CHN:90, IND:82, BRA:87, DEU:63, KOR:54, AUS:48, RUS:20, SAU:26,
     TUR:25, EGY:85, ARG:85, NGA:50, PAK:70, ZAF:75, ISR:68, UKR:95, LBN:170, VEN:160, SDN:100, PRT:95, AUT:80, FIN:82, NLD:45, CHE:38, NOR:40, SWE:34, DNK:30, POL:55,
     HUN:73, ROU:55, MEX:57, COL:58, IDN:40, THA:62, MYS:63, PHL:60, VNM:36, BGD:40, ETH:40, KEN:70, GHA:80, ZMB:100, LKA:100, JOR:90, MAR:68, TUN:80, IRN:30, IRQ:42 };
@@ -10189,7 +10215,7 @@ function warRender() {
 // ---------------------------------------------------------------------
 // Control zones are schematic outlines of where each group holds ground at the start of 2026.
 const PROXY_DEFS = [
-    { id: 'hamas', name: 'Hamas', short: 'Hamas', kind: 'militant movement', host: ['PSE'], patrons: ['IRN', 'QAT'], color: '#22c55e', conf: 'gaza', S: 38, fighters: 20000, popShare: 0.85, hostArea: 6020, aims: 'Armed resistance to Israeli control; governs Gaza.', cities: ['Gaza City', 'Khan Younis', 'Rafah'], base: [31.5, 34.46],
+    { id: 'hamas', name: 'Hamas', short: 'Hamas', kind: 'militant movement', host: ['GAZ'], patrons: ['IRN', 'QAT'], color: '#22c55e', conf: 'gaza', S: 38, fighters: 20000, popShare: 0.8, hostArea: 365, aims: 'Armed resistance to Israel; still rules the half of Gaza west of the "yellow line" after the October 2025 ceasefire.', cities: ['Gaza City', 'Khan Younis', 'Rafah'], base: [31.5, 34.46],
         poly: [[31.58, 34.23], [31.5, 34.2], [31.35, 34.28], [31.25, 34.27], [31.3, 34.38], [31.45, 34.5], [31.58, 34.52]] },
     { id: 'rsf', name: 'Rapid Support Forces (RSF)', short: 'RSF', kind: 'paramilitary', host: ['SDN'], patrons: ['ARE'], color: '#f97316', conf: 'sdn', S: 62, fighters: 100000, popShare: 0.4, hostArea: 1861484, aims: 'Seize Sudan from the army; rules Darfur and parts of Kordofan.', cities: ['El Fasher', 'Nyala', 'El Geneina'], base: [13.6, 25.3],
         poly: [[19.8, 22.3], [19.0, 25.0], [16.0, 27.0], [13.0, 29.6], [11.0, 29.2], [9.6, 27.0], [9.6, 24.2], [11.0, 22.6], [13.0, 22.0], [15.5, 22.0]] },
@@ -11468,6 +11494,170 @@ proxyRender = function () {
 };
 proxyPopup = function (p) { return `<b>${esc(p.name)}</b>`; };
 
+// ----- accurate control zones (situation on 1 January 2026) -----
+// Each zone = (its host country's real border) ∩ (a control mask) − (pockets the group does not hold: rings, or { c: [lat, lng], r: km }).
+// Outer edges therefore follow the same country borders and coastlines as the nations on the map;
+// only the front lines inside the country come from the masks below. Points are [lat, lng].
+const ENT_CONTROL = {
+    // west of the "yellow line" the IDF pulled back to in the October 2025 ceasefire (Israel holds the east, Rafah and Beit Hanoun)
+    hamas: { mask: [[[31.62, 34.40], [31.565, 34.455], [31.545, 34.475], [31.50, 34.468], [31.45, 34.425], [31.42, 34.385], [31.37, 34.345], [31.34, 34.318], [31.31, 34.30], [31.30, 34.18], [31.45, 34.25], [31.62, 34.30]]] },
+    // all of Darfur after El Fasher (Oct 2025), the tri-border desert, West Kordofan (Babanusa, Heglig) and the Bara area; Jebel Marra is SLA-AW's
+    rsf: { mask: [[[22.3, 23.5], [22.3, 25.6], [20.0, 26.4], [17.0, 27.4], [15.0, 27.9], [14.4, 29.2], [14.1, 30.5], [13.5, 30.4], [13.3, 29.7], [12.6, 29.4], [11.8, 29.1], [10.6, 29.7], [9.6, 29.8], [9.2, 29.0], [8.6, 26.0], [9.0, 22.0], [13.0, 21.5], [19.0, 23.0]]],
+           minus: [{ c: [13.0, 24.3], r: 55 }] },
+    // north-west Yemen: Sana'a, Saada, most of Hodeidah, Ibb, Dhamar, al-Bayda, al-Jawf; Marib city and southern Tihama stay with the government
+    houthi: { mask: [[[18.2, 42.4], [18.2, 44.6], [16.9, 45.25], [16.2, 45.55], [15.6, 45.12], [15.05, 45.2], [14.45, 45.7], [13.85, 45.55], [13.72, 44.9], [13.56, 44.45], [13.6, 44.02], [13.72, 43.62], [14.05, 43.27], [14.0, 42.6]]] },
+    // Goma, Rutshuru, Masisi, Nyiragongo, Bukavu, Kalehe, Kabare, Walungu down to the Ruzizi plain
+    m23: { mask: [[[-0.4, 29.15], [-0.45, 29.75], [-1.3, 30.2], [-3.15, 29.5], [-3.15, 29.05], [-2.85, 28.75], [-2.4, 28.5], [-1.85, 28.4], [-1.35, 28.55], [-0.9, 28.8]]] },
+    // the south (Litani to the border), the Bekaa/Hermel and Beirut's southern suburbs
+    hezbollah: { mask: [[[33.0, 35.0], [33.45, 35.2], [33.62, 35.38], [33.84, 35.48], [33.9, 35.55], [34.05, 35.8], [34.4, 36.15], [34.75, 36.4], [34.6, 36.7], [33.3, 36.1], [32.9, 35.6]]] },
+    // rural central/western Mali and most of Burkina Faso; Bamako, Ouagadougou's central plateau and Bobo-Dioulasso held by the juntas
+    jnim: { mask: [[[15.6, -11.6], [15.3, -8.5], [15.8, -5.5], [16.1, -3.5], [15.4, -1.0], [14.9, 0.3], [13.6, 1.2], [11.3, 2.5], [10.8, 0.3], [9.6, -2.8], [10.2, -5.2], [11.4, -5.6], [12.6, -6.6], [13.2, -7.6], [13.6, -9.0], [13.8, -10.6], [14.4, -12.0]]],
+            minus: [{ c: [12.3, -1.55], r: 80 }, { c: [11.18, -4.3], r: 50 }, { c: [10.6, -4.75], r: 45 }, { c: [10.15, -3.2], r: 55 }] },
+    // rural Middle/Lower Juba, Bay, Bakool, the Shabelles, Hiiraan and southern Galguduud; Mogadishu, Kismayo, Baidoa and the towns stay with the government
+    shabaab: { mask: [[[5.3, 46.5], [4.1, 46.1], [3.1, 45.75], [2.45, 45.15], [1.85, 44.75], [1.3, 44.2], [0.35, 43.0], [-0.8, 42.3], [-1.6, 41.6], [-0.5, 40.9], [2.0, 40.9], [3.4, 42.0], [4.1, 43.3], [4.4, 44.6], [4.9, 45.4]]],
+               minus: [{ c: [2.05, 45.3], r: 40 }, { c: [-0.36, 42.54], r: 28 }, { c: [3.11, 43.65], r: 22 }, { c: [3.78, 43.4], r: 12 }] },
+    // east of the Euphrates: Hasakah, Raqqa, Tabqa, Kobani and Deir ez-Zor's east bank; minus the Turkish-held Tal Abyad–Ras al-Ain strip
+    sdf: { mask: [[[36.95, 38.02], [37.6, 38.6], [37.6, 42.6], [34.4, 41.2], [34.47, 40.93], [34.9, 40.55], [35.1, 40.42], [35.33, 40.16], [35.6, 39.8], [35.85, 39.35], [35.93, 38.98], [35.78, 38.55], [35.95, 38.25], [36.3, 38.15], [36.6, 38.1], [36.82, 38.05]]],
+           minus: [[[37.2, 38.88], [37.2, 40.2], [36.62, 40.2], [36.48, 39.9], [36.43, 39.4], [36.5, 38.95]]] },
+    // 14 of Rakhine's 17 townships plus Paletwa; Sittwe, Kyaukphyu and Manaung still junta-held
+    aa: { mask: [[[21.75, 92.0], [21.75, 93.15], [20.85, 93.65], [20.0, 94.15], [19.15, 94.6], [18.3, 94.8], [17.35, 94.95], [17.1, 94.3], [18.6, 93.6], [20.5, 92.2]]],
+          minus: [{ c: [20.15, 92.9], r: 18 }, { c: [19.43, 93.55], r: 20 }, { c: [18.85, 93.72], r: 22 }] },
+    // Cyrenaica, Sirte, Jufra and the whole Fezzan; the Tripoli government keeps the north-west and Ghadames
+    lna: { mask: [[[33.5, 15.6], [31.4, 15.6], [30.0, 15.4], [29.0, 13.8], [28.6, 12.0], [29.3, 9.0], [21.0, 9.0], [18.5, 16.0], [19.0, 26.5], [33.5, 26.5]]] },
+    // the "Free Zone" east of the Moroccan berm
+    polisario: { clip: ['Western Sahara'], mask: [[[27.75, -8.85], [27.45, -9.25], [26.9, -10.3], [26.6, -10.9], [26.2, -11.5], [26.05, -11.75], [25.8, -12.3], [25.3, -12.3], [25.05, -12.32], [24.4, -12.6], [23.8, -13.0], [23.4, -13.2], [22.6, -13.9], [22.0, -14.4], [21.6, -14.8], [21.4, -15.0], [20.8, -15.0], [20.8, -8.0], [27.9, -8.0]]] },
+    // Tigray without Western Tigray (Amhara-held) and the contested southern edge
+    tplf: { mask: [[[15.2, 37.85], [15.2, 40.3], [14.3, 40.05], [13.6, 39.92], [13.0, 39.85], [12.6, 39.65], [12.6, 39.3], [12.95, 38.9], [13.1, 38.5], [13.45, 38.15], [13.9, 37.9]]] },
+    // left bank of the Dniester plus Bender
+    transnistria: { mask: [[[48.25, 28.3], [47.95, 28.72], [47.77, 28.97], [47.5, 29.1], [47.27, 29.1], [47.1, 29.25], [46.9, 29.35], [46.78, 29.38], [46.62, 29.75], [46.45, 30.0], [46.4, 30.5], [48.3, 30.5]]] },
+    // Abkhazia (west of the Inguri, incl. upper Kodori) and South Ossetia (incl. Akhalgori)
+    abkhazia: { mask: [[[43.75, 39.8], [43.7, 42.25], [42.95, 42.22], [42.72, 42.0], [42.55, 41.75], [42.4, 41.56], [42.3, 41.3], [43.0, 39.8]],
+                       [[42.78, 43.7], [42.68, 44.35], [42.5, 44.65], [42.15, 44.55], [42.02, 44.15], [42.15, 43.85], [42.33, 43.45], [42.58, 43.48]]] },
+    // most of Port-au-Prince, Croix-des-Bouquets, Mirebalais and the lower Artibonite
+    vivansanm: { mask: [[[18.62, -72.42], [18.5, -72.42], [18.47, -72.3], [18.5, -72.2], [18.55, -72.0], [18.75, -71.92], [19.0, -72.02], [19.25, -72.38], [19.3, -72.75], [18.95, -72.7], [18.75, -72.5]]] },
+    // Sinaloa and the Golden Triangle (Sinaloa–Durango–Chihuahua)
+    sinaloa: { mask: [[[27.1, -109.6], [27.05, -108.1], [26.3, -107.0], [25.2, -106.25], [24.0, -105.55], [23.0, -105.55], [22.45, -105.8], [22.3, -106.6], [25.0, -109.3]]] },
+    // Catatumbo, Arauca and the Cauca/Nariño Pacific belt
+    eln: { mask: [[[9.2, -73.35], [8.0, -73.55], [7.75, -72.55], [8.6, -72.3], [9.3, -72.8]], [[7.2, -72.25], [6.4, -72.05], [6.2, -70.6], [7.15, -69.9], [7.2, -71.2]], [[3.4, -77.6], [1.9, -79.2], [1.15, -78.0], [1.3, -77.2], [1.6, -76.6], [2.6, -76.25], [3.3, -76.4]]] },
+    // Duhok, Erbil, Sulaymaniyah and Halabja (Kirkuk is under Baghdad since 2017)
+    krg: { mask: [[[37.5, 42.25], [36.88, 42.35], [36.72, 42.95], [36.45, 43.25], [36.15, 43.45], [35.95, 43.75], [35.85, 44.15], [35.72, 44.35], [35.52, 44.65], [35.2, 44.95], [34.85, 45.15], [34.55, 45.45], [34.5, 46.0], [35.2, 46.4], [37.5, 46.0]]] },
+    // Somaliland minus Las Anod / Sool and eastern Sanaag (SSC-Khatumo, now Somalia's North Eastern State)
+    somaliland: { clip: ['Somaliland'], mask: [[[12.0, 42.5], [12.0, 49.5], [7.5, 49.5], [7.5, 42.5]]],
+                  minus: [[[9.75, 46.95], [9.75, 49.5], [7.5, 49.5], [7.5, 46.75], [8.6, 46.75]], [[11.3, 48.1], [11.3, 49.5], [9.7, 49.5], [9.7, 48.1]]] },
+    trnc: { clip: ['Northern Cyprus'], mask: [[[36.0, 32.4], [36.0, 34.8], [34.9, 34.8], [34.9, 32.4]]] },
+    // northern Wa (Pangkham) on the Chinese border and southern Wa on the Thai border
+    uwsa: { mask: [[[23.3, 98.9], [22.6, 98.82], [22.0, 99.02], [21.95, 99.45], [22.2, 99.7], [22.9, 99.65], [23.3, 99.55]], [[20.6, 98.3], [20.35, 98.25], [20.0, 99.2], [20.05, 100.1], [20.55, 100.1]]] },
+    // most of Kachin State incl. the border trade gates and rare-earth belt; Myitkyina, Bhamo town and Putao junta-held
+    kia: { mask: [[[27.6, 97.4], [26.1, 96.9], [25.65, 96.25], [24.95, 96.65], [24.15, 97.25], [23.95, 97.75], [24.9, 98.75], [26.0, 98.8], [27.5, 98.8]]],
+           minus: [{ c: [25.38, 97.4], r: 20 }, { c: [24.26, 97.24], r: 10 }, { c: [27.33, 97.42], r: 15 }] }
+};
+/*! polygon-clipping v0.15.7 | MIT License | github.com/mfogel/polygon-clipping */
+!function(t,e){"object"==typeof exports&&"undefined"!=typeof module?module.exports=e():"function"==typeof define&&define.amd?define(e):(t="undefined"!=typeof globalThis?globalThis:t||self).polygonClipping=e()}(this,(function(){"use strict";
+/**
+     * splaytree v3.1.2
+     * Fast Splay tree for Node and browser
+     *
+     * @author Alexander Milevski <info@w8r.name>
+     * @license MIT
+     * @preserve
+     */
+/*! *****************************************************************************
+    Copyright (c) Microsoft Corporation. All rights reserved.
+    Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+    this file except in compliance with the License. You may obtain a copy of the
+    License at http://www.apache.org/licenses/LICENSE-2.0
+
+    THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+    WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+    MERCHANTABLITY OR NON-INFRINGEMENT.
+
+    See the Apache Version 2.0 License for specific language governing permissions
+    and limitations under the License.
+    ***************************************************************************** */function t(t,e){var n,r,i,o,s={label:0,sent:function(){if(1&i[0])throw i[1];return i[1]},trys:[],ops:[]};return o={next:l(0),throw:l(1),return:l(2)},"function"==typeof Symbol&&(o[Symbol.iterator]=function(){return this}),o;function l(o){return function(l){return function(o){if(n)throw new TypeError("Generator is already executing.");for(;s;)try{if(n=1,r&&(i=2&o[0]?r.return:o[0]?r.throw||((i=r.return)&&i.call(r),0):r.next)&&!(i=i.call(r,o[1])).done)return i;switch(r=0,i&&(o=[2&o[0],i.value]),o[0]){case 0:case 1:i=o;break;case 4:return s.label++,{value:o[1],done:!1};case 5:s.label++,r=o[1],o=[0];continue;case 7:o=s.ops.pop(),s.trys.pop();continue;default:if(!(i=s.trys,(i=i.length>0&&i[i.length-1])||6!==o[0]&&2!==o[0])){s=0;continue}if(3===o[0]&&(!i||o[1]>i[0]&&o[1]<i[3])){s.label=o[1];break}if(6===o[0]&&s.label<i[1]){s.label=i[1],i=o;break}if(i&&s.label<i[2]){s.label=i[2],s.ops.push(o);break}i[2]&&s.ops.pop(),s.trys.pop();continue}o=e.call(t,s)}catch(t){o=[6,t],r=0}finally{n=i=0}if(5&o[0])throw o[1];return{value:o[0]?o[1]:void 0,done:!0}}([o,l])}}}var e=function(t,e){this.next=null,this.key=t,this.data=e,this.left=null,this.right=null};function n(t,e){return t>e?1:t<e?-1:0}function r(t,n,r){for(var i=new e(null,null),o=i,s=i;;){var l=r(t,n.key);if(l<0){if(null===n.left)break;if(r(t,n.left.key)<0){var h=n.left;if(n.left=h.right,h.right=n,null===(n=h).left)break}s.left=n,s=n,n=n.left}else{if(!(l>0))break;if(null===n.right)break;if(r(t,n.right.key)>0){h=n.right;if(n.right=h.left,h.left=n,null===(n=h).right)break}o.right=n,o=n,n=n.right}}return o.right=n.left,s.left=n.right,n.left=i.right,n.right=i.left,n}function i(t,n,i,o){var s=new e(t,n);if(null===i)return s.left=s.right=null,s;var l=o(t,(i=r(t,i,o)).key);return l<0?(s.left=i.left,s.right=i,i.left=null):l>=0&&(s.right=i.right,s.left=i,i.right=null),s}function o(t,e,n){var i=null,o=null;if(e){var s=n((e=r(t,e,n)).key,t);0===s?(i=e.left,o=e.right):s<0?(o=e.right,e.right=null,i=e):(i=e.left,e.left=null,o=e)}return{left:i,right:o}}function s(t,e,n,r,i){if(t){r(e+(n?"└── ":"├── ")+i(t)+"\n");var o=e+(n?"    ":"│   ");t.left&&s(t.left,o,!1,r,i),t.right&&s(t.right,o,!0,r,i)}}var l=function(){function l(t){void 0===t&&(t=n),this._root=null,this._size=0,this._comparator=t}return l.prototype.insert=function(t,e){return this._size++,this._root=i(t,e,this._root,this._comparator)},l.prototype.add=function(t,n){var i=new e(t,n);null===this._root&&(i.left=i.right=null,this._size++,this._root=i);var o=this._comparator,s=r(t,this._root,o),l=o(t,s.key);return 0===l?this._root=s:(l<0?(i.left=s.left,i.right=s,s.left=null):l>0&&(i.right=s.right,i.left=s,s.right=null),this._size++,this._root=i),this._root},l.prototype.remove=function(t){this._root=this._remove(t,this._root,this._comparator)},l.prototype._remove=function(t,e,n){var i;return null===e?null:0===n(t,(e=r(t,e,n)).key)?(null===e.left?i=e.right:(i=r(t,e.left,n)).right=e.right,this._size--,i):e},l.prototype.pop=function(){var t=this._root;if(t){for(;t.left;)t=t.left;return this._root=r(t.key,this._root,this._comparator),this._root=this._remove(t.key,this._root,this._comparator),{key:t.key,data:t.data}}return null},l.prototype.findStatic=function(t){for(var e=this._root,n=this._comparator;e;){var r=n(t,e.key);if(0===r)return e;e=r<0?e.left:e.right}return null},l.prototype.find=function(t){return this._root&&(this._root=r(t,this._root,this._comparator),0!==this._comparator(t,this._root.key))?null:this._root},l.prototype.contains=function(t){for(var e=this._root,n=this._comparator;e;){var r=n(t,e.key);if(0===r)return!0;e=r<0?e.left:e.right}return!1},l.prototype.forEach=function(t,e){for(var n=this._root,r=[],i=!1;!i;)null!==n?(r.push(n),n=n.left):0!==r.length?(n=r.pop(),t.call(e,n),n=n.right):i=!0;return this},l.prototype.range=function(t,e,n,r){for(var i=[],o=this._comparator,s=this._root;0!==i.length||s;)if(s)i.push(s),s=s.left;else{if(o((s=i.pop()).key,e)>0)break;if(o(s.key,t)>=0&&n.call(r,s))return this;s=s.right}return this},l.prototype.keys=function(){var t=[];return this.forEach((function(e){var n=e.key;return t.push(n)})),t},l.prototype.values=function(){var t=[];return this.forEach((function(e){var n=e.data;return t.push(n)})),t},l.prototype.min=function(){return this._root?this.minNode(this._root).key:null},l.prototype.max=function(){return this._root?this.maxNode(this._root).key:null},l.prototype.minNode=function(t){if(void 0===t&&(t=this._root),t)for(;t.left;)t=t.left;return t},l.prototype.maxNode=function(t){if(void 0===t&&(t=this._root),t)for(;t.right;)t=t.right;return t},l.prototype.at=function(t){for(var e=this._root,n=!1,r=0,i=[];!n;)if(e)i.push(e),e=e.left;else if(i.length>0){if(e=i.pop(),r===t)return e;r++,e=e.right}else n=!0;return null},l.prototype.next=function(t){var e=this._root,n=null;if(t.right){for(n=t.right;n.left;)n=n.left;return n}for(var r=this._comparator;e;){var i=r(t.key,e.key);if(0===i)break;i<0?(n=e,e=e.left):e=e.right}return n},l.prototype.prev=function(t){var e=this._root,n=null;if(null!==t.left){for(n=t.left;n.right;)n=n.right;return n}for(var r=this._comparator;e;){var i=r(t.key,e.key);if(0===i)break;i<0?e=e.left:(n=e,e=e.right)}return n},l.prototype.clear=function(){return this._root=null,this._size=0,this},l.prototype.toList=function(){return function(t){var n=t,r=[],i=!1,o=new e(null,null),s=o;for(;!i;)n?(r.push(n),n=n.left):r.length>0?n=(n=s=s.next=r.pop()).right:i=!0;return s.next=null,o.next}(this._root)},l.prototype.load=function(t,n,r){void 0===n&&(n=[]),void 0===r&&(r=!1);var i=t.length,o=this._comparator;if(r&&f(t,n,0,i-1,o),null===this._root)this._root=h(t,n,0,i),this._size=i;else{var s=function(t,n,r){var i=new e(null,null),o=i,s=t,l=n;for(;null!==s&&null!==l;)r(s.key,l.key)<0?(o.next=s,s=s.next):(o.next=l,l=l.next),o=o.next;null!==s?o.next=s:null!==l&&(o.next=l);return i.next}(this.toList(),function(t,n){for(var r=new e(null,null),i=r,o=0;o<t.length;o++)i=i.next=new e(t[o],n[o]);return i.next=null,r.next}(t,n),o);i=this._size+i,this._root=u({head:s},0,i)}return this},l.prototype.isEmpty=function(){return null===this._root},Object.defineProperty(l.prototype,"size",{get:function(){return this._size},enumerable:!0,configurable:!0}),Object.defineProperty(l.prototype,"root",{get:function(){return this._root},enumerable:!0,configurable:!0}),l.prototype.toString=function(t){void 0===t&&(t=function(t){return String(t.key)});var e=[];return s(this._root,"",!0,(function(t){return e.push(t)}),t),e.join("")},l.prototype.update=function(t,e,n){var s=this._comparator,l=o(t,this._root,s),h=l.left,u=l.right;s(t,e)<0?u=i(e,n,u,s):h=i(e,n,h,s),this._root=function(t,e,n){return null===e?t:(null===t||((e=r(t.key,e,n)).left=t),e)}(h,u,s)},l.prototype.split=function(t){return o(t,this._root,this._comparator)},l.prototype[Symbol.iterator]=function(){var e,n,r;return t(this,(function(t){switch(t.label){case 0:e=this._root,n=[],r=!1,t.label=1;case 1:return r?[3,6]:null===e?[3,2]:(n.push(e),e=e.left,[3,5]);case 2:return 0===n.length?[3,4]:[4,e=n.pop()];case 3:return t.sent(),e=e.right,[3,5];case 4:r=!0,t.label=5;case 5:return[3,1];case 6:return[2]}}))},l}();function h(t,n,r,i){var o=i-r;if(o>0){var s=r+Math.floor(o/2),l=t[s],u=n[s],f=new e(l,u);return f.left=h(t,n,r,s),f.right=h(t,n,s+1,i),f}return null}function u(t,e,n){var r=n-e;if(r>0){var i=e+Math.floor(r/2),o=u(t,e,i),s=t.head;return s.left=o,t.head=t.head.next,s.right=u(t,i+1,n),s}return null}function f(t,e,n,r,i){if(!(n>=r)){for(var o=t[n+r>>1],s=n-1,l=r+1;;){do{s++}while(i(t[s],o)<0);do{l--}while(i(t[l],o)>0);if(s>=l)break;var h=t[s];t[s]=t[l],t[l]=h,h=e[s],e[s]=e[l],e[l]=h}f(t,e,n,l,i),f(t,e,l+1,r,i)}}const c=(t,e)=>t.ll.x<=e.x&&e.x<=t.ur.x&&t.ll.y<=e.y&&e.y<=t.ur.y,p=(t,e)=>{if(e.ur.x<t.ll.x||t.ur.x<e.ll.x||e.ur.y<t.ll.y||t.ur.y<e.ll.y)return null;const n=t.ll.x<e.ll.x?e.ll.x:t.ll.x,r=t.ur.x<e.ur.x?t.ur.x:e.ur.x;return{ll:{x:n,y:t.ll.y<e.ll.y?e.ll.y:t.ll.y},ur:{x:r,y:t.ur.y<e.ur.y?t.ur.y:e.ur.y}}};let g=Number.EPSILON;void 0===g&&(g=Math.pow(2,-52));const a=g*g,y=(t,e)=>{if(-g<t&&t<g&&-g<e&&e<g)return 0;const n=t-e;return n*n<a*t*e?0:t<e?-1:1};class x{constructor(){this.tree=new l,this.round(0)}round(t){const e=this.tree.add(t),n=this.tree.prev(e);if(null!==n&&0===y(e.key,n.key))return this.tree.remove(t),n.key;const r=this.tree.next(e);return null!==r&&0===y(e.key,r.key)?(this.tree.remove(t),r.key):t}}const b=new class{constructor(){this.reset()}reset(){this.xRounder=new x,this.yRounder=new x}round(t,e){return{x:this.xRounder.round(t),y:this.yRounder.round(e)}}},v=11102230246251565e-32,d=134217729,m=(3+8*v)*v;function E(t,e,n,r,i){let o,s,l,h,u=e[0],f=r[0],c=0,p=0;f>u==f>-u?(o=u,u=e[++c]):(o=f,f=r[++p]);let g=0;if(c<t&&p<n)for(f>u==f>-u?(s=u+o,l=o-(s-u),u=e[++c]):(s=f+o,l=o-(s-f),f=r[++p]),o=s,0!==l&&(i[g++]=l);c<t&&p<n;)f>u==f>-u?(s=o+u,h=s-o,l=o-(s-h)+(u-h),u=e[++c]):(s=o+f,h=s-o,l=o-(s-h)+(f-h),f=r[++p]),o=s,0!==l&&(i[g++]=l);for(;c<t;)s=o+u,h=s-o,l=o-(s-h)+(u-h),u=e[++c],o=s,0!==l&&(i[g++]=l);for(;p<n;)s=o+f,h=s-o,l=o-(s-h)+(f-h),f=r[++p],o=s,0!==l&&(i[g++]=l);return 0===o&&0!==g||(i[g++]=o),g}function S(t){return new Float64Array(t)}const _=22204460492503146e-32,w=11093356479670487e-47,k=S(4),R=S(8),I=S(12),P=S(16),N=S(4);function A(t,e,n,r,i,o){const s=(e-o)*(n-i),l=(t-i)*(r-o),h=s-l,u=Math.abs(s+l);return Math.abs(h)>=33306690738754716e-32*u?h:-function(t,e,n,r,i,o,s){let l,h,u,f,c,p,g,a,y,x,b,v,S,A,O,L,$,M;const z=t-i,B=n-i,G=e-o,T=r-o;A=z*T,p=d*z,g=p-(p-z),a=z-g,p=d*T,y=p-(p-T),x=T-y,O=a*x-(A-g*y-a*y-g*x),L=G*B,p=d*G,g=p-(p-G),a=G-g,p=d*B,y=p-(p-B),x=B-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,k[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,k[1]=S-(b+c)+(c-L),M=v+b,c=M-v,k[2]=v-(M-c)+(b-c),k[3]=M;let q=function(t,e){let n=e[0];for(let r=1;r<t;r++)n+=e[r];return n}(4,k),C=_*s;if(q>=C||-q>=C)return q;if(c=t-z,l=t-(z+c)+(c-i),c=n-B,u=n-(B+c)+(c-i),c=e-G,h=e-(G+c)+(c-o),c=r-T,f=r-(T+c)+(c-o),0===l&&0===h&&0===u&&0===f)return q;if(C=w*s+m*Math.abs(q),q+=z*f+T*l-(G*u+B*h),q>=C||-q>=C)return q;A=l*T,p=d*l,g=p-(p-l),a=l-g,p=d*T,y=p-(p-T),x=T-y,O=a*x-(A-g*y-a*y-g*x),L=h*B,p=d*h,g=p-(p-h),a=h-g,p=d*B,y=p-(p-B),x=B-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,N[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,N[1]=S-(b+c)+(c-L),M=v+b,c=M-v,N[2]=v-(M-c)+(b-c),N[3]=M;const F=E(4,k,4,N,R);A=z*f,p=d*z,g=p-(p-z),a=z-g,p=d*f,y=p-(p-f),x=f-y,O=a*x-(A-g*y-a*y-g*x),L=G*u,p=d*G,g=p-(p-G),a=G-g,p=d*u,y=p-(p-u),x=u-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,N[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,N[1]=S-(b+c)+(c-L),M=v+b,c=M-v,N[2]=v-(M-c)+(b-c),N[3]=M;const j=E(F,R,4,N,I);A=l*f,p=d*l,g=p-(p-l),a=l-g,p=d*f,y=p-(p-f),x=f-y,O=a*x-(A-g*y-a*y-g*x),L=h*u,p=d*h,g=p-(p-h),a=h-g,p=d*u,y=p-(p-u),x=u-y,$=a*x-(L-g*y-a*y-g*x),b=O-$,c=O-b,N[0]=O-(b+c)+(c-$),v=A+b,c=v-A,S=A-(v-c)+(b-c),b=S-L,c=S-b,N[1]=S-(b+c)+(c-L),M=v+b,c=M-v,N[2]=v-(M-c)+(b-c),N[3]=M;const U=E(j,I,4,N,P);return P[U-1]}(t,e,n,r,i,o,u)}const O=(t,e)=>t.x*e.y-t.y*e.x,L=(t,e)=>t.x*e.x+t.y*e.y,$=(t,e,n)=>{const r=A(t.x,t.y,e.x,e.y,n.x,n.y);return r>0?-1:r<0?1:0},M=t=>Math.sqrt(L(t,t)),z=(t,e,n)=>{const r={x:e.x-t.x,y:e.y-t.y},i={x:n.x-t.x,y:n.y-t.y};return O(i,r)/M(i)/M(r)},B=(t,e,n)=>{const r={x:e.x-t.x,y:e.y-t.y},i={x:n.x-t.x,y:n.y-t.y};return L(i,r)/M(i)/M(r)},G=(t,e,n)=>0===e.y?null:{x:t.x+e.x/e.y*(n-t.y),y:n},T=(t,e,n)=>0===e.x?null:{x:n,y:t.y+e.y/e.x*(n-t.x)};class q{static compare(t,e){const n=q.comparePoints(t.point,e.point);return 0!==n?n:(t.point!==e.point&&t.link(e),t.isLeft!==e.isLeft?t.isLeft?1:-1:F.compare(t.segment,e.segment))}static comparePoints(t,e){return t.x<e.x?-1:t.x>e.x?1:t.y<e.y?-1:t.y>e.y?1:0}constructor(t,e){void 0===t.events?t.events=[this]:t.events.push(this),this.point=t,this.isLeft=e}link(t){if(t.point===this.point)throw new Error("Tried to link already linked events");const e=t.point.events;for(let t=0,n=e.length;t<n;t++){const n=e[t];this.point.events.push(n),n.point=this.point}this.checkForConsuming()}checkForConsuming(){const t=this.point.events.length;for(let e=0;e<t;e++){const n=this.point.events[e];if(void 0===n.segment.consumedBy)for(let r=e+1;r<t;r++){const t=this.point.events[r];void 0===t.consumedBy&&(n.otherSE.point.events===t.otherSE.point.events&&n.segment.consume(t.segment))}}}getAvailableLinkedEvents(){const t=[];for(let e=0,n=this.point.events.length;e<n;e++){const n=this.point.events[e];n!==this&&!n.segment.ringOut&&n.segment.isInResult()&&t.push(n)}return t}getLeftmostComparator(t){const e=new Map,n=n=>{const r=n.otherSE;e.set(n,{sine:z(this.point,t.point,r.point),cosine:B(this.point,t.point,r.point)})};return(t,r)=>{e.has(t)||n(t),e.has(r)||n(r);const{sine:i,cosine:o}=e.get(t),{sine:s,cosine:l}=e.get(r);return i>=0&&s>=0?o<l?1:o>l?-1:0:i<0&&s<0?o<l?-1:o>l?1:0:s<i?-1:s>i?1:0}}}let C=0;class F{static compare(t,e){const n=t.leftSE.point.x,r=e.leftSE.point.x,i=t.rightSE.point.x,o=e.rightSE.point.x;if(o<n)return 1;if(i<r)return-1;const s=t.leftSE.point.y,l=e.leftSE.point.y,h=t.rightSE.point.y,u=e.rightSE.point.y;if(n<r){if(l<s&&l<h)return 1;if(l>s&&l>h)return-1;const n=t.comparePoint(e.leftSE.point);if(n<0)return 1;if(n>0)return-1;const r=e.comparePoint(t.rightSE.point);return 0!==r?r:-1}if(n>r){if(s<l&&s<u)return-1;if(s>l&&s>u)return 1;const n=e.comparePoint(t.leftSE.point);if(0!==n)return n;const r=t.comparePoint(e.rightSE.point);return r<0?1:r>0?-1:1}if(s<l)return-1;if(s>l)return 1;if(i<o){const n=e.comparePoint(t.rightSE.point);if(0!==n)return n}if(i>o){const n=t.comparePoint(e.rightSE.point);if(n<0)return 1;if(n>0)return-1}if(i!==o){const t=h-s,e=i-n,f=u-l,c=o-r;if(t>e&&f<c)return 1;if(t<e&&f>c)return-1}return i>o?1:i<o||h<u?-1:h>u?1:t.id<e.id?-1:t.id>e.id?1:0}constructor(t,e,n,r){this.id=++C,this.leftSE=t,t.segment=this,t.otherSE=e,this.rightSE=e,e.segment=this,e.otherSE=t,this.rings=n,this.windings=r}static fromRing(t,e,n){let r,i,o;const s=q.comparePoints(t,e);if(s<0)r=t,i=e,o=1;else{if(!(s>0))throw new Error(`Tried to create degenerate segment at [${t.x}, ${t.y}]`);r=e,i=t,o=-1}const l=new q(r,!0),h=new q(i,!1);return new F(l,h,[n],[o])}replaceRightSE(t){this.rightSE=t,this.rightSE.segment=this,this.rightSE.otherSE=this.leftSE,this.leftSE.otherSE=this.rightSE}bbox(){const t=this.leftSE.point.y,e=this.rightSE.point.y;return{ll:{x:this.leftSE.point.x,y:t<e?t:e},ur:{x:this.rightSE.point.x,y:t>e?t:e}}}vector(){return{x:this.rightSE.point.x-this.leftSE.point.x,y:this.rightSE.point.y-this.leftSE.point.y}}isAnEndpoint(t){return t.x===this.leftSE.point.x&&t.y===this.leftSE.point.y||t.x===this.rightSE.point.x&&t.y===this.rightSE.point.y}comparePoint(t){if(this.isAnEndpoint(t))return 0;const e=this.leftSE.point,n=this.rightSE.point,r=this.vector();if(e.x===n.x)return t.x===e.x?0:t.x<e.x?1:-1;const i=(t.y-e.y)/r.y,o=e.x+i*r.x;if(t.x===o)return 0;const s=(t.x-e.x)/r.x,l=e.y+s*r.y;return t.y===l?0:t.y<l?-1:1}getIntersection(t){const e=this.bbox(),n=t.bbox(),r=p(e,n);if(null===r)return null;const i=this.leftSE.point,o=this.rightSE.point,s=t.leftSE.point,l=t.rightSE.point,h=c(e,s)&&0===this.comparePoint(s),u=c(n,i)&&0===t.comparePoint(i),f=c(e,l)&&0===this.comparePoint(l),g=c(n,o)&&0===t.comparePoint(o);if(u&&h)return g&&!f?o:!g&&f?l:null;if(u)return f&&i.x===l.x&&i.y===l.y?null:i;if(h)return g&&o.x===s.x&&o.y===s.y?null:s;if(g&&f)return null;if(g)return o;if(f)return l;const a=((t,e,n,r)=>{if(0===e.x)return T(n,r,t.x);if(0===r.x)return T(t,e,n.x);if(0===e.y)return G(n,r,t.y);if(0===r.y)return G(t,e,n.y);const i=O(e,r);if(0==i)return null;const o={x:n.x-t.x,y:n.y-t.y},s=O(o,e)/i,l=O(o,r)/i;return{x:(t.x+l*e.x+(n.x+s*r.x))/2,y:(t.y+l*e.y+(n.y+s*r.y))/2}})(i,this.vector(),s,t.vector());return null===a?null:c(r,a)?b.round(a.x,a.y):null}split(t){const e=[],n=void 0!==t.events,r=new q(t,!0),i=new q(t,!1),o=this.rightSE;this.replaceRightSE(i),e.push(i),e.push(r);const s=new F(r,o,this.rings.slice(),this.windings.slice());return q.comparePoints(s.leftSE.point,s.rightSE.point)>0&&s.swapEvents(),q.comparePoints(this.leftSE.point,this.rightSE.point)>0&&this.swapEvents(),n&&(r.checkForConsuming(),i.checkForConsuming()),e}swapEvents(){const t=this.rightSE;this.rightSE=this.leftSE,this.leftSE=t,this.leftSE.isLeft=!0,this.rightSE.isLeft=!1;for(let t=0,e=this.windings.length;t<e;t++)this.windings[t]*=-1}consume(t){let e=this,n=t;for(;e.consumedBy;)e=e.consumedBy;for(;n.consumedBy;)n=n.consumedBy;const r=F.compare(e,n);if(0!==r){if(r>0){const t=e;e=n,n=t}if(e.prev===n){const t=e;e=n,n=t}for(let t=0,r=n.rings.length;t<r;t++){const r=n.rings[t],i=n.windings[t],o=e.rings.indexOf(r);-1===o?(e.rings.push(r),e.windings.push(i)):e.windings[o]+=i}n.rings=null,n.windings=null,n.consumedBy=e,n.leftSE.consumedBy=e.leftSE,n.rightSE.consumedBy=e.rightSE}}prevInResult(){return void 0!==this._prevInResult||(this.prev?this.prev.isInResult()?this._prevInResult=this.prev:this._prevInResult=this.prev.prevInResult():this._prevInResult=null),this._prevInResult}beforeState(){if(void 0!==this._beforeState)return this._beforeState;if(this.prev){const t=this.prev.consumedBy||this.prev;this._beforeState=t.afterState()}else this._beforeState={rings:[],windings:[],multiPolys:[]};return this._beforeState}afterState(){if(void 0!==this._afterState)return this._afterState;const t=this.beforeState();this._afterState={rings:t.rings.slice(0),windings:t.windings.slice(0),multiPolys:[]};const e=this._afterState.rings,n=this._afterState.windings,r=this._afterState.multiPolys;for(let t=0,r=this.rings.length;t<r;t++){const r=this.rings[t],i=this.windings[t],o=e.indexOf(r);-1===o?(e.push(r),n.push(i)):n[o]+=i}const i=[],o=[];for(let t=0,r=e.length;t<r;t++){if(0===n[t])continue;const r=e[t],s=r.poly;if(-1===o.indexOf(s))if(r.isExterior)i.push(s);else{-1===o.indexOf(s)&&o.push(s);const t=i.indexOf(r.poly);-1!==t&&i.splice(t,1)}}for(let t=0,e=i.length;t<e;t++){const e=i[t].multiPoly;-1===r.indexOf(e)&&r.push(e)}return this._afterState}isInResult(){if(this.consumedBy)return!1;if(void 0!==this._isInResult)return this._isInResult;const t=this.beforeState().multiPolys,e=this.afterState().multiPolys;switch(H.type){case"union":{const n=0===t.length,r=0===e.length;this._isInResult=n!==r;break}case"intersection":{let n,r;t.length<e.length?(n=t.length,r=e.length):(n=e.length,r=t.length),this._isInResult=r===H.numMultiPolys&&n<r;break}case"xor":{const n=Math.abs(t.length-e.length);this._isInResult=n%2==1;break}case"difference":{const n=t=>1===t.length&&t[0].isSubject;this._isInResult=n(t)!==n(e);break}default:throw new Error(`Unrecognized operation type found ${H.type}`)}return this._isInResult}}class j{constructor(t,e,n){if(!Array.isArray(t)||0===t.length)throw new Error("Input geometry is not a valid Polygon or MultiPolygon");if(this.poly=e,this.isExterior=n,this.segments=[],"number"!=typeof t[0][0]||"number"!=typeof t[0][1])throw new Error("Input geometry is not a valid Polygon or MultiPolygon");const r=b.round(t[0][0],t[0][1]);this.bbox={ll:{x:r.x,y:r.y},ur:{x:r.x,y:r.y}};let i=r;for(let e=1,n=t.length;e<n;e++){if("number"!=typeof t[e][0]||"number"!=typeof t[e][1])throw new Error("Input geometry is not a valid Polygon or MultiPolygon");let n=b.round(t[e][0],t[e][1]);n.x===i.x&&n.y===i.y||(this.segments.push(F.fromRing(i,n,this)),n.x<this.bbox.ll.x&&(this.bbox.ll.x=n.x),n.y<this.bbox.ll.y&&(this.bbox.ll.y=n.y),n.x>this.bbox.ur.x&&(this.bbox.ur.x=n.x),n.y>this.bbox.ur.y&&(this.bbox.ur.y=n.y),i=n)}r.x===i.x&&r.y===i.y||this.segments.push(F.fromRing(i,r,this))}getSweepEvents(){const t=[];for(let e=0,n=this.segments.length;e<n;e++){const n=this.segments[e];t.push(n.leftSE),t.push(n.rightSE)}return t}}class U{constructor(t,e){if(!Array.isArray(t))throw new Error("Input geometry is not a valid Polygon or MultiPolygon");this.exteriorRing=new j(t[0],this,!0),this.bbox={ll:{x:this.exteriorRing.bbox.ll.x,y:this.exteriorRing.bbox.ll.y},ur:{x:this.exteriorRing.bbox.ur.x,y:this.exteriorRing.bbox.ur.y}},this.interiorRings=[];for(let e=1,n=t.length;e<n;e++){const n=new j(t[e],this,!1);n.bbox.ll.x<this.bbox.ll.x&&(this.bbox.ll.x=n.bbox.ll.x),n.bbox.ll.y<this.bbox.ll.y&&(this.bbox.ll.y=n.bbox.ll.y),n.bbox.ur.x>this.bbox.ur.x&&(this.bbox.ur.x=n.bbox.ur.x),n.bbox.ur.y>this.bbox.ur.y&&(this.bbox.ur.y=n.bbox.ur.y),this.interiorRings.push(n)}this.multiPoly=e}getSweepEvents(){const t=this.exteriorRing.getSweepEvents();for(let e=0,n=this.interiorRings.length;e<n;e++){const n=this.interiorRings[e].getSweepEvents();for(let e=0,r=n.length;e<r;e++)t.push(n[e])}return t}}class Y{constructor(t,e){if(!Array.isArray(t))throw new Error("Input geometry is not a valid Polygon or MultiPolygon");try{"number"==typeof t[0][0][0]&&(t=[t])}catch(t){}this.polys=[],this.bbox={ll:{x:Number.POSITIVE_INFINITY,y:Number.POSITIVE_INFINITY},ur:{x:Number.NEGATIVE_INFINITY,y:Number.NEGATIVE_INFINITY}};for(let e=0,n=t.length;e<n;e++){const n=new U(t[e],this);n.bbox.ll.x<this.bbox.ll.x&&(this.bbox.ll.x=n.bbox.ll.x),n.bbox.ll.y<this.bbox.ll.y&&(this.bbox.ll.y=n.bbox.ll.y),n.bbox.ur.x>this.bbox.ur.x&&(this.bbox.ur.x=n.bbox.ur.x),n.bbox.ur.y>this.bbox.ur.y&&(this.bbox.ur.y=n.bbox.ur.y),this.polys.push(n)}this.isSubject=e}getSweepEvents(){const t=[];for(let e=0,n=this.polys.length;e<n;e++){const n=this.polys[e].getSweepEvents();for(let e=0,r=n.length;e<r;e++)t.push(n[e])}return t}}class V{static factory(t){const e=[];for(let n=0,r=t.length;n<r;n++){const r=t[n];if(!r.isInResult()||r.ringOut)continue;let i=null,o=r.leftSE,s=r.rightSE;const l=[o],h=o.point,u=[];for(;i=o,o=s,l.push(o),o.point!==h;)for(;;){const t=o.getAvailableLinkedEvents();if(0===t.length){const t=l[0].point,e=l[l.length-1].point;throw new Error(`Unable to complete output ring starting at [${t.x}, ${t.y}]. Last matching segment found ends at [${e.x}, ${e.y}].`)}if(1===t.length){s=t[0].otherSE;break}let n=null;for(let t=0,e=u.length;t<e;t++)if(u[t].point===o.point){n=t;break}if(null!==n){const t=u.splice(n)[0],r=l.splice(t.index);r.unshift(r[0].otherSE),e.push(new V(r.reverse()));continue}u.push({index:l.length,point:o.point});const r=o.getLeftmostComparator(i);s=t.sort(r)[0].otherSE;break}e.push(new V(l))}return e}constructor(t){this.events=t;for(let e=0,n=t.length;e<n;e++)t[e].segment.ringOut=this;this.poly=null}getGeom(){let t=this.events[0].point;const e=[t];for(let n=1,r=this.events.length-1;n<r;n++){const r=this.events[n].point,i=this.events[n+1].point;0!==$(r,t,i)&&(e.push(r),t=r)}if(1===e.length)return null;const n=e[0],r=e[1];0===$(n,t,r)&&e.shift(),e.push(e[0]);const i=this.isExteriorRing()?1:-1,o=this.isExteriorRing()?0:e.length-1,s=this.isExteriorRing()?e.length:-1,l=[];for(let t=o;t!=s;t+=i)l.push([e[t].x,e[t].y]);return l}isExteriorRing(){if(void 0===this._isExteriorRing){const t=this.enclosingRing();this._isExteriorRing=!t||!t.isExteriorRing()}return this._isExteriorRing}enclosingRing(){return void 0===this._enclosingRing&&(this._enclosingRing=this._calcEnclosingRing()),this._enclosingRing}_calcEnclosingRing(){let t=this.events[0];for(let e=1,n=this.events.length;e<n;e++){const n=this.events[e];q.compare(t,n)>0&&(t=n)}let e=t.segment.prevInResult(),n=e?e.prevInResult():null;for(;;){if(!e)return null;if(!n)return e.ringOut;if(n.ringOut!==e.ringOut)return n.ringOut.enclosingRing()!==e.ringOut?e.ringOut:e.ringOut.enclosingRing();e=n.prevInResult(),n=e?e.prevInResult():null}}}class X{constructor(t){this.exteriorRing=t,t.poly=this,this.interiorRings=[]}addInterior(t){this.interiorRings.push(t),t.poly=this}getGeom(){const t=[this.exteriorRing.getGeom()];if(null===t[0])return null;for(let e=0,n=this.interiorRings.length;e<n;e++){const n=this.interiorRings[e].getGeom();null!==n&&t.push(n)}return t}}class Q{constructor(t){this.rings=t,this.polys=this._composePolys(t)}getGeom(){const t=[];for(let e=0,n=this.polys.length;e<n;e++){const n=this.polys[e].getGeom();null!==n&&t.push(n)}return t}_composePolys(t){const e=[];for(let n=0,r=t.length;n<r;n++){const r=t[n];if(!r.poly)if(r.isExteriorRing())e.push(new X(r));else{const t=r.enclosingRing();t.poly||e.push(new X(t)),t.poly.addInterior(r)}}return e}}class W{constructor(t){let e=arguments.length>1&&void 0!==arguments[1]?arguments[1]:F.compare;this.queue=t,this.tree=new l(e),this.segments=[]}process(t){const e=t.segment,n=[];if(t.consumedBy)return t.isLeft?this.queue.remove(t.otherSE):this.tree.remove(e),n;const r=t.isLeft?this.tree.add(e):this.tree.find(e);if(!r)throw new Error(`Unable to find segment #${e.id} [${e.leftSE.point.x}, ${e.leftSE.point.y}] -> [${e.rightSE.point.x}, ${e.rightSE.point.y}] in SweepLine tree.`);let i,o,s=r,l=r;for(;void 0===i;)s=this.tree.prev(s),null===s?i=null:void 0===s.key.consumedBy&&(i=s.key);for(;void 0===o;)l=this.tree.next(l),null===l?o=null:void 0===l.key.consumedBy&&(o=l.key);if(t.isLeft){let r=null;if(i){const t=i.getIntersection(e);if(null!==t&&(e.isAnEndpoint(t)||(r=t),!i.isAnEndpoint(t))){const e=this._splitSafely(i,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}}let s=null;if(o){const t=o.getIntersection(e);if(null!==t&&(e.isAnEndpoint(t)||(s=t),!o.isAnEndpoint(t))){const e=this._splitSafely(o,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}}if(null!==r||null!==s){let t=null;if(null===r)t=s;else if(null===s)t=r;else{t=q.comparePoints(r,s)<=0?r:s}this.queue.remove(e.rightSE),n.push(e.rightSE);const i=e.split(t);for(let t=0,e=i.length;t<e;t++)n.push(i[t])}n.length>0?(this.tree.remove(e),n.push(t)):(this.segments.push(e),e.prev=i)}else{if(i&&o){const t=i.getIntersection(o);if(null!==t){if(!i.isAnEndpoint(t)){const e=this._splitSafely(i,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}if(!o.isAnEndpoint(t)){const e=this._splitSafely(o,t);for(let t=0,r=e.length;t<r;t++)n.push(e[t])}}}this.tree.remove(e)}return n}_splitSafely(t,e){this.tree.remove(t);const n=t.rightSE;this.queue.remove(n);const r=t.split(e);return r.push(n),void 0===t.consumedBy&&this.tree.add(t),r}}const Z="undefined"!=typeof process&&process.env.POLYGON_CLIPPING_MAX_QUEUE_SIZE||1e6,D="undefined"!=typeof process&&process.env.POLYGON_CLIPPING_MAX_SWEEPLINE_SEGMENTS||1e6;const H=new class{run(t,e,n){H.type=t,b.reset();const r=[new Y(e,!0)];for(let t=0,e=n.length;t<e;t++)r.push(new Y(n[t],!1));if(H.numMultiPolys=r.length,"difference"===H.type){const t=r[0];let e=1;for(;e<r.length;)null!==p(r[e].bbox,t.bbox)?e++:r.splice(e,1)}if("intersection"===H.type)for(let t=0,e=r.length;t<e;t++){const e=r[t];for(let n=t+1,i=r.length;n<i;n++)if(null===p(e.bbox,r[n].bbox))return[]}const i=new l(q.compare);for(let t=0,e=r.length;t<e;t++){const e=r[t].getSweepEvents();for(let t=0,n=e.length;t<n;t++)if(i.insert(e[t]),i.size>Z)throw new Error("Infinite loop when putting segment endpoints in a priority queue (queue size too big).")}const o=new W(i);let s=i.size,h=i.pop();for(;h;){const t=h.key;if(i.size===s){const e=t.segment;throw new Error(`Unable to pop() ${t.isLeft?"left":"right"} SweepEvent [${t.point.x}, ${t.point.y}] from segment #${e.id} [${e.leftSE.point.x}, ${e.leftSE.point.y}] -> [${e.rightSE.point.x}, ${e.rightSE.point.y}] from queue.`)}if(i.size>Z)throw new Error("Infinite loop when passing sweep line over endpoints (queue size too big).");if(o.segments.length>D)throw new Error("Infinite loop when passing sweep line over endpoints (too many sweep line segments).");const e=o.process(t);for(let t=0,n=e.length;t<n;t++){const n=e[t];void 0===n.consumedBy&&i.insert(n)}s=i.size,h=i.pop()}b.reset();const u=V.factory(o.segments);return new Q(u).getGeom()}};var J={union:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("union",t,n)},intersection:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("intersection",t,n)},xor:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("xor",t,n)},difference:function(t){for(var e=arguments.length,n=new Array(e>1?e-1:0),r=1;r<e;r++)n[r-1]=arguments[r];return H.run("difference",t,n)}};return J}));
+(function () {
+    const PC = typeof polygonClipping !== 'undefined' ? polygonClipping : null;
+    const ll2xy = r => r.map(q => [q[1], q[0]]);
+    // a round pocket of radius r km (government-held towns inside a group's area)
+    const circleRing = (c, r) => { const out = [], dy = r / 110.57, dx = r / (111.32 * Math.cos(c[0] * Math.PI / 180)); for (let i = 0; i < 24; i++) { const a = i / 24 * 2 * Math.PI; out.push([c[0] + dy * Math.sin(a), c[1] + dx * Math.cos(a)]); } return out; };
+    const polysOf = g => !g ? [] : g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    function hostGeom(p, C) {
+        const out = [];
+        if (C.clip) C.clip.forEach(n => { const l = nameLayer[n]; if (l && l.feature) out.push(...polysOf(l.feature.geometry)); });
+        else p.host.forEach(iso => { const f = isoFeature[iso]; if (f) out.push(...polysOf(f.geometry)); });
+        return out;
+    }
+    // the mask grows/shrinks around the group's base with its strength (exact at the start)
+    function maskOf(p, C) {
+        const g = Math.sqrt(proxyGrowth(p)), a = p.base || polyCentroid(C.mask[0]);
+        return C.mask.map(r => [ll2xy(r.map(q => [a[0] + (q[0] - a[0]) * g, a[1] + (q[1] - a[1]) * g]))]);
+    }
+    // multipolygon [[[lng,lat]…]…] or null when no accurate zone is available
+    window.entGeom = function (p) {
+        const C = ENT_CONTROL[p.id]; if (!C || !PC) return null;
+        const key = Math.round(p.S) + '|' + (C.clip ? C.clip.map(n => nameLayer[n] ? 1 : 0).join('') : p.host.map(i => isoFeature[i] ? 1 : 0).join(''));
+        if (p._geomKey === key) return p._geom;
+        let res = null;
+        try {
+            const host = hostGeom(p, C);
+            if (host.length) {
+                res = PC.intersection(host, maskOf(p, C));
+                if (C.minus && res.length) res = PC.difference(res, C.minus.map(m => [ll2xy(Array.isArray(m) ? m : circleRing(m.c, m.r))]));
+                if (!res.length) res = null;
+            }
+        } catch (e) { console.warn('control zone', p.id, e); res = null; }
+        p._geom = res; p._geomKey = key; return res;
+    };
+    const ringArea = r => { let s = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) s += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return s / 2; };
+    const geoKm2 = (r, lat0) => Math.abs(ringArea(r)) * 111.32 * 110.57 * Math.cos(lat0 * Math.PI / 180);
+    function inRingXY(x, y, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
+    const oldShape = entShape;
+    // Leaflet latlngs: one [outer, ...holes] per polygon
+    entShape = function (p) { const G = entGeom(p); if (!G) return [[oldShape(p)]]; return G.map(pl => pl.map(r => r.map(q => [q[1], q[0]]))); };
+    entArea = function (p) {
+        const G = entGeom(p); if (!G) return polyArea(oldShape(p));
+        return G.reduce((a, pl) => a + pl.reduce((b, r, i) => b + (i ? -1 : 1) * geoKm2(r, r[0][1]), 0), 0);
+    };
+    window.entCenter = function (p) {
+        const G = entGeom(p); if (!G) return polyCentroid(oldShape(p));
+        let big = G[0], ba = 0; G.forEach(pl => { const a = Math.abs(ringArea(pl[0])); if (a > ba) { ba = a; big = pl; } });
+        const r = big[0]; let A = 0, cx = 0, cy = 0;
+        for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const f = r[j][0] * r[i][1] - r[i][0] * r[j][1]; A += f; cx += (r[j][0] + r[i][0]) * f; cy += (r[j][1] + r[i][1]) * f; }
+        if (Math.abs(A) < 1e-12) return [r[0][1], r[0][0]];
+        let c = [cy / (3 * A), cx / (3 * A)];
+        if (!entPIP(c[0], c[1], p)) { const b = p.base; c = b && entPIP(b[0], b[1], p) ? b : [r[Math.floor(r.length / 2)][1], r[Math.floor(r.length / 2)][0]]; }
+        return c;
+    };
+    const oldPIP = entPIP;
+    // point-in-zone (accepts a proxy, or a plain ring as before)
+    entPIP = function (lat, lng, p) {
+        if (Array.isArray(p)) return oldPIP(lat, lng, p);
+        const G = entGeom(p); if (!G) return oldPIP(lat, lng, oldShape(p));
+        return G.some(pl => inRingXY(lng, lat, pl[0]) && !pl.slice(1).some(h => inRingXY(lng, lat, h)));
+    };
+    entAt = function (ll) { if (!state.proxies || !WAR.show.proxies) return null; for (const p of state.proxies) { if (p.status === 'dissolved') continue; if (entPIP(ll.lat, ll.lng, p)) return p; } return null; };
+    proxyFocus = function (id) { const p = proxyById(id); if (!p) return; closeSociety(); map.flyTo(entCenter(p), 6, { duration: 1.4 }); setTimeout(() => entSelect(id), 1500); };
+    // drawn like the countries: solid border that follows the real frontier, tinted fill
+    proxyRender = function () {
+        if (!state.proxies) return; warInitLayers(); WAR.pLayer.clearLayers(); WAR.pMarkers.clearLayers(); ENT.polys = {};
+        state.proxies.forEach(p => {
+            if (p.status === 'dissolved') return;
+            const sh = entShape(p); if (!sh.length) return;
+            const sel = ENT.sel === p.id;
+            const poly = L.polygon(sh, { renderer: WAR.renderer, color: sel ? '#ffffff' : p.color, weight: sel ? 2.4 : 1.4, opacity: 0.95, fillColor: p.color, fillOpacity: sel ? 0.5 : 0.3, interactive: false, lineJoin: 'round', smoothFactor: 0.6 }).addTo(WAR.pLayer);
+            ENT.polys[p.id] = poly;
+            const cen = entCenter(p);
+            const pat = p.patrons.filter(x => (p.aid[x] || 0) > 0);
+            const html = `<div class="px-name" style="cursor:pointer">${esc(p.short)}<small>${esc(p.leader || p.kind)}</small>${pat.length ? `<small>${pat.map(x => flagHTML(nationIso(x), 9)).join(' ')}</small>` : ''}</div>`;
+            const mk = L.marker(cen, { icon: L.divIcon({ className: 'fx-ic', html, iconSize: [140, 36], iconAnchor: [70, 18] }), zIndexOffset: 350 }).addTo(WAR.pMarkers);
+            mk.on('click', e => { L.DomEvent.stopPropagation(e); playClick(); entSelect(p.id); });
+        });
+    };
+    // older saves: pick up the corrected host (Hamas now sits in the Gaza Strip)
+    const _mig = entsMigrate;
+    entsMigrate = function () { _mig(); (state.proxies || []).forEach(p => { const d = PROXY_DEFS.find(x => x.id === p.id); if (d && p.id === 'hamas') { p.host = d.host.slice(); p.hostArea = d.hostArea; } }); };
+})();
+
 // ----- hover + click on the territory (capture phase so it works like a country) -----
 (function () {
     const cont = map.getContainer(); let tip = null, lastMove = 0;
@@ -11534,7 +11724,7 @@ function entCountryExtras(cName) {
     const ps = proxiesIn(iso); const el = document.getElementById('target-prox');
     if (el && ps.length) el.innerHTML = `<div class="gs-section" style="margin-top:8px">Non-state actors here</div>` + ps.map(p => { const T = proxyTerritory(p); return `<div class="text-[11px]" style="border-left:3px solid ${p.color};padding-left:6px;margin:3px 0;cursor:pointer" onclick="entSelect('${p.id}')"><b style="color:${p.color}">${esc(p.short)}</b> — ruled by ${esc(p.leader || '—')} · holds ${(T.share * 100).toFixed(1)}% of land, ${(T.pop * 100).toFixed(0)}% of people · strength ${Math.round(p.S)}</div>`; }).join('');
 }
-proxyFocus = function (id) { const p = proxyById(id); if (!p) return; closeSociety(); map.flyTo(polyCentroid(entShape(p)), 6, { duration: 1.4 }); setTimeout(() => entSelect(id), 1500); };
+proxyFocus = function (id) { const p = proxyById(id); if (!p) return; closeSociety(); map.flyTo(entCenter(p), 6, { duration: 1.4 }); setTimeout(() => entSelect(id), 1500); };
 {
     const _pw = proxiesHTML;
     proxiesHTML = function () { return _pw().replace(/Armed groups that hold ground <b>separately from the governments<\/b>/, 'Armed groups, breakaway states and autonomous regions that hold ground <b>separately from the governments</b>').replace(/their territory is outlined/i, 'their territory has its own borders'); };
@@ -11561,7 +11751,7 @@ function mapFindInit() {
 function mapFind(q) {
     q = (q || '').trim(); if (!q) return; const n = normName(q);
     const px = state.proxies && state.proxies.find(p => normName(p.short) === n || normName(p.name) === n || (PROXY_ALIASES[p.id] || []).includes(n));
-    if (px) { map.flyTo(polyCentroid(entShape(px)), 6, { duration: 1.3 }); setTimeout(() => entSelect(px.id), 1400); return; }
+    if (px) { map.flyTo(entCenter(px), 6, { duration: 1.3 }); setTimeout(() => entSelect(px.id), 1400); return; }
     const city = CITIES.find(c => normName(c[0]) === n);
     if (city) { map.flyTo([city[2], city[3]], 9, { duration: 1.3 }); return; }
     const iso = resolveIso(q) || WORLD_BY_NAME[n];
@@ -11648,16 +11838,25 @@ map.on('zoomend', uiZoomClass); uiZoomClass();
     zout.onclick = () => { try { playClick(); } catch (e) { } map.zoomOut(1); };
     L.DomEvent.disableClickPropagation(box); L.DomEvent.disableScrollPropagation(box);
     function syncDisabled() { const z = map.getZoom(); zin.disabled = z >= map.getMaxZoom() - 1e-6; zout.disabled = z <= map.getMinZoom() + 1e-6; }
-    // keep the buttons clear of the right-hand panels (intel panel / diplomacy dock) when they are showing
+    // stay on the right edge, in the free gap between the right-hand panels (intel panel / diplomacy dock);
+    // only step left of them if there is no gap tall enough
     function place() {
-        let right = 12;
+        const H = box.offsetHeight || 72, vh = window.innerHeight, mid = vh / 2 - H / 2;
+        let right = 12, top = mid;
         if (!document.body.classList.contains('map-only')) {
-            ['right-panel', 'diplomacy-menu'].forEach(id => {
-                const el = document.getElementById(id); if (!el || el.offsetParent === null) return;
-                const r = el.getBoundingClientRect(); if (r.width) right = Math.max(right, window.innerWidth - r.left + 10);
-            });
+            const vis = id => { const el = typeof id === 'string' ? document.getElementById(id) : id; if (!el || el.offsetParent === null) return null; const r = el.getBoundingClientRect(); return r.width && r.height ? r : null; };
+            const bar = vis(document.querySelector('.gs-topbar'));
+            const rects = ['right-panel', 'diplomacy-menu'].map(vis).filter(Boolean).sort((a, b) => a.top - b.top);
+            let y = bar ? bar.bottom : 0; const gaps = [];
+            rects.forEach(r => { if (r.top - y >= H + 16) gaps.push([y + 8, r.top - 8]); y = Math.max(y, r.bottom); });
+            if (vh - y >= H + 16) gaps.push([y + 8, vh - 8]);
+            if (gaps.length) {
+                let best = null, bd = Infinity;
+                gaps.forEach(g => { const t = Math.min(Math.max(mid, g[0]), g[1] - H), d = Math.abs(t - mid); if (d < bd) { bd = d; best = t; } });
+                top = best;
+            } else rects.forEach(r => { right = Math.max(right, window.innerWidth - r.left + 10); });
         }
-        box.style.right = right + 'px';
+        box.style.transform = 'none'; box.style.top = Math.round(top) + 'px'; box.style.right = right + 'px';
     }
     map.on('zoomend', syncDisabled); syncDisabled();
     window.addEventListener('resize', place); setInterval(place, 500); place();
