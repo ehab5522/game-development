@@ -487,6 +487,8 @@
         .war-occ { width: 26px; height: 26px; border: 2px dashed; border-radius: 50%; background: rgba(10,12,8,.7); display: flex; align-items: center; justify-content: center; }
         .px-label { display: flex; align-items: center; gap: 4px; background: rgba(10,12,8,.82); border: 1px solid; padding: 1px 5px; font-family: 'Oswald', sans-serif; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; width: max-content; margin: 0 auto; cursor: pointer; }
         body.map-only #ui-layer, body.map-only .gs-topbar { visibility: hidden !important; }
+        .tile-dark { filter: grayscale(1) brightness(.34) contrast(1.15); }
+        .tile-light { filter: grayscale(1) brightness(1.22) contrast(.82); }
         #maponly-restore { position: fixed; top: 10px; right: 10px; z-index: 3000; display: none; }
         /* Map zoom buttons — on the right edge, in the gap between the right-hand panels (JS picks the spot) */
         #zoom-ctrl { position: fixed; top: 50%; right: 12px; transform: translateY(-50%); z-index: 1001; display: flex; flex-direction: column; gap: 4px; transition: right .2s, top .2s; }
@@ -1727,7 +1729,7 @@
                 playerFeature = null; targetFeature = null;
                 geojsonLayer = L.geoJSON(simplifyGeo(RAW_GEO), COUNTRY_OPTS).addTo(map);
                 if (state.phase === 'playing') highlightPlayerCountry();
-                else if (state.player && nameLayer[state.player]) { playerFeature = nameLayer[state.player]; playerFeature.setStyle(getHighlightStyle('player')); }
+                else if (state.player && nameLayer[state.player]) { playerFeature = nameLayer[state.player]; hlSet(playerFeature, 'player'); }
             }
             document.querySelectorAll('input[name="gfx-mode"]').forEach(r => r.checked = r.value === k);
             flashReply && state.phase === 'playing' && flashReply(`Graphics set to <b>${GFX().label}</b>. Map tile sharpness changes fully after you reload the page.`);
@@ -1751,7 +1753,8 @@
         });
         
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { noWrap: true, bounds: [[-90, -180], [90, 180]], maxNativeZoom: 17, keepBuffer: GFX().keep, updateWhenZooming: false, updateWhenIdle: !GFX().anim, detectRetina: GFX().retina }).addTo(map);
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {opacity: 0.85, noWrap: true, bounds: [[-90, -180], [90, 180]], maxNativeZoom: 13, keepBuffer: GFX().keep, updateWhenZooming: false, updateWhenIdle: !GFX().anim }).addTo(map);
+        // place names only: the game draws every border itself, so a second, different set of borders from the tiles would not line up
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png', {subdomains: 'abcd', opacity: 0.9, noWrap: true, bounds: [[-90, -180], [90, 180]], maxNativeZoom: 13, keepBuffer: GFX().keep, updateWhenZooming: false, updateWhenIdle: !GFX().anim }).addTo(map);
 
         // ---- Click guard: zooming/panning (wheel, double-click, drag, pinch) must never select a country ----
         let mapBusyUntil = 0, mapMoving = false, pendingCountryClick = null;
@@ -1766,18 +1769,21 @@
         function getHighlightStyle(type) {
             const color = type === 'player' ? '#9cbf5a' : '#d9733f';
             if (currentViewMode === 'shaded') {
-                return { color: color, weight: 2, fillColor: color, fillOpacity: 0.35 };
+                return { color: color, weight: 2, fillColor: color, fillOpacity: 0.35, lineJoin: 'round', opacity: 1 };
             } else {
-                return { color: color, weight: 2, fillColor: 'transparent' };
+                return { color: color, weight: 2, fillColor: 'transparent', lineJoin: 'round', opacity: 1 };
             }
         }
 
+        // highlight a country and draw it above its neighbours, so its whole outline shows instead of being half-covered
+        function hlSet(l, type) { if (!l) return; l.setStyle(getHighlightStyle(type)); try { l.bringToFront(); } catch (e) { } }
+        function hlRaise() { try { if (targetFeature && targetFeature !== playerFeature) targetFeature.bringToFront(); if (playerFeature) playerFeature.bringToFront(); } catch (e) { } }
         function refreshHighlightStyles() {
             if (playerFeature) {
-                playerFeature.setStyle(getHighlightStyle('player'));
+                hlSet(playerFeature, 'player');
             }
             if (targetFeature && targetFeature !== playerFeature) {
-                targetFeature.setStyle(getHighlightStyle('target'));
+                hlSet(targetFeature, 'target');
             }
         }
 
@@ -1799,8 +1805,8 @@
 
                         layer.bindTooltip(cName, { className: 'country-tooltip', sticky: GFX().sticky, direction: 'top', offset: [0, -6] });
                         if (GFX().hover) {
-                            layer.on('mouseover', () => { if (layer !== playerFeature && layer !== targetFeature && !mapMoving) layer.setStyle({ color: 'rgba(240,214,150,0.9)', weight: 1.6, fillColor: '#d1ad5b', fillOpacity: 0.07 }); });
-                            layer.on('mouseout', () => { if (layer !== playerFeature && layer !== targetFeature) { try { geojsonLayer.resetStyle(layer); } catch (e) { } } });
+                            layer.on('mouseover', () => { if (layer !== playerFeature && layer !== targetFeature && !mapMoving) { layer.setStyle({ color: 'rgba(240,214,150,0.9)', weight: 1.6, fillColor: '#d1ad5b', fillOpacity: 0.07 }); try { layer.bringToFront(); } catch (e) { } } });
+                            layer.on('mouseout', () => { if (layer !== playerFeature && layer !== targetFeature) { try { geojsonLayer.resetStyle(layer); } catch (e) { } hlRaise(); } });
                         }
                         layer.on('dblclick', cancelPendingClick);
                         layer.on('click', (e) => {
@@ -1820,7 +1826,7 @@
                             if (state.phase === 'setup') {
                                 if(playerFeature) geojsonLayer.resetStyle(playerFeature);
                                 playerFeature = e.target; 
-                                playerFeature.setStyle(getHighlightStyle('player'));
+                                hlSet(playerFeature, 'player');
                                 
                                 state.player = cName; document.getElementById('country-display').value = cName;
                                 document.getElementById('deploy-btn').disabled = false;
@@ -1836,12 +1842,12 @@
                                 
                                 // Apply orange target style ONLY if they didn't click themselves
                                 if (targetFeature !== playerFeature) {
-                                    targetFeature.setStyle(getHighlightStyle('target'));
+                                    hlSet(targetFeature, 'target');
                                 }
                                 
                                 // Strictly enforce player color so it never gets overwritten
                                 if (playerFeature) {
-                                    playerFeature.setStyle(getHighlightStyle('player'));
+                                    hlSet(playerFeature, 'player');
                                 }
                                 
                                 updateTargetUI(cName);
@@ -5139,7 +5145,7 @@
             if (!l) return;
             if (playerFeature && playerFeature !== l) { try { geojsonLayer.resetStyle(playerFeature); } catch (e) {} }
             playerFeature = l;
-            try { playerFeature.setStyle(getHighlightStyle('player')); } catch (e) {}
+            try { hlSet(playerFeature, 'player'); } catch (e) {}
         }
 
         function saveToSlot(slot, silent) {
@@ -10596,6 +10602,7 @@ function customTreatyHTML() {
         <div class="text-[10.5px] text-slate-500 mb-2">Write your idea in a sentence or two, the way you would say it. Your legal staff turn it into a formal draft at once${aiReady() ? `, then <b>${esc(aiLabel())}</b> rewrites it in full treaty language in the background` : ''}. Send it or clear it.</div>
         <div class="flex flex-wrap gap-2 items-center mb-2"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn" onchange="ctGrab();state.treatyMsg='';renderSociety()">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
             <span class="text-[11px] text-slate-400 ml-2">Duration</span><input id="ct-dur-n" type="number" min="1" max="1200" step="1" class="tc-in" style="width:70px;padding:3px 6px;font-size:12px" value="${(d.dur || CT_DUR0).n}" onchange="ctGrab()"><select id="ct-dur-u" class="gs-btn" onchange="ctGrab()"><option value="months" ${(d.dur || CT_DUR0).u === 'months' ? 'selected' : ''}>months</option><option value="years" ${(d.dur || CT_DUR0).u === 'years' ? 'selected' : ''}>years</option></select></div>
+        ${treatyCdBar(d.iso + 'custom', d.iso, 'last agreement')}
         <textarea id="ct-idea" class="tc-in w-full" rows="2" maxlength="400" placeholder="Your idea, e.g. cheap oil for them in exchange for lower tariffs on our goods" style="resize:vertical;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ctWrite();}">${esc(d.idea || '')}</textarea>
         <div class="mt-1 mb-2" style="line-height:1.9">${CT_EXAMPLES.map(x => `<button type="button" class="gs-btn" style="padding:2px 6px;font-size:10px;text-transform:none;letter-spacing:0" onclick="ctUseExample(this.textContent)">${esc(x)}</button>`).join(' ')}</div>
         <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" onclick="ctWrite()">${R && R.valid ? 'Rewrite the draft' : 'Write the draft'}</button></div>`;
@@ -10604,7 +10611,6 @@ function customTreatyHTML() {
         h += `${R.changes && R.changes.length ? `<div class="text-[11px] mb-1" style="color:#d8b45a">To make your idea workable, your staff ${R.changes.map(esc).join('; ')}.</div>` : ''}
             ${ctDocHTML(d, R)}
             ${ctOutlookHTML(d.iso, R)}
-            ${treatyCdBar(d.iso + 'custom', d.iso, 'last draft')}
             <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy || treatyCdLeft(d.iso + 'custom') ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Send to ${esc(shortName(d.iso))}`}</button><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctClear()">Clear</button></div>`;
     }
     return h;
@@ -10868,7 +10874,7 @@ async function ctSend() {
         if (j && typeof j.accept === 'boolean') { accept = j.accept ? sc > C.need - 30 : sc >= C.need + 30; reply = j.accept !== accept ? null : String(j.reply || '').slice(0, 400) || null; }   // don't show a refusal letter on a signed deal
     }
     d.busy = null;
-    if (accept) delete state.treatyCd[iso + 'custom']; else treatyCdStart(iso + 'custom');
+    treatyCdStart(iso + 'custom', accept ? 'signed' : 'refused');
     if (accept) {
         state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, articles: R.articles, preamble: R.preamble, summary: R.summary, dur: R.dur, expires: R.dur ? state.dayIndex + ctDurDays(R.dur) : null, day: state.dayIndex, status: 'active' });
         addRel(me, iso, 10); state.cred = clamp((state.cred || 60) + 2, 0, 100);
@@ -10885,14 +10891,14 @@ async function ctSend() {
     renderSociety();
 }
 
-// after a refusal a government waits 14 days before looking at the same kind of proposal again
+// after answering a proposal (yes or no) a government waits 14 days before looking at the same kind of proposal again
 const TREATY_CD = 14;
-function treatyCdStart(key) { state.treatyCd[key] = state.dayIndex + TREATY_CD; state.treatyCdFrom = state.treatyCdFrom || {}; state.treatyCdFrom[key] = state.dayIndex; }
+function treatyCdStart(key, why) { state.treatyCd[key] = state.dayIndex + TREATY_CD; state.treatyCdFrom = state.treatyCdFrom || {}; state.treatyCdFrom[key] = state.dayIndex; state.treatyCdWhy = state.treatyCdWhy || {}; state.treatyCdWhy[key] = why || 'refused'; }
 function treatyCdLeft(key) { const end = (state.treatyCd || {})[key]; return end && end > state.dayIndex ? end - state.dayIndex : 0; }
 function treatyCdBar(key, iso, what) {
     const left = treatyCdLeft(key); if (!left) return '';
     const from = ((state.treatyCdFrom || {})[key]) ?? (state.treatyCd[key] - TREATY_CD), total = Math.max(1, left, state.treatyCd[key] - from), done = total - left;
-    return `<div class="mb-2" style="max-width:520px"><div class="flex justify-between text-[11px]"><span class="text-slate-300">${esc(shortName(iso))} turned down your ${esc(what)} · cooldown</span><span class="font-mono" style="color:#d8b45a">day ${done} of ${total} · ${left} day${left === 1 ? '' : 's'} left</span></div>
+    return `<div class="mb-2" style="max-width:520px"><div class="flex justify-between text-[11px]"><span class="text-slate-300">${esc(shortName(iso))} ${((state.treatyCdWhy || {})[key]) === 'signed' ? 'signed' : 'turned down'} your ${esc(what)} · cooldown before the next one</span><span class="font-mono" style="color:#d8b45a">day ${done} of ${total} · ${left} day${left === 1 ? '' : 's'} left</span></div>
         <div class="gs-stat-bar" style="margin-top:3px"><div style="width:${Math.round(done / total * 100)}%;background:#d8b45a"></div></div></div>`;
 }
 function treatyInit() {
@@ -10931,7 +10937,7 @@ function treatyPropose(type, iso) {
     { const cover = treatiesOf(me).find(t => t.parties.includes(iso) && ['defense', 'alliance'].includes(t.type)); if (cover && ['defense', 'alliance'].includes(type)) { state.treatyMsg = `You are already allied with ${shortName(iso)} through the ${cover.name}.`; renderSociety(); return; } }
     if (state.treaties.some(t => t.status === 'active' && t.parties.includes(me) && t.parties.includes(iso) && t.type === type)) { state.treatyMsg = `You already have this treaty with ${shortName(iso)}.`; renderSociety(); return; }
     const r = treatyScore(type, iso), ok = r.sc >= T.need;
-    if (ok) delete state.treatyCd[iso + type]; else treatyCdStart(iso + type);
+    treatyCdStart(iso + type, ok ? 'signed' : 'refused');
     if (ok) {
         state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type, parties: [me, iso], name: `${state.player}–${shortName(iso)} ${T.label.toLowerCase()}`, day: state.dayIndex, status: 'active' });
         addRel(me, iso, T.rel); state.cred = clamp((state.cred || 60) + 2, 0, 100);
@@ -11813,9 +11819,10 @@ const MAPS = { base: 'satellite', mode: 'none', tiles: [], orig: null, inited: f
 try { MAPS.base = localStorage.getItem('era_base') || 'satellite'; MAPS.mode = localStorage.getItem('era_mode') || 'none'; } catch (e) { }
 const MAP_BASES = {
     satellite: { label: 'Satellite', border: 'rgba(222,196,130,0.28)', bg: '#030712' },
-    dark: { label: 'Dark political', border: 'rgba(200,210,230,0.35)', bg: '#0b1020', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'] },
-    atlas: { label: 'Light atlas', border: 'rgba(40,50,70,0.55)', bg: '#dfe6ee', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}'] },
-    terrain: { label: 'Terrain', border: 'rgba(250,240,200,0.5)', bg: '#1b2a2f', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'] }
+    // bases without borders of their own (the game draws all borders), with place names on top
+    dark: { label: 'Dark political', border: 'rgba(200,210,230,0.35)', bg: '#0b1020', cls: 'tile-dark', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png'] },
+    atlas: { label: 'Light atlas', border: 'rgba(40,50,70,0.55)', bg: '#dfe6ee', cls: 'tile-light', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Physical_Map/MapServer/tile/{z}/{y}/{x}', 'https://{s}.basemaps.cartocdn.com/rastertiles/light_only_labels/{z}/{x}/{y}.png'] },
+    terrain: { label: 'Terrain', border: 'rgba(250,240,200,0.5)', bg: '#1b2a2f', urls: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}', 'https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}.png'] }
 };
 const MAP_MODES = {
     none: { label: 'No overlay' },
@@ -11882,8 +11889,8 @@ function mapApplyMode() {
     geojsonLayer.options.style = mapStyleFor;
     Object.keys(nameLayer).forEach(n => {
         const l = nameLayer[n]; if (!l || !l.feature) return;
-        if (l === playerFeature) { l.setStyle(getHighlightStyle('player')); return; }
-        if (l === targetFeature) { l.setStyle(getHighlightStyle('target')); return; }
+        if (l === playerFeature) { hlSet(l, 'player'); return; }
+        if (l === targetFeature) { hlSet(l, 'target'); return; }
         try { l.setStyle(mapStyleFor(l.feature)); } catch (e) { }
     });
     mapLegend();
@@ -11897,7 +11904,7 @@ function mapSetBase(b) {
     if (b === 'satellite') MAPS.orig.forEach(l => { if (!map.hasLayer(l)) l.addTo(map); });
     else {
         MAPS.orig.forEach(l => { try { map.removeLayer(l); } catch (e) { } });
-        B.urls.forEach((u, i) => { const l = L.tileLayer(u, { noWrap: true, maxNativeZoom: b === 'terrain' ? 13 : 16, opacity: i === 1 ? 0.9 : 1, keepBuffer: GFX().keep, updateWhenZooming: false }).addTo(map); l.bringToBack && i === 0 && l.bringToBack(); MAPS.tiles.push(l); });
+        B.urls.forEach((u, i) => { const l = L.tileLayer(u, { subdomains: 'abcd', noWrap: true, maxNativeZoom: b === 'terrain' ? 13 : i === 0 && B.cls ? 8 : 16, opacity: i === 1 ? 0.9 : 1, keepBuffer: GFX().keep, updateWhenZooming: false, className: i === 0 && B.cls ? B.cls : '' }).addTo(map); l.bringToBack && i === 0 && l.bringToBack(); MAPS.tiles.push(l); });
     }
     document.getElementById('map').style.background = B.bg; document.body.classList.toggle('base-light', b === 'atlas');
     mapApplyMode(); const s = document.getElementById('mm-base'); if (s) s.value = b;
@@ -11946,15 +11953,15 @@ const PERF = { under: null, fps: 60, samples: 0, acc: 0, auto: false, last: perf
 try { PERF.auto = localStorage.getItem('era_autoperf_done') === '1'; } catch (e) { }
 
 // 1. never show a black hole where tiles have not arrived yet: a cheap low-zoom copy sits underneath
-function perfUnderlay(url) {
+function perfUnderlay(url, cls) {
     try { if (PERF.under) map.removeLayer(PERF.under); } catch (e) { }
-    PERF.under = L.tileLayer(url, { noWrap: true, maxNativeZoom: 4, maxZoom: 13, zIndex: 0, keepBuffer: 1, updateWhenZooming: false, className: 'tile-underlay', bounds: [[-90, -180], [90, 180]] }).addTo(map);
+    PERF.under = L.tileLayer(url, { noWrap: true, maxNativeZoom: 4, maxZoom: 13, zIndex: 0, keepBuffer: 1, updateWhenZooming: false, className: 'tile-underlay' + (cls ? ' ' + cls : ''), bounds: [[-90, -180], [90, 180]] }).addTo(map);
     try { PERF.under.bringToBack(); } catch (e) { }
 }
 perfUnderlay('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 {
     const _sb = mapSetBase;
-    mapSetBase = function (b) { _sb(b); try { const B = MAP_BASES[b]; perfUnderlay(b === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : B.urls[0]); } catch (e) { } };
+    mapSetBase = function (b) { _sb(b); try { const B = MAP_BASES[b]; perfUnderlay(b === 'satellite' ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' : B.urls[0], B.cls); } catch (e) { } };
 }
 
 // 2. DOM virtualisation for the ~900 airports & bases: only markers in view are on the map
