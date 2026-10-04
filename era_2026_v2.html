@@ -709,7 +709,7 @@
                 <label class="flex items-center gap-2 cursor-pointer mb-1"><input type="checkbox" checked onchange="setAutoPause(this.checked)"><span class="text-xs font-mono text-slate-300">Auto-pause on critical events</span></label>
                 <div class="flex items-center gap-2 mb-2"><span class="text-xs font-mono text-slate-300">Interface size</span><select class="gs-btn" onchange="uiScale(this.value)"><option value="0.8">Small</option><option value="0.9">Compact</option><option value="1" selected>Normal</option><option value="1.15">Large</option></select></div>
                 <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Map layers</div>
-                <label class="flex items-center gap-2 cursor-pointer mb-1"><input type="checkbox" checked onchange="setMapLayer('proxies', this.checked)"><span class="text-xs font-mono text-slate-300">🏴 Proxy &amp; militia territory</span></label>
+                <label class="flex items-center gap-2 cursor-pointer mb-1"><input type="checkbox" checked onchange="setMapLayer('proxies', this.checked)"><span class="text-xs font-mono text-slate-300">🏴 Non-state actor territory</span></label>
                 <label class="flex items-center gap-2 cursor-pointer mb-1"><input type="checkbox" checked onchange="setMapLayer('fronts', this.checked)"><span class="text-xs font-mono text-slate-300">⚔ War fronts &amp; occupation</span></label>
                 <label class="flex items-center gap-2 cursor-pointer mb-2"><input type="checkbox" checked onchange="setMapLayer('scars', this.checked)"><span class="text-xs font-mono text-slate-300">🔥 Strike damage</span></label>
                 <label class="flex items-center gap-2 cursor-pointer mb-2"><input type="checkbox" checked onchange="fxSetCine(this.checked)" id="cine-chk"><span class="text-xs font-mono text-slate-300">🎬 Cinematic strike camera</span></label>
@@ -9342,7 +9342,7 @@ function socCard(ind, iso, big) {
 function renderSociety() {
     const body = document.getElementById('soc-body'); if (!body) return;
     const iso = state.playerIso, s = socOf(iso), n = nationIso(iso);
-    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['military', 'Military'], ['war', 'War room'], ['proxies', 'Proxies & militias'], ['treaties', 'Treaties & UN'], ['politics', 'Politics'], ['legacy', 'Legacy'], ['world', 'World rankings']];
+    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['military', 'Military'], ['war', 'War room'], ['proxies', 'Non-state actors'], ['treaties', 'Treaties & UN'], ['politics', 'Politics'], ['legacy', 'Legacy'], ['world', 'World rankings']];
     let h = `<div class="flex flex-wrap gap-1 mb-3">${tabs.map(([k, l]) => `<button type="button" class="gs-btn ${socTab === k ? 'gs-btn-primary' : ''}" onclick="socSetTab('${k}')">${l}</button>`).join('')}</div>`;
     if (socTab === 'overview') {
         const gr = getGrowth(iso);
@@ -10917,7 +10917,7 @@ const REGIME_TBL = {
     autocracy: 'EGY BLR VEN NIC AZE KAZ UZB TKM TJK KGZ SYR ERI CMR UGA RWA AGO COD CAF COG GNQ DJI BDI SSD SOM YEM LBY TGO'.split(' '),
     'one-party': 'CHN VNM LAO CUB PRK'.split(' '),
     monarchy: 'SAU ARE QAT KWT OMN BHR JOR MAR BRN SWZ'.split(' '),
-    theocracy: 'IRN AFG'.split(' '),
+    theocracy: 'IRN AFG VAT'.split(' '),
     junta: 'MMR MLI BFA NER SDN GIN GAB TCD'.split(' ')
 };
 const REGIME_OF = {}; Object.keys(REGIME_TBL).forEach(k => REGIME_TBL[k].forEach(i => REGIME_OF[i] = k));
@@ -11199,14 +11199,48 @@ function politicsHTML() {
 }
 // ---------- change your political system ----------
 const REGIME_PLAN = {
-    democracy: { icon: '🗳', what: 'Free elections every 4 years. Unpopular moves cost political capital. Coups almost impossible.', mods: ['Elections every 4 years — losing one ends your government', 'Coup risk: very low', 'Democracies +12 relations, autocracies −5', 'Investor confidence: growth +0.3 pts'] },
-    hybrid: { icon: '⚖', what: 'Elections are held but tilted in your favour; the courts and media are leaned on.', mods: ['Managed elections every 5 years (+9% home advantage)', 'Political capital costs halved', 'Coup risk: moderate', 'Democracies −5 relations'] },
-    autocracy: { icon: '🏛', what: 'Rule by one leader and a security apparatus. No elections; legitimacy rests on order and results.', mods: ['No elections — no political capital needed', 'Coup risk: high', 'Democracies −15 relations, autocracies +8', 'Approval −8 on taking power'] },
-    'one-party': { icon: '☭', what: 'A single ruling party controls the state, army and economy.', mods: ['No elections', 'Coup risk: low (the party controls the army)', 'One-party states +10, democracies −15', 'Approval −10 on taking power'] },
-    monarchy: { icon: '👑', what: 'A royal family rules; the crown is the source of law.', mods: ['No elections', 'Coup risk: low', 'Gulf and other monarchies +10, democracies −10', 'Approval −6 on taking power'] },
-    theocracy: { icon: '☪', what: 'Clerics hold final authority and religious law governs the state.', mods: ['No elections that can remove you', 'Coup risk: low', 'Iran and Afghanistan +12, democracies −20', 'Approval −12 on taking power'] },
-    junta: { icon: '🎖', what: 'The armed forces rule directly after suspending the constitution.', mods: ['No elections', 'Coup risk: very high (officers copy you)', 'Juntas +10, democracies −25, aid and investment frozen', 'Approval −15 on taking power'] }
+    democracy: { what: 'Free elections every 4 years. Unpopular moves cost political capital. Coups almost impossible.', mods: ['Elections every 4 years — losing one ends your government', 'Coup risk: very low', 'Democracies +12 relations, autocracies −5', 'Investor confidence: growth +0.3 pts'] },
+    hybrid: { what: 'Elections are held but tilted in your favour; the courts and media are leaned on.', mods: ['Managed elections every 5 years (+9% home advantage)', 'Political capital costs halved', 'Coup risk: moderate', 'Democracies −5 relations'] },
+    autocracy: { what: 'Rule by one leader and a security apparatus. No elections; legitimacy rests on order and results.', mods: ['No elections — no political capital needed', 'Coup risk: high', 'Democracies −15 relations, autocracies +8', 'Approval −8 on taking power'] },
+    'one-party': { what: 'A single ruling party controls the state, army and economy.', mods: ['No elections', 'Coup risk: low (the party controls the army)', 'One-party states +10, democracies −15', 'Approval −10 on taking power'] },
+    monarchy: { what: 'A royal family rules; the crown is the source of law.', mods: ['No elections', 'Coup risk: low', 'Gulf and other monarchies +10, democracies −10', 'Approval −6 on taking power'] },
+    theocracy: { what: 'Religious leaders hold final authority and religious law governs the state. Choose the state religion below.', mods: ['No elections that can remove you', 'Coup risk: low', 'Countries of the same faith +10, theocracies of the same faith +15, of other faiths −10, democracies −20', 'Approval −8 if it is your people\'s majority faith, −25 if it is not'] },
+    junta: { what: 'The armed forces rule directly after suspending the constitution.', mods: ['No elections', 'Coup risk: very high (officers copy you)', 'Juntas +10, democracies −25, aid and investment frozen', 'Approval −15 on taking power'] }
 };
+// state religions a theocracy can be built on, and each country's majority faith (1 January 2026, simplified)
+const FAITHS = {
+    sunni: 'Sunni Islam', shia: 'Shia Islam', catholic: 'Catholic Christianity', orthodox: 'Orthodox Christianity', protestant: 'Protestant Christianity',
+    judaism: 'Judaism', hinduism: 'Hinduism', buddhism: 'Buddhism', sikhism: 'Sikhism'
+};
+const FAITH_TBL = {
+    sunni: 'SAU ARE QAT KWT OMN JOR EGY LBY TUN DZA MAR MRT SDN SOM DJI TUR SYR PSE GAZ AFG PAK BGD IDN MYS BRN MDV SEN GMB GIN MLI NER BFA TCD SLE KAZ UZB TKM TJK KGZ ALB XKX BIH COM ESH YEM CYN SOL RSF HTH SHB JNM LNA SRD KRG SDF'.split(' '),
+    shia: 'IRN IRQ AZE BHR HZB'.split(' '),
+    catholic: 'ITA ESP PRT FRA BEL AUT IRL POL LTU SVK SVN HRV HUN MLT LUX VAT MCO SMR AND LIE MEX GTM HND SLV NIC CRI PAN COL VEN ECU PER BOL PRY URY ARG CHL BRA CUB DOM HTI PHL TLS COD AGO COG GAB BDI RWA GNQ CPV STP SYC MOZ CAF KVU ELN SIN VVA'.split(' '),
+    orthodox: 'RUS UKR BLR SRB MNE MKD BGR ROU MDA GRC CYP GEO ARM ETH ERI PMR ABK OST TGR'.split(' '),
+    protestant: 'USA GBR DEU NLD DNK NOR SWE FIN ISL EST LVA CAN AUS NZL ZAF NAM BWA ZMB ZWE KEN UGA TZA GHA LBR JAM TTO BHS BRB PNG FJI SLB VUT WSM TON MWI MDG SSD NGA CMR CHE CZE'.split(' '),
+    judaism: ['ISR'], hinduism: ['IND', 'NPL', 'MUS'],
+    buddhism: 'THA MMR LKA KHM LAO BTN MNG JPN ARK WAS KIA'.split(' ')
+};
+const FAITH_OF = {}; Object.keys(FAITH_TBL).forEach(k => FAITH_TBL[k].forEach(i => FAITH_OF[i] = k));
+const STATE_FAITH = { IRN: 'shia', AFG: 'sunni', VAT: 'catholic' };   // existing theocracies
+function faithOfState(iso) { return (state.faiths && state.faiths[iso]) || STATE_FAITH[iso] || FAITH_OF[iso] || null; }
+function regimeLabel(iso) { const R = regimeOf(iso), I = REGIME_INFO[R]; if (R !== 'theocracy') return I.label; const f = faithOfState(iso); return f ? `${I.label} (${FAITHS[f]})` : I.label; }
+function regimeFaithPick() { const el = document.getElementById('regime-faith'); return el && FAITHS[el.value] ? el.value : (FAITH_OF[state.playerIso] || 'sunni'); }
+function regimeSetFaith() {
+    const f = regimeFaithPick(), me = state.playerIso, n = nationIso(me); if (faithOfState(me) === f) return;
+    playClick(); state.faiths = state.faiths || {}; const old = faithOfState(me); state.faiths[me] = f;
+    n.stability = clamp(n.stability - (FAITH_OF[me] === f ? 6 : 20), 0, 100); regimeFaithRelations(f, old);
+    logEvent(`<b>${esc(state.player)}</b> changes its state religion from ${esc(FAITHS[old] || 'none')} to <b>${esc(FAITHS[f])}</b>.`, 'bad'); renderSociety();
+}
+function regimeFaithRelations(f, old) {
+    const me = state.playerIso;
+    Object.keys(WORLD).forEach(x => {
+        if (x === me || !(WORLD[x][3] > 0)) return; let d = 0;
+        if (FAITH_OF[x] === f) d += 10; else if (old && FAITH_OF[x] === old) d -= 8;
+        if (regimeOf(x) === 'theocracy') d += faithOfState(x) === f ? 15 : -10;
+        if (d) addRel(me, x, d);
+    });
+}
 function regimeChangeCost(to, how) {
     const from = state.pol.regime;
     const dem = r => r === 'democracy' || r === 'hybrid';
@@ -11217,23 +11251,26 @@ function regimeChangeCost(to, how) {
 }
 function regimeChangeHTML() {
     const P = state.pol, cur = P.regime, n = nationIso(state.playerIso);
-    let h = `<div class="gs-stat-lbl mt-4 mb-1">🏛 Change your political system</div>
+    let h = `<div class="gs-stat-lbl mt-4 mb-1">Change your political system</div>
         <div class="text-[11px] text-slate-400 mb-2">You can rewrite the constitution through a <b>reform</b> (slow, needs approval of at least 35% when it completes${cur === 'democracy' || cur === 'hybrid' ? ' and 40 political capital up front' : ''}) or impose a new system <b>by decree</b> (immediate, but a heavy blow to approval and to your standing with democracies).</div>`;
     if (P.reform) {
         const d0 = P.reform.start, d1 = P.reform.end, pct = clamp((state.date.getTime() - d0) / Math.max(1, d1 - d0) * 100, 0, 100), left = Math.max(0, Math.ceil((d1 - state.date.getTime()) / 864e5));
-        h += `<div class="gs-stat mb-2" style="padding:8px 10px"><div class="text-[12px]">Constitutional reform to <b style="color:#d1ad5b">${REGIME_INFO[P.reform.to].label}</b> under way — ${left} days left</div>
+        h += `<div class="gs-stat mb-2" style="padding:8px 10px"><div class="text-[12px]">Constitutional reform to <b style="color:#d1ad5b">${REGIME_INFO[P.reform.to].label}${P.reform.faith ? ' (' + esc(FAITHS[P.reform.faith]) + ')' : ''}</b> under way — ${left} days left</div>
             <div class="gs-stat-bar"><div style="width:${pct}%;background:#d1ad5b"></div></div>
             <div class="text-[10.5px] text-slate-400 mt-1">It passes if approval is at least 35% on the day (now ${Math.round(n.stability)}%).</div>
             <button type="button" class="gs-btn mt-2" onclick="regimeCancel()">Abandon the reform</button></div>`;
     }
     h += `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">` + Object.keys(REGIME_PLAN).map(k => {
         const R = REGIME_PLAN[k], I = REGIME_INFO[k], on = k === cur, rf = regimeChangeCost(k, 'reform'), dc = regimeChangeCost(k, 'decree');
-        return `<div class="gs-stat" style="padding:8px 10px;${on ? 'border-color:#d1ad5b' : ''}"><div class="text-[13px]" style="color:${on ? '#fcd34d' : '#e7dcc0'}">${R.icon} <b>${I.label}</b>${on ? ' · current' : ''}</div>
+        return `<div class="gs-stat" style="padding:8px 10px;${on ? 'border-color:#d1ad5b' : ''}"><div class="text-[13px]" style="color:${on ? '#fcd34d' : '#e7dcc0'}"><b>${k === 'theocracy' && on ? esc(regimeLabel(state.playerIso)) : I.label}</b>${on ? ' · current' : ''}</div>
             <div class="text-[10.5px] text-slate-400 my-1">${R.what}</div>
             <ul class="text-[10.5px] text-slate-300" style="margin:0 0 6px 14px;list-style:disc">${R.mods.map(m => `<li>${m}</li>`).join('')}</ul>
+            ${k === 'theocracy' ? `<div class="text-[10.5px] text-slate-400 mb-1">State religion <select id="regime-faith" class="tc-in" style="padding:2px 4px;font-size:11px;margin-left:4px">${Object.keys(FAITHS).map(f => `<option value="${f}" ${f === (on ? faithOfState(state.playerIso) : (P.reform && P.reform.faith) || FAITH_OF[state.playerIso] || 'sunni') ? 'selected' : ''}>${FAITHS[f]}</option>`).join('')}</select></div>
+                <div class="text-[10px] text-slate-500 mb-1">Your people's majority faith: ${esc(FAITHS[FAITH_OF[state.playerIso]] || 'none / mixed')}</div>
+                ${on ? `<button type="button" class="gs-btn" onclick="regimeSetFaith()">Change state religion</button>` : ''}` : ''}
             ${on ? '' : `<div class="flex gap-1 flex-wrap">
-                <button type="button" class="gs-btn" ${P.reform ? 'disabled' : ''} onclick="regimeStart('${k}','reform')" title="Approval ${rf.approval} now${rf.capital ? ', ' + rf.capital + ' political capital' : ''}">📜 Reform · ${rf.days} days</button>
-                <button type="button" class="gs-btn" ${P.reform ? 'disabled' : ''} onclick="regimeStart('${k}','decree')" title="Approval ${dc.approval}">⚡ By decree</button></div>
+                <button type="button" class="gs-btn" ${P.reform ? 'disabled' : ''} onclick="regimeStart('${k}','reform')" title="Approval ${rf.approval} now${rf.capital ? ', ' + rf.capital + ' political capital' : ''}">Reform · ${rf.days} days</button>
+                <button type="button" class="gs-btn" ${P.reform ? 'disabled' : ''} onclick="regimeStart('${k}','decree')" title="Approval ${dc.approval}">By decree</button></div>
                 <div class="text-[10px] text-slate-500 mt-1">Reform: approval ${rf.approval}${rf.capital ? ` · ${rf.capital} capital` : ''} · Decree: approval ${dc.approval}</div>`}</div>`;
     }).join('') + `</div>`;
     return h;
@@ -11244,17 +11281,20 @@ function regimeStart(to, how) {
     if (c.capital && !P.immune && P.capital < c.capital) { flashReply && flashReply(`You need ${c.capital} political capital to start a constitutional reform (you have ${Math.round(P.capital)}).`); return; }
     playClick();
     if (c.capital && !P.immune) P.capital -= c.capital;
-    if (how === 'decree') { n.stability = clamp(n.stability + c.approval, 0, 100); regimeApply(to, true); }
+    if (how === 'decree') { n.stability = clamp(n.stability + c.approval, 0, 100); regimeApply(to, true, to === 'theocracy' ? regimeFaithPick() : null); }
     else {
         n.stability = clamp(n.stability + c.approval, 0, 100);
-        P.reform = { to, start: state.date.getTime(), end: state.date.getTime() + c.days * 864e5 };
-        logEvent(`📜 <b>Constitutional reform:</b> ${esc(state.player)} begins rewriting its constitution to become a <b>${REGIME_INFO[to].label.toLowerCase()}</b> (${c.days} days).`, 'info');
+        P.reform = { to, start: state.date.getTime(), end: state.date.getTime() + c.days * 864e5, faith: to === 'theocracy' ? regimeFaithPick() : null };
+        logEvent(`<b>Constitutional reform:</b> ${esc(state.player)} begins rewriting its constitution to become a <b>${REGIME_INFO[to].label.toLowerCase()}${P.reform.faith ? ' (' + esc(FAITHS[P.reform.faith]) + ')' : ''}</b> (${c.days} days).`, 'info');
     }
     renderSociety();
 }
-function regimeCancel() { const P = state.pol; if (!P || !P.reform) return; playClick(); logEvent(`📜 The constitutional reform to a ${REGIME_INFO[P.reform.to].label.toLowerCase()} is abandoned.`, 'info'); P.reform = null; renderSociety(); }
-function regimeApply(to, decree) {
+function regimeCancel() { const P = state.pol; if (!P || !P.reform) return; playClick(); logEvent(`The constitutional reform to a ${REGIME_INFO[P.reform.to].label.toLowerCase()} is abandoned.`, 'info'); P.reform = null; renderSociety(); }
+function regimeApply(to, decree, faith) {
     const P = state.pol, me = state.playerIso, n = nationIso(me), from = P.regime, I = REGIME_INFO[to];
+    const fromLabel = regimeLabel(me);
+    state.faiths = state.faiths || {};
+    if (to === 'theocracy') { faith = faith || FAITH_OF[me] || 'sunni'; const old = faithOfState(me); state.faiths[me] = faith; regimeFaithRelations(faith, FAITH_OF[me] !== faith ? old : null); }
     state.regimes = state.regimes || {}; state.regimes[me] = to; P.regime = to; P.term = I.term; P.reform = null;
     if (I.elections) { const d = state.date; P.next = [d.getFullYear() + 1, d.getMonth() + 1]; P.capital = Math.max(P.capital, 50); } else P.next = null;
     const dem = x => regimeOf(x) === 'democracy';
@@ -11265,24 +11305,25 @@ function regimeApply(to, decree) {
         else if (to === 'autocracy') d += dem(x) ? -15 : rx === 'autocracy' ? 8 : 0;
         else if (to === 'one-party') d += dem(x) ? -15 : rx === 'one-party' ? 10 : 0;
         else if (to === 'monarchy') d += dem(x) ? -10 : rx === 'monarchy' ? 10 : 0;
-        else if (to === 'theocracy') d += dem(x) ? -20 : rx === 'theocracy' ? 12 : 0;
+        else if (to === 'theocracy') d += dem(x) ? -20 : 0;
         else if (to === 'junta') d += dem(x) ? -25 : rx === 'junta' ? 10 : 0;
         if (decree && from === 'democracy' && dem(x)) d -= 5;
         if (d) addRel(me, x, d);
     });
-    const ap = { autocracy: -8, 'one-party': -10, monarchy: -6, theocracy: -12, junta: -15 }[to] || 0;
+    const ap = { autocracy: -8, 'one-party': -10, monarchy: -6, theocracy: FAITH_OF[me] === faith ? -8 : -25, junta: -15 }[to] || 0;
     if (ap) n.stability = clamp(n.stability + ap, 0, 100);
-    logEvent(`🏛 <b>${esc(state.player)} is now a ${I.label.toLowerCase()}</b> (was ${REGIME_INFO[from].label.toLowerCase()}${decree ? ', imposed by decree' : ', by constitutional reform'}). ${I.elections ? `First election in ${P.next[0]}.` : 'There will be no free elections.'}`, to === 'democracy' ? 'good' : 'bad');
-    try { if (typeof flashReply === 'function') flashReply(`🏛 Your country is now a <b>${I.label}</b>.`); } catch (e) { }
+    const lc = l => l.replace(/^[^(]+/, m => m.toLowerCase());
+    logEvent(`<b>${esc(state.player)} is now a ${esc(lc(regimeLabel(me)))}</b> (was ${esc(lc(fromLabel))}${decree ? ', imposed by decree' : ', by constitutional reform'}). ${I.elections ? `First election in ${P.next[0]}.` : 'There will be no free elections.'}`, to === 'democracy' ? 'good' : 'bad');
+    try { if (typeof flashReply === 'function') flashReply(`Your country is now a <b>${esc(regimeLabel(me))}</b>.`); } catch (e) { }
 }
 function regimeReformTick() {
     const P = state.pol; if (!P || !P.reform || state.date.getTime() < P.reform.end) return;
     const n = nationIso(state.playerIso), to = P.reform.to;
-    if (n.stability >= 35) regimeApply(to, false);
-    else { P.reform = null; n.stability = clamp(n.stability - 5, 0, 100); logEvent(`📜 <b>Reform defeated:</b> with approval at only ${Math.round(n.stability + 5)}%, the new constitution is rejected. Approval −5.`, 'bad'); }
+    if (n.stability >= 35) regimeApply(to, false, P.reform.faith);
+    else { P.reform = null; n.stability = clamp(n.stability - 5, 0, 100); logEvent(`<b>Reform defeated:</b> with approval at only ${Math.round(n.stability + 5)}%, the new constitution is rejected. Approval −5.`, 'bad'); }
     if (!document.getElementById('soc-modal').classList.contains('hidden')) renderSociety();
 }
-{ const _p = politicsHTML; politicsHTML = function () { return _p() + regimeChangeHTML(); }; }
+{ const _p = politicsHTML; politicsHTML = function () { return _p().replace(`<div class="gs-stat-val" style="font-size:16px">${REGIME_INFO.theocracy.label}</div>`, `<div class="gs-stat-val" style="font-size:16px">${esc(regimeLabel(state.playerIso))}</div>`) + regimeChangeHTML(); }; }
 { const _d = dailyTick; dailyTick = function (catchUp) { _d(catchUp); try { regimeReformTick(); } catch (e) { } }; }
 function legacyHTML() {
     const L = legacyScore();
@@ -11301,7 +11342,7 @@ function unHTML() {
 const HELP_ORDERS = {
     'Society & economy': ['Increase education spending by 25%', 'Clean the streets', 'Improve healthcare', 'Fight corruption and hire more police', 'Raise taxes by 2%', 'Cut interest rates', 'Stop printing money', 'Hold a campaign rally'],
     'Military': ['Launch an airstrike on Tehran', 'Fire cruise missiles at Damascus', 'Launch a full-scale invasion of Libya', 'Blockade Venezuela', 'Launch cyber attack on Iran', 'Move armored division to Poland', 'Naval bombardment of Latakia'],
-    'Proxies & militias': ['Arm the SDF', 'Strike the Houthis', 'Open talks with Hamas', 'Sanction Hezbollah', 'Stop funding the RSF'],
+    'Non-state actors': ['Arm the SDF', 'Strike the Houthis', 'Open talks with Hamas', 'Sanction Hezbollah', 'Stop funding the RSF'],
     'Diplomacy & trade': ['Impose sanctions on Russia', 'Propose ceasefire between Russia and Ukraine', 'Negotiate a trade deal with China', 'Buy 30 oil from Saudi Arabia', 'Send arms to Ukraine', 'Send humanitarian aid to Sudan', 'Call a UN Security Council resolution condemning Russia', 'Seek UN sanctions on Iran']
 };
 function helpFill(t) { try { document.getElementById('help-modal').classList.add('hidden'); } catch (e) { } openCommandCenter(false); const i = document.getElementById('cc-input'); if (i) { i.value = t; i.focus(); } }
@@ -11312,7 +11353,7 @@ function openHelp() {
         <div class="mb-3 text-slate-300">You lead a country from 1 January 2026. Type any order in plain English at the bottom (⚑ Orders), then press <b>Execute</b>. Click chips below to drop an example into the order bar.</div>
         ${Object.keys(HELP_ORDERS).map(k => `<div class="gs-stat-lbl mt-2 mb-1">${k}</div><div class="flex flex-wrap gap-1">${HELP_ORDERS[k].map(t => `<button type="button" class="cc-chip" onclick="helpFill('${t.replace(/'/g, "\\'")}')">${esc(t)}</button>`).join('')}</div>`).join('')}
         <div class="gs-stat-lbl mt-4 mb-1">Where to look</div><ul class="text-slate-300" style="list-style:disc;padding-left:18px;line-height:1.6">
-        <li><b>🏛 Government</b> — budget sliders, economy, military roster, war room (front lines), proxies &amp; militias, treaties &amp; the UN, politics &amp; elections, your legacy score.</li>
+        <li><b>🏛 Government</b> — budget sliders, economy, military roster, war room (front lines), non-state actors, treaties &amp; the UN, politics &amp; elections, your legacy score.</li>
         <li><b>⚔ War room</b> — each front has three sectors (left flank, centre, right flank). Slide your divisions between them, set each sector's posture, watch air superiority and the season, or type <i>"Reinforce the right flank"</i>.</li><li><b>🗺 Map mode</b> (top centre) — recolour the world by blocs, relations, stability, wealth, education, health, clean streets, debt, war… and switch the base map style.</li>
         <li><b>Settings ⚙</b> — toggle map layers (proxy territory, fronts, strike damage) and the cinematic strike camera.</li>
         <li><b>👁 / H</b> — hide every panel for an unobstructed map. <b>Space</b> pauses. <b>Esc</b> closes windows. <b>F6</b> quick-save, <b>F9</b> quick-load.</li><li><b>🔍 Find</b> (top centre) — jump to any country, city or armed group. <b>Click a group's territory</b> on the map to see who rules it, like a country.</li><li><b>Settings ⚙</b> also has Performance options (lite effects, FPS counter), interface size and auto-pause.</li></ul>
@@ -11973,14 +12014,14 @@ function entSelect(id) {
 // every country panel also shows its political system and next election
 function entCountryExtras(cName) {
     const iso = resolveIso(cName); if (!iso || !socEligible(iso)) return; const R = regimeOf(iso), I = REGIME_INFO[R]; const note = document.getElementById('target-leader-note');
-    if (note && iso !== state.playerIso) { let t = I.label; const k = ELECT_KNOWN[iso]; if (I.elections && k) t += ` · next election ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][k[1] - 1]} ${k[0]}`; note.textContent = t + ' · ' + note.textContent; }
+    if (note && iso !== state.playerIso) { let t = regimeLabel(iso); const k = ELECT_KNOWN[iso]; if (I.elections && k) t += ` · next election ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][k[1] - 1]} ${k[0]}`; note.textContent = t + ' · ' + note.textContent; }
     const ps = proxiesIn(iso); const el = document.getElementById('target-prox');
     if (el && ps.length) el.innerHTML = `<div class="gs-section" style="margin-top:8px">Non-state actors here</div>` + ps.map(p => { const T = proxyTerritory(p); return `<div class="text-[11px]" style="border-left:3px solid ${p.color};padding-left:6px;margin:3px 0;cursor:pointer" onclick="entSelect('${p.id}')"><b style="color:${p.color}">${esc(p.short)}</b> — ruled by ${esc(p.leader || '—')} · holds ${(T.share * 100).toFixed(1)}% of land, ${(T.pop * 100).toFixed(0)}% of people · strength ${Math.round(p.S)}</div>`; }).join('');
 }
 proxyFocus = function (id) { const p = proxyById(id); if (!p) return; closeSociety(); map.flyTo(entCenter(p), 6, { duration: 1.4 }); setTimeout(() => entSelect(id), 1500); };
 {
     const _pw = proxiesHTML;
-    proxiesHTML = function () { return _pw().replace(/Armed groups that hold ground <b>separately from the governments<\/b>/, 'Armed groups, breakaway states and autonomous regions that hold ground <b>separately from the governments</b>').replace(/their territory is outlined/i, 'their territory has its own borders'); };
+    proxiesHTML = function () { return _pw().replace(/Armed groups that hold ground <b>separately from the governments<\/b>/, 'Armed groups, breakaway states and autonomous regions that hold ground <b>separately from the governments</b>').replace('Their territory is outlined on the map (toggle in Settings ▸ Map layers).', 'Most of them appear on the map as states of their own, governed by the group.'); };
 }
 // refresh the shapes monthly
 {
