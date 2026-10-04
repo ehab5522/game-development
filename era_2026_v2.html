@@ -10594,7 +10594,7 @@ function customTreatyHTML() {
     const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && (!NON_SOVEREIGN.has(i) || nameLayer[WORLD[i][1]]) && WORLD[i][3] > 0.05).sort((a, b) => shortName(a).localeCompare(shortName(b)));
     let h = `<div class="gs-stat-lbl mb-1 mt-3">✍ Write your own agreement</div>
         <div class="text-[10.5px] text-slate-500 mb-2">Write your idea in a sentence or two, the way you would say it. Your legal staff turn it into a formal draft at once${aiReady() ? `, then <b>${esc(aiLabel())}</b> rewrites it in full treaty language in the background` : ''}. Send it or clear it.</div>
-        <div class="flex flex-wrap gap-2 items-center mb-2"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn" onchange="ctGrab()">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
+        <div class="flex flex-wrap gap-2 items-center mb-2"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn" onchange="ctGrab();state.treatyMsg='';renderSociety()">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
             <span class="text-[11px] text-slate-400 ml-2">Duration</span><input id="ct-dur-n" type="number" min="1" max="1200" step="1" class="tc-in" style="width:70px;padding:3px 6px;font-size:12px" value="${(d.dur || CT_DUR0).n}" onchange="ctGrab()"><select id="ct-dur-u" class="gs-btn" onchange="ctGrab()"><option value="months" ${(d.dur || CT_DUR0).u === 'months' ? 'selected' : ''}>months</option><option value="years" ${(d.dur || CT_DUR0).u === 'years' ? 'selected' : ''}>years</option></select></div>
         <textarea id="ct-idea" class="tc-in w-full" rows="2" maxlength="400" placeholder="Your idea, e.g. cheap oil for them in exchange for lower tariffs on our goods" style="resize:vertical;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ctWrite();}">${esc(d.idea || '')}</textarea>
         <div class="mt-1 mb-2" style="line-height:1.9">${CT_EXAMPLES.map(x => `<button type="button" class="gs-btn" style="padding:2px 6px;font-size:10px;text-transform:none;letter-spacing:0" onclick="ctUseExample(this.textContent)">${esc(x)}</button>`).join(' ')}</div>
@@ -10608,7 +10608,8 @@ function customTreatyHTML() {
             <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:11.5px"><div>For the Government of<br><b>${esc(state.player)}</b></div><div style="text-align:right">For the Government of<br><b>${esc(shortName(d.iso))}</b></div></div>
             <div style="font-size:10px;color:#6b6250;margin-top:8px">${d.polishing ? `${esc(aiLabel())} is rewriting this in full treaty language… you can already send this version.` : esc(R.note || '')}</div></div>
             ${ctOutlookHTML(d.iso, R)}
-            <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Send to ${esc(shortName(d.iso))}`}</button><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctClear()">Clear</button></div>`;
+            ${treatyCdBar(d.iso + 'custom', d.iso, 'last draft')}
+            <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy || treatyCdLeft(d.iso + 'custom') ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Send to ${esc(shortName(d.iso))}`}</button><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctClear()">Clear</button></div>`;
     }
     return h;
 }
@@ -10731,7 +10732,7 @@ function ctOutlookHTML(iso, R) {
 }
 function ctFinish(R) { R.terms = R.articles.map(a => (a.heading ? a.heading + ': ' : '') + a.text.replace(/\n/g, ' ')); return R; }
 async function ctWrite() {
-    const d = ctGrab(), idea = (d.idea || '').trim(); if (!d.iso) return;
+    const d = ctGrab(), idea = (d.idea || '').trim(); if (!d.iso) return; state.treatyMsg = '';
     // a length written in the idea ("for 18 months", "for 15 years") wins over the duration box
     const said = idea.match(/\b(\d{1,4})[- ](months?|years?)\b/i);
     const Y = said ? ctDur(said[1], /^m/i.test(said[2]) ? 'months' : 'years') : (d.dur || CT_DUR0);
@@ -10772,7 +10773,7 @@ function ctExpireTick() {
 { const _d = dailyTick; dailyTick = function (catchUp) { _d(catchUp); try { ctExpireTick(); } catch (e) { } }; }
 async function ctSend() {
     const d = ctGrab(), R = d.review, me = state.playerIso, iso = d.iso; if (!R || !R.valid || !iso) return;
-    if ((state.treatyCd[iso + 'custom'] || -99) > state.dayIndex) { state.treatyMsg = `${shortName(iso)} wants more time before it looks at another draft from you.`; renderSociety(); return; }
+    if (treatyCdLeft(iso + 'custom')) { renderSociety(); return; }
     playClick(); d.busy = 'send'; renderSociety();
     const C = CT_CATS[R.category] || { need: 20, growth: 0.0002, them: 0.05 };
     const O = ctOutlook(iso, R), base = O.base, sc = O.score; let accept = sc >= C.need, reply = null;
@@ -10783,7 +10784,8 @@ async function ctSend() {
         const j = await callAI(sys, user, true, { maxTokens: 300 });
         if (j && typeof j.accept === 'boolean') { accept = j.accept ? sc > C.need - 30 : sc >= C.need + 30; reply = j.accept !== accept ? null : String(j.reply || '').slice(0, 400) || null; }   // don't show a refusal letter on a signed deal
     }
-    state.treatyCd[iso + 'custom'] = state.dayIndex + 20; d.busy = null;
+    d.busy = null;
+    if (accept) delete state.treatyCd[iso + 'custom']; else treatyCdStart(iso + 'custom');
     if (accept) {
         state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, articles: R.articles, preamble: R.preamble, summary: R.summary, dur: R.dur, expires: R.dur ? state.dayIndex + ctDurDays(R.dur) : null, day: state.dayIndex, status: 'active' });
         addRel(me, iso, 10); state.cred = clamp((state.cred || 60) + 2, 0, 100);
@@ -10800,6 +10802,16 @@ async function ctSend() {
     renderSociety();
 }
 
+// after a refusal a government waits 14 days before looking at the same kind of proposal again
+const TREATY_CD = 14;
+function treatyCdStart(key) { state.treatyCd[key] = state.dayIndex + TREATY_CD; state.treatyCdFrom = state.treatyCdFrom || {}; state.treatyCdFrom[key] = state.dayIndex; }
+function treatyCdLeft(key) { const end = (state.treatyCd || {})[key]; return end && end > state.dayIndex ? end - state.dayIndex : 0; }
+function treatyCdBar(key, iso, what) {
+    const left = treatyCdLeft(key); if (!left) return '';
+    const from = ((state.treatyCdFrom || {})[key]) ?? (state.treatyCd[key] - TREATY_CD), total = Math.max(1, left, state.treatyCd[key] - from), done = total - left;
+    return `<div class="mb-2" style="max-width:520px"><div class="flex justify-between text-[11px]"><span class="text-slate-300">${esc(shortName(iso))} turned down your ${esc(what)} · cooldown</span><span class="font-mono" style="color:#d8b45a">day ${done} of ${total} · ${left} day${left === 1 ? '' : 's'} left</span></div>
+        <div class="gs-stat-bar" style="margin-top:3px"><div style="width:${Math.round(done / total * 100)}%;background:#d8b45a"></div></div></div>`;
+}
 function treatyInit() {
     state.treaties = []; state.obl = []; state.offers = []; state.cred = 60; state.treatyCd = {}; let id = 0;
     const add = (type, parties, name) => state.treaties.push({ id: 't' + (++id), type, parties: parties.filter(x => socEligible(x)), name, day: 0, status: 'active', multi: parties.length > 2 });
@@ -10831,11 +10843,12 @@ function treatyScore(type, iso) {
 function treatyPropose(type, iso) {
     const T = TREATY_TYPES[type], me = state.playerIso;
     if (!T || !iso || iso === me) return;
-    if ((state.treatyCd[iso + type] || -99) > state.dayIndex) { state.treatyMsg = `${shortName(iso)} wants more time before it will discuss this again.`; renderSociety(); return; }
+    state.trSel = { iso, type };
+    if (treatyCdLeft(iso + type)) { renderSociety(); return; }
     { const cover = treatiesOf(me).find(t => t.parties.includes(iso) && ['defense', 'alliance'].includes(t.type)); if (cover && ['defense', 'alliance'].includes(type)) { state.treatyMsg = `You are already allied with ${shortName(iso)} through the ${cover.name}.`; renderSociety(); return; } }
     if (state.treaties.some(t => t.status === 'active' && t.parties.includes(me) && t.parties.includes(iso) && t.type === type)) { state.treatyMsg = `You already have this treaty with ${shortName(iso)}.`; renderSociety(); return; }
     const r = treatyScore(type, iso), ok = r.sc >= T.need;
-    state.treatyCd[iso + type] = state.dayIndex + 30;
+    if (ok) delete state.treatyCd[iso + type]; else treatyCdStart(iso + type);
     if (ok) {
         state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type, parties: [me, iso], name: `${state.player}–${shortName(iso)} ${T.label.toLowerCase()}`, day: state.dayIndex, status: 'active' });
         addRel(me, iso, T.rel); state.cred = clamp((state.cred || 60) + 2, 0, 100);
@@ -10984,8 +10997,9 @@ function treatiesHTML() {
     const mine = treatiesOf(me);
     h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${t.type === 'custom' && t.category ? esc(t.category) + ' agreement' : TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}${t.expires ? ` · ${ctLeft(t.expires - state.dayIndex)} left` : ''}</span>${t.articles && t.articles.length ? `<details class="text-[10.5px] text-slate-400" style="margin-top:2px"><summary style="cursor:pointer">Read the text (${t.articles.length} articles)</summary>${t.articles.map((a, i) => `<div style="margin:3px 0 0 10px"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}</details>` : t.terms && t.terms.length ? `<ul class="text-[10.5px] text-slate-400" style="margin:2px 0 0 16px;list-style:disc">${t.terms.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
     const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 1).sort((a, b) => getRel(me, b) - getRel(me, a)).slice(0, 60);
-    h += `<div class="gs-stat-lbl mb-1">Propose a treaty</div><div class="flex flex-wrap gap-2 items-center mb-2"><select id="tr-country" class="gs-btn">${cands.map(i => `<option value="${i}">${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
-        <select id="tr-type" class="gs-btn">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `<option value="${k}">${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
+    h += `<div class="gs-stat-lbl mb-1">Propose a treaty</div><div class="flex flex-wrap gap-2 items-center mb-2"><select id="tr-country" class="gs-btn" onchange="state.trSel={iso:this.value,type:document.getElementById('tr-type').value};state.treatyMsg='';renderSociety()">${cands.map(i => `<option value="${i}" ${(state.trSel || {}).iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
+        <select id="tr-type" class="gs-btn" onchange="state.trSel={iso:document.getElementById('tr-country').value,type:this.value};state.treatyMsg='';renderSociety()">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `<option value="${k}" ${(state.trSel || {}).type === k ? 'selected' : ''}>${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" ${(() => { const sel = state.trSel || {}, iso = cands.includes(sel.iso) ? sel.iso : cands[0], type = sel.type || Object.keys(TREATY_TYPES)[0]; return treatyCdLeft(iso + type) ? 'disabled' : ''; })()} onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
+    { const sel = state.trSel || {}, iso = cands.includes(sel.iso) ? sel.iso : cands[0], type = sel.type || Object.keys(TREATY_TYPES)[0]; h += treatyCdBar(iso + type, iso, TREATY_TYPES[type].label.toLowerCase()); }
     h += `<div class="text-[10.5px] text-slate-500 mb-2">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `${TREATY_TYPES[k].icon} <b>${TREATY_TYPES[k].label}</b>: ${TREATY_TYPES[k].desc}`).join('<br>')}</div>`;
     if (state.treatyMsg) h += `<div class="p-2 mb-2" style="border:1px solid #d1ad5b;color:#ece2c4">${esc(state.treatyMsg)}</div>`;
     h += customTreatyHTML();
