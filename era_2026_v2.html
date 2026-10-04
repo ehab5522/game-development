@@ -752,6 +752,7 @@
                     <button type="button" onclick="openSociety()" title="Government &amp; society: budget, education, health, clean streets, economy" class="gs-btn">🏛<span class="tb-lbl"> Government</span></button>
                     <button type="button" onclick="openSaveMenu()" class="gs-btn gs-btn-sq" title="Save / Load">💾</button>
                     <button type="button" onclick="openHelp()" class="gs-btn gs-btn-sq" title="How to play and example orders (?)">?</button>
+                    <button type="button" id="vo-btn" onclick="toggleViewOnly()" class="gs-btn gs-btn-sq" title="View-only mode (V)">👁</button>
                     <button id="gear-btn" type="button" class="gs-btn gs-btn-sq" title="Settings">⚙</button>
             <div id="settings-menu" class="hidden absolute top-11 right-0 ui-panel rounded-lg p-3 w-52 border border-slate-600/50 z-50">
                 <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Interface size</div>
@@ -3492,7 +3493,15 @@
             const nm = byName('Cyprus No Mans Area');
             if (nm) { if (cy) cy.geometry = { type: 'MultiPolygon', coordinates: polysOf(cy.geometry).concat(polysOf(nm.geometry)) }; F.splice(F.indexOf(nm), 1); }
             const kz = byName('Kazakhstan'), bk = byName('Baykonur Cosmodrome');
-            if (bk) { if (kz) kz.geometry = { type: 'MultiPolygon', coordinates: polysOf(kz.geometry).concat(polysOf(bk.geometry)) }; F.splice(F.indexOf(bk), 1); }
+            if (bk) {
+                // Kazakhstan's outline has a hole where the leased area is: fill it (drop the hole) so no border is drawn around it
+                if (kz) {
+                    const bb = polysOf(bk.geometry)[0][0], bx = [Math.min(...bb.map(c => c[0])) - 0.05, Math.min(...bb.map(c => c[1])) - 0.05, Math.max(...bb.map(c => c[0])) + 0.05, Math.max(...bb.map(c => c[1])) + 0.05];
+                    const inside = r => r.every(c => c[0] >= bx[0] && c[0] <= bx[2] && c[1] >= bx[1] && c[1] <= bx[3]);
+                    kz.geometry = { type: 'MultiPolygon', coordinates: polysOf(kz.geometry).map(pl => [pl[0]].concat(pl.slice(1).filter(h => !inside(h)))) };
+                }
+                F.splice(F.indexOf(bk), 1);
+            }
             data._fixed = true;
             return data;
         }
@@ -11780,7 +11789,7 @@ function renderSociety() {
     const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['actors', 'Non-state actors'], ['politics', 'Politics'], ['treaties', 'Treaties & UN'], ['world', 'World rankings']];
     let h = `<div class="flex flex-wrap gap-1 mb-3">${tabs.map(([k, l]) => `<button type="button" class="gs-btn ${socTab === k ? 'gs-btn-primary' : ''}" onclick="socSetTab('${k}')">${l}</button>`).join('')}</div>`;
     if (socTab === 'politics') h += politicsHTML();
-    else if (socTab === 'treaties') h += treatiesHTML() + unHTML();
+    else if (socTab === 'treaties') h += treatiesHTML() + reactHTML() + unHTML();
     else if (socTab === 'actors') h += proxiesHTML();
     else if (socTab === 'overview') {
         const gr = getGrowth(iso);
@@ -13655,6 +13664,159 @@ function worldRankingsHTML(iso) {
 }
 
 // =====================================================================
+//  WORLD REACTIONS — countries remember what you do to them and answer it over the following weeks
+//  grievance (hostile acts against them or their allies) · fear (you threaten their neighbours or arm yourself)
+//  · goodwill (aid, trade, support). Each week the most affected governments act: they defend themselves
+//  (rearm, mobilise, seek protectors, go to the UN), hit back diplomatically, economically or militarily — up to
+//  declaring war — or, if you have treated them well, reward you.
+// =====================================================================
+function reactState() { if (!state.react) state.react = { g: {}, f: {}, w: {}, cd: {}, log: [], war: {} }; return state.react; }
+function reactAdd(iso, kind, v) {
+    if (!iso || iso === state.playerIso || !WORLD[iso] || NON_SOVEREIGN.has(iso)) return;
+    const R = reactState(); R[kind][iso] = clamp((R[kind][iso] || 0) + v, 0, 100);
+    if (kind === 'g' && v > 0) R.w[iso] = Math.max(0, (R.w[iso] || 0) - v * 0.6);
+    if (kind === 'w' && v > 0) R.g[iso] = Math.max(0, (R.g[iso] || 0) - v * 0.4);
+}
+// a hostile act against one country also angers its allies and frightens its neighbours
+function reactHostile(iso, v) {
+    reactAdd(iso, 'g', v);
+    try { treatyPartners(iso, ['defense', 'alliance']).forEach(x => reactAdd(x, 'g', v * (x === state.playerIso ? 0 : 0.35))); } catch (e) { }
+    try { neighboursOf(iso).forEach(x => reactAdd(x, 'f', v * 0.3)); } catch (e) { }
+}
+// record what the player just did
+function reactRecord(o) {
+    if (!o || !state.playerIso || !o.outcome) return;
+    const m = o.outcome === 'Failure' ? 0.5 : o.outcome === 'Major success' ? 1.2 : 1, T = (o.targets || []).filter(t => t.iso && t.iso !== state.playerIso);
+    const hostile = T.filter(t => t.stance === 'hostile').map(t => t.iso), friendly = T.filter(t => t.stance !== 'hostile').map(t => t.iso);
+    const sc = o.scale || 1;
+    if (o.cat === 'military') {
+        if (['strike', 'invasion', 'blockade'].includes(o.kind)) hostile.forEach(i => reactHostile(i, ({ strike: 28, invasion: 50, blockade: 24 })[o.kind] * m * sc));
+        else if (o.kind === 'arms') friendly.forEach(i => { reactAdd(i, 'w', 15 * m); try { rivalsOf(i).slice(0, 6).forEach(x => reactAdd(x, 'g', 7)); } catch (e) { } });
+        else if (o.kind === 'move' || o.kind === 'posture') hostile.concat(o.loc && o.loc.host && o.loc.host !== state.playerIso ? [o.loc.host] : []).forEach(i => reactAdd(i, 'f', 12 * sc));
+    } else if (o.cat === 'economy') {
+        if (o.kind === 'tariff') T.forEach(t => reactAdd(t.iso, 'g', 16 * m));
+        else if (['trade', 'tradeDeal'].includes(o.kind)) friendly.forEach(i => reactAdd(i, 'w', 10 * m));
+    } else if (o.cat === 'diplomacy') {
+        if (o.kind === 'sanction') T.forEach(t => reactAdd(t.iso, 'g', 20 * m));
+        else if (o.kind === 'protest') T.forEach(t => reactAdd(t.iso, 'g', 8 * m));
+        else if (o.kind === 'unsc') T.forEach(t => reactAdd(t.iso, 'g', ({ condemn: 12, sanction: 20, ceasefire: 4, peacekeepers: 4 })[o.unsc] || 6));
+        else if (o.kind === 'engage' || o.kind === 'peace') friendly.forEach(i => reactAdd(i, 'w', 7 * m));
+    } else if (o.cat === 'intelligence') {
+        if (o.kind === 'proxy') {
+            const p = proxyById(o.proxyId); if (!p) return; const gov = proxyGov(p);
+            if (['arm', 'fund'].includes(o.act)) reactHostile(gov, 18 * m);
+            if (o.act === 'recognize') reactHostile(gov, 30);
+            if (['strike', 'sanction'].includes(o.act)) p.patrons.filter(x => x !== state.playerIso).forEach(x => reactAdd(x, 'g', o.act === 'strike' ? 10 : 5));
+            if (o.act === 'strike' && getRel(state.playerIso, gov) < 30) reactAdd(gov, 'g', 8);
+        } else hostile.concat(T.filter(t => t.stance !== 'friendly').map(t => t.iso)).forEach(i => reactAdd(i, 'g', 18 * m));
+    } else if (o.cat === 'humanitarian') friendly.concat(hostile).forEach(i => reactAdd(i, 'w', 15 * m));
+    else if (o.cat === 'construction' && ['nuke_weapon', 'enrichment', 'missile'].includes(o.siteType)) { try { rivalsOf(state.playerIso).slice(0, 8).forEach(x => reactAdd(x, 'f', 14)); } catch (e) { } }
+}
+{
+    const _ro = resolveOrder;
+    resolveOrder = function (o) { const r = _ro(o); try { reactRecord(r || o); } catch (e) { console.warn('react', e); } return r; };
+}
+const REACT_STANCE = s => state.conflicts.some(c => c.type === 'war' && ((c.sideA.includes(s.iso) && c.sideB.includes(state.playerIso)) || (c.sideB.includes(s.iso) && c.sideA.includes(state.playerIso)))) ? ['At war with you', '#c4553c'] : s.h >= 70 ? ['Preparing for war', '#c4553c'] : s.h >= 45 ? ['Retaliating', '#e0975a'] : s.h >= 25 ? ['Hostile', '#d8b45a'] : s.f >= 30 ? ['Arming in fear', '#d8b45a'] : s.w >= 25 ? ['Grateful', '#93b25f'] : ['Wary', '#ab9f80'];
+function reactStanding() {
+    const R = reactState(), me = state.playerIso;
+    return [...new Set(Object.keys(R.g).concat(Object.keys(R.f), Object.keys(R.w)))].filter(i => WORLD[i] && i !== me).map(i => {
+        const g = R.g[i] || 0, f = R.f[i] || 0, w = R.w[i] || 0, rel = getRel(me, i);
+        return { iso: i, g, f, w, rel, h: g + Math.max(0, -rel) * 0.25 };
+    }).filter(s => s.g >= 8 || s.f >= 12 || s.w >= 12);
+}
+function reactLog(iso, txt, type) { const R = reactState(); R.log.unshift({ iso, txt, day: state.dayIndex, date: state.date.toDateString(), type }); R.log = R.log.slice(0, 25); logEvent(`${flagHTML(nationIso(iso), 10)} ${txt}`, type); }
+function reactWeekly() {
+    const R = reactState(), me = state.playerIso, pn = nationIso(me), nm = esc(state.player);
+    // memories fade
+    ['g', 'f', 'w'].forEach(k => Object.keys(R[k]).forEach(i => { R[k][i] *= 0.93; if (R[k][i] < 1) delete R[k][i]; }));
+    const cand = reactStanding().filter(s => !(R.cd[s.iso] > state.dayIndex)).sort((a, b) => Math.max(b.h, b.f, b.w) - Math.max(a.h, a.f, a.w)).slice(0, 8);
+    let acted = 0; const maxActs = 1 + Math.round(Math.min(2, (D().retal || 1)));
+    for (const s of cand) {
+        if (acted >= maxActs) break;
+        const i = s.iso, n = shortName(i), en = esc(n), pr = power(i) / Math.max(1, power(me)), atWar = state.conflicts.some(c => c.type === 'war' && ((c.sideA.includes(i) && c.sideB.includes(me)) || (c.sideB.includes(i) && c.sideA.includes(me))));
+        const chance = clamp(Math.max(s.h, s.f, s.w) / 90, 0.15, 0.85); if (Math.random() > chance) continue;
+        acted++; R.cd[i] = state.dayIndex + rint(14, 28);
+        // ---- reward a friend ----
+        if (s.w >= 25 && s.w > s.g && s.rel > 0) {
+            const opts = ['trade', 'aid', 'praise']; if (state.offers && state.offers.length < 3 && !treatyPartners(me).includes(i)) opts.push('treaty');
+            const t = pick(opts);
+            if (t === 'trade') { state.mods.growth += 0.0004; addRel(me, i, 4); reactLog(i, `<b>${en}</b> opens its market wider to ${nm}'s exports in thanks for your support (growth +0.04 pts).`, 'good'); }
+            else if (t === 'aid') { const g = Math.min(nationIso(i).gdp * 0.0004, pn.gdp * 0.002); pn.treasury += g; reactLog(i, `<b>${en}</b> extends ${formatVal(g)} in soft loans and investment to ${nm}.`, 'good'); }
+            else if (t === 'praise') { pn.stability = clamp(pn.stability + 1, 0, 100); addRel(me, i, 5); reactLog(i, `<b>${en}</b>'s leader publicly praises ${nm} as a trusted partner (approval +1).`, 'good'); }
+            else { state.offers.push({ id: 'f' + Date.now() % 1e7, from: i, type: getRel(me, i) > 55 ? 'defense' : 'entente', exp: state.dayIndex + 30 }); reactLog(i, `<b>${en}</b> proposes a closer partnership with ${nm} — see Government → Treaties &amp; UN.`, 'good'); }
+            R.w[i] *= 0.6; continue;
+        }
+        // ---- defend themselves ----
+        const defend = s.f >= 30 && s.f >= s.g ? 1 : (s.h >= 25 && pr < 0.7 ? 0.5 : 0);
+        if (defend && Math.random() < defend) {
+            const opts = ['rearm', 'mobilise', 'protector', 'un']; if (proxiesIn(me).length) opts.push('proxy');
+            const t = pick(opts);
+            if (t === 'rearm') { const so = socOf(i); so.b.def = Math.min(so.b0.def * 2.5, so.b.def * 1.15); reactLog(i, `<b>${en}</b> raises its defence budget by 15%, citing the threat from ${nm}.`, 'bad'); }
+            else if (t === 'mobilise') { let near = false; try { near = bordersWith(i, me); } catch (e) { } reactLog(i, near ? `<b>${en}</b> moves troops and air defences to its border with ${nm} and puts its forces on alert.` : `<b>${en}</b> puts its armed forces on alert and deploys air defences, citing ${nm}'s actions in the region.`, 'bad'); addRel(me, i, -4); }
+            else if (t === 'protector') {
+                const P = Object.keys(WORLD).filter(x => x !== i && x !== me && !NON_SOVEREIGN.has(x) && WORLD[x][3] > 3 && getRel(x, i) > 15 && getRel(x, me) < 10 && power(x) > power(i) * 0.6).sort((a, b) => power(b) - power(a))[0];
+                if (P && state.treaties && !treatiesOf(i).some(t => t.parties.includes(P) && ['defense', 'alliance'].includes(t.type))) {
+                    state.treaties.push({ id: 't' + Date.now() % 1e7 + rint(0, 99), type: 'defense', parties: [i, P], name: `${n}–${shortName(P)} defence pact`, day: state.dayIndex, status: 'active' });
+                    addRel(i, P, 15); reactLog(i, `<b>${en}</b> and <b>${esc(shortName(P))}</b> sign a mutual defence pact aimed at ${nm}.`, 'bad');
+                } else { const so = socOf(i); so.b.def = Math.min(so.b0.def * 2.5, so.b.def * 1.1); reactLog(i, `<b>${en}</b> buys new air-defence systems to protect itself from ${nm}.`, 'bad'); }
+            }
+            else if (t === 'un') {
+                const V = unscVote('condemn', me, i, null);
+                (state.unscLog = state.unscLog || []).unshift({ day: state.dayIndex, date: state.date.toDateString(), kind: 'condemn', target: me, by: i, passed: V.passed, veto: V.veto, yes: V.yes, no: V.no, abst: V.abst, tally: '' }); state.unscLog = state.unscLog.slice(0, 12);
+                if (V.passed) { state.sanctionsOnMe += 1; pn.stability = clamp(pn.stability - 1, 0, 100); }
+                reactLog(i, `<b>${en}</b> takes ${nm} to the UN Security Council: resolution ${V.passed ? '<b>adopted</b>' : V.veto.length ? 'vetoed by ' + V.veto.map(shortName).join('/') : 'fails'} (${V.yes}-${V.no}-${V.abst}).`, V.passed ? 'bad' : 'neutral');
+            }
+            else { const p = pick(proxiesIn(me)); p.aid[i] = clamp((p.aid[i] || 0) + 0.3, 0, 1); if (!p.patrons.includes(i)) p.patrons.push(i); p.S = clamp(p.S + 3, 3, 95); reactLog(i, `<b>${en}</b> starts arming ${esc(p.short)} inside ${nm} (strength +3).`, 'bad'); }
+            R.f[i] = (R.f[i] || 0) * 0.7; continue;
+        }
+        // ---- hit back ----
+        if (s.h >= 25) {
+            const can = { war: s.h >= 70 && pr >= 0.45 && !atWar && Math.random() < 0.35, strike: (s.h >= 45 && pr >= 0.25) || atWar, econ: true, dip: true };
+            const t = can.war ? 'war' : can.strike && Math.random() < 0.5 ? pick(['strike', 'strike', 'cyber']) : Math.random() < 0.55 ? pick(['sanctions', 'tariffs', 'freeze', 'embargo']) : pick(['expel', 'rally', 'recall']);
+            if (t === 'war') {
+                const c = { id: 'ai_' + i + '_' + state.dayIndex, name: `${n}–${shortName(me)} War`, type: 'war', intensity: 70, sideA: [i], sideB: [me], backA: [], backB: [], mediators: [], brief: `${n} declared war on ${state.date.toDateString()} after repeated hostile acts by ${state.player}.`, flavor: [`Fighting continues between ${n} and ${shortName(me)}.`] };
+                state.conflicts.push(c); R.war[i] = c.id;
+                reactLog(i, `⚔ <b>${en} declares war on ${nm}</b> after months of hostile acts. Its forces begin attacking.`, 'bad');
+                queueMessage(i, `You have left us no choice. From today our countries are at war.`);
+                try { treatyOnWar(c, i, me); } catch (e) { }
+                try { treatyOnAttack(i, me); } catch (e) { }
+                scheduleRetaliation(i, 1.4);
+                pn.stability = clamp(pn.stability + 3, 0, 100);       // rally round the flag
+            }
+            else if (t === 'strike') { scheduleRetaliation(i, atWar ? 1.2 : 0.9); reactLog(i, `<b>${en}</b> warns it will answer ${nm}'s actions with force; its military is preparing strikes.`, 'bad'); }
+            else if (t === 'cyber') { const loss = pn.treasury * 0.008; pn.treasury -= loss; reactLog(i, `A cyber attack traced to <b>${en}</b> hits ${nm}'s banks and power grid (${formatVal(loss)} in damage).`, 'bad'); }
+            else if (t === 'sanctions') { state.sanctionsOnMe += 1; state.mods.growth -= 0.0008; reactLog(i, `<b>${en}</b> imposes sanctions on ${nm}'s banks and state companies (growth −0.08 pts).`, 'bad'); }
+            else if (t === 'tariffs') { state.mods.growth -= 0.0005; reactLog(i, `<b>${en}</b> slaps tariffs on ${nm}'s exports (growth −0.05 pts).`, 'bad'); }
+            else if (t === 'freeze') { const loss = Math.min(pn.treasury * 0.02, nationIso(i).gdp * 0.002); pn.treasury -= loss; reactLog(i, `<b>${en}</b> freezes ${formatVal(loss)} of ${nm}'s state assets held in its banks.`, 'bad'); }
+            else if (t === 'embargo') { const r = pick(RKEYS); state.mods.growth -= 0.0003; reactLog(i, `<b>${en}</b> halts ${esc(RES[r].name.toLowerCase())} sales to ${nm}; prices for your importers rise.`, 'bad'); }
+            else if (t === 'expel') { addRel(me, i, -6); reactLog(i, `<b>${en}</b> expels ${nm}'s ambassador and closes its embassy.`, 'bad'); }
+            else if (t === 'recall') { addRel(me, i, -4); reactLog(i, `<b>${en}</b> recalls its ambassador from ${nm} for consultations.`, 'bad'); }
+            else { const fr = Object.keys(WORLD).filter(x => x !== i && x !== me && !NON_SOVEREIGN.has(x) && getRel(x, i) > 40).slice(0, 6); fr.forEach(x => addRel(me, x, -3)); reactLog(i, `<b>${en}</b> rallies its partners against ${nm}${fr.length ? ` — ${fr.slice(0, 3).map(shortName).map(esc).join(', ')} criticise you` : ''}.`, 'bad'); }
+            if (!['war', 'strike'].includes(t)) queueMessage(i, pick([`These measures are our answer to your hostile conduct. Change course and they can be lifted.`, `You will find that hostility has a price.`, `We are defending our interests. Further provocations will meet a stronger response.`]));
+            R.g[i] = (R.g[i] || 0) * (t === 'war' ? 0.5 : 0.75);
+        }
+    }
+    // countries at war with you stay hostile and keep fighting back until there is peace (whoever started it)
+    Object.keys(R.war).forEach(i => { const c = state.conflicts.find(k => k.id === R.war[i]); if (!c || c.type !== 'war') delete R.war[i]; });
+    state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me))).forEach(c => {
+        (c.sideA.includes(me) ? c.sideB : c.sideA).filter(i => WORLD[i] && i !== me).forEach(i => {
+            R.g[i] = Math.max(R.g[i] || 0, 50);
+            if (Math.random() < (R.war[i] ? 0.6 : 0.4) * clamp(power(i) / Math.max(1, power(me)) + 0.3, 0.3, 1.2)) scheduleRetaliation(i, 1);
+        });
+    });
+    updateEconomyUI();
+}
+function reactHTML() {
+    const L = reactStanding().sort((a, b) => Math.max(b.h, b.f, b.w) - Math.max(a.h, a.f, a.w)).slice(0, 12), R = reactState();
+    let h = `<div class="gs-stat-lbl mt-4 mb-1">How the world is responding to you</div><div class="text-[11px] text-slate-400 mb-2">Governments remember what you do. Attacks, sanctions, threats and arming rebels build <b>grievance</b> (they hit back: sanctions, asset freezes, cyber attacks, strikes, even war); threatening their neighbours or building weapons builds <b>fear</b> (they rearm, mobilise, find protectors, go to the UN); aid, trade and support build <b>goodwill</b> (they reward you). Memories fade over months.</div>`;
+    if (!L.length) h += `<div class="text-slate-500 text-[11px] mb-2">No government is reacting to you right now.</div>`;
+    else h += `<table class="w-full text-[11.5px] mb-2"><tbody>${L.map(s => { const [lab, col] = REACT_STANCE(s); const b = (v, c) => `<div style="flex:1;height:5px;background:#2a2a20"><div style="width:${Math.round(v)}%;height:100%;background:${c}"></div></div>`;
+        return `<tr class="border-t border-slate-800"><td class="py-1" style="width:34%">${flagHTML(nationIso(s.iso), 11)} ${esc(shortName(s.iso))}</td><td style="color:${col};width:24%">${lab}</td><td><div class="flex gap-1 items-center text-[9.5px] text-slate-500"><span>grievance</span>${b(s.g, '#c4553c')}<span>fear</span>${b(s.f, '#d8b45a')}<span>goodwill</span>${b(s.w, '#93b25f')}</div></td></tr>`; }).join('')}</tbody></table>`;
+    if (R.log.length) h += `<div class="text-[11px]">${R.log.slice(0, 6).map(l => `<div class="border-t border-slate-800 py-0.5"><span class="text-slate-600">${esc(l.date)}</span> ${l.txt}</div>`).join('')}</div>`;
+    return h;
+}
+
+// =====================================================================
 //  UI — Government tabs, non-state actors list, help with clickable orders, map search
 // =====================================================================
 (function () {
@@ -13710,6 +13872,7 @@ function openHelp() {
         <li><b>🗺 Map view</b> — political map, front lines, or internal control (militias, autonomous regions, breakaway states). <b>Click inside a group's area</b> to see who rules it, like a country.</li>
         <li><b>🔍</b> (under the zoom buttons, or press <b>F</b>) — find any country, city or armed group.</li>
         <li><b>🪖 Coup</b> — coup risk at home and abroad. <b>📑 Report</b> — your advisor's situation report.</li>
+        <li><b>👁</b> (next to ?) or <b>V</b> — view-only mode: hides every panel so you can look at the map; press V or Esc to bring the interface back.</li>
         <li><b>Space</b> pauses, <b>Esc</b> closes windows, <b>?</b> opens this screen.</li></ul>
         <div class="gs-stat-lbl mt-4 mb-1">What drives the world</div><div class="text-slate-300" style="line-height:1.6">Every country has education, health, safety, corruption, inflation, unemployment and debt that respond to spending. Wars move front lines. Armed groups hold their own ground and answer to their patrons. Treaties bind allies to defend each other, and breaking your word costs credibility. Elections can remove you from office.</div></div></div>`;
     el.classList.remove('hidden');
@@ -13765,7 +13928,7 @@ function mapFind(q) {
 //  WIRING — new game, saves, schedule
 // =====================================================================
 // saved with the game; a save from before these systems existed starts them fresh
-const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths'];
+const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react'];
 NEW_FIELDS.forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 function systemsEnsure() {
     if (!state.proxies) proxyInit(); else proxyMigrate();
@@ -13776,7 +13939,7 @@ function systemsEnsure() {
 }
 {
     const _iw = initWorld;
-    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; state.faiths = {}; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
+    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; state.faiths = {}; state.react = null; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
     const _as = applySave;
     applySave = function (d) { _as(d); try { ENT.sel = null; NEW_FIELDS.forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; }); systemsEnsure(); if (state.pol && state.pol.over) state.pol.over = null; grpRefresh(true); } catch (e) { console.warn('systems load', e); } };
     const _dt = dailyTick;
@@ -13787,6 +13950,7 @@ function systemsEnsure() {
             systemsEnsure();
             const d = state.dayIndex;
             if (d % 7 === 3) treatyWeekly();
+            if (d % 7 === 5) reactWeekly();
             if (state.date.getDate() === 2) { proxiesMonthly(); treatyMonthly(); }
             if (state.date.getDate() === 4) polMonthly();
             if (ENT.sel && !catchUp) entSelect(ENT.sel, true);
@@ -13817,6 +13981,7 @@ const TIPS = {
     'act:openSociety': 'Government\nBudget, economy, war & casualties, non-state actors, politics, treaties & UN and world rankings.',
     'act:openSaveMenu': 'Save / Load\nSave your campaign or load an earlier one.',
     'act:openHelp': 'How to play\nWhere to find things, and example orders you can click to use. Shortcut: ?',
+    'vo-btn': 'View-only mode\nHide the whole interface to look at the map. Press V, Esc or the Show interface button to bring it back.',
     'gear-btn': 'Settings\nInterface size, map style, map layers and graphics quality.',
     date: 'Date\nToday\'s date in the game. Click to jump ahead to a date.',
     'speed-indicator': 'Game speed\nHow fast time passes: 1×, 5× or 10×, or paused.',
@@ -13885,6 +14050,33 @@ function tipKey(el) {
     document.addEventListener('keydown', hide, true);
     window.addEventListener('blur', hide);
 })();
+
+// =====================================================================
+//  VIEW-ONLY MODE — hide every panel to look at the map; a small button (or V / Esc) brings the interface back
+// =====================================================================
+(function () {
+    const st = document.createElement('style');
+    st.textContent = `body.view-only #ui-layer, body.view-only #ui-tip, body.view-only .leaflet-control-container { display: none !important; }
+        #vo-exit { position: fixed; top: 12px; right: 12px; z-index: 9998; display: none; align-items: center; gap: 6px; padding: 7px 12px; cursor: pointer;
+            font-family: 'Oswald','Arial Narrow',Arial,sans-serif; letter-spacing: .1em; text-transform: uppercase; font-size: 11.5px; color: #f3d98a;
+            background: linear-gradient(180deg, rgba(34,33,24,.9), rgba(20,19,13,.9)); border: 1px solid #9c8040; box-shadow: 0 4px 14px rgba(0,0,0,.5); opacity: .55; transition: opacity .15s; }
+        #vo-exit:hover { opacity: 1; } body.view-only #vo-exit { display: flex; }`;
+    document.head.appendChild(st);
+    const b = document.createElement('button'); b.type = 'button'; b.id = 'vo-exit'; b.innerHTML = '👁 Show interface <span style="opacity:.6;font-size:10px">(V)</span>';
+    b.onclick = () => setViewOnly(false); document.body.appendChild(b);
+})();
+function setViewOnly(on) {
+    document.body.classList.toggle('view-only', !!on);
+    try { playClick(); } catch (e) { }
+    try { map.invalidateSize(); } catch (e) { }
+}
+function toggleViewOnly() { setViewOnly(!document.body.classList.contains('view-only')); }
+document.addEventListener('keydown', e => {
+    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (state.phase !== 'playing' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'v' || e.key === 'V') { e.preventDefault(); toggleViewOnly(); }
+    else if (e.key === 'Escape' && document.body.classList.contains('view-only')) setViewOnly(false);
+});
 
     </script>
 </body>
