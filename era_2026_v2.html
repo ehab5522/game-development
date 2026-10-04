@@ -1395,7 +1395,15 @@
         }
 
         // Windows doesn't draw flag emojis (shows "RU" instead), so use real flag images
+        // Afghanistan is ruled by the Taliban (Islamic Emirate): white field with the black shahada
+        const FLAG_OVERRIDE = {
+            af: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200"><rect width="300" height="200" fill="#fff"/><g fill="#000" font-family="Amiri, Scheherazade, Noto Naskh Arabic, Arial, sans-serif" font-weight="700" text-anchor="middle" direction="rtl"><text x="150" y="88" font-size="40">لا إله إلا الله</text><text x="150" y="146" font-size="40">محمد رسول الله</text></g></svg>')
+        };
         function flagHTML(t, h = 14) {
+            if (t && t.iso2 && FLAG_OVERRIDE[t.iso2]) {
+                const w = Math.round(h * 4 / 3);
+                return `<img src="${FLAG_OVERRIDE[t.iso2]}" alt="${t.iso2.toUpperCase()}" style="height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)">`;
+            }
             if (t && t.iso2) {
                 const w = Math.round(h * 4 / 3);
                 return `<img src="https://flagcdn.com/w40/${t.iso2}.png" alt="${t.iso2.toUpperCase()}" style="height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)">`;
@@ -11648,7 +11656,7 @@ const ENT_CONTROL = {
         rsf: { code: 'RSF', name: 'Sudan (RSF)', rel: -95 },
         houthi: { code: 'HTH', name: 'Yemen (Houthis)', rel: -85, also: { ISR: -100, USA: -80, SAU: -40, ARE: -40 } },
         m23: { code: 'KVU', name: 'Kivu (M23)', rel: -90 },
-        hezbollah: { code: 'HZB', name: 'South Lebanon (Hezbollah)', rel: -10, also: { ISR: -100, USA: -70 } },
+        hezbollah: { code: 'HZB', name: 'South Lebanon', iso2: 'lb', rel: 30, leader: ['Joseph Aoun', 'Naim Qassem'], also: { ISR: -100, USA: -40, IRN: 70 } },
         jnim: { code: 'JNM', name: 'Sahel (JNIM)', rel: -100, also: { NER: -90, FRA: -70, RUS: -80 } },
         shabaab: { code: 'SHB', name: 'Somalia (al-Shabaab)', rel: -100, also: { KEN: -80, ETH: -80, USA: -90, TUR: -70 } },
         sdf: { code: 'SDF', name: 'North-East Syria (SDF)', rel: -30, also: { TUR: -80 } },
@@ -11674,7 +11682,7 @@ const ENT_CONTROL = {
         let pop = o.pop, gdp = o.gdp;
         if (pop === undefined) { const sp = SPECIAL[d.id]; if (sp) { pop = sp[0]; gdp = sp[1]; } else if (H) { pop = H[3] * d.popShare; gdp = H[2] * d.popShare * 0.6; } else { pop = 0.5; gdp = 0.5; } }
         pop = +pop.toFixed(3); gdp = +gdp.toFixed(2);
-        WORLD[code] = ['', name, gdp, pop];
+        WORLD[code] = [o.iso2 || '', name, gdp, pop];
         if (H && d.host.length === 1 && d.id !== 'abkhazia') { H[3] = Math.max(0.01, +(H[3] - pop).toFixed(3)); H[2] = Math.max(0.01, +(H[2] - gdp).toFixed(2)); }
         LEADERS[code] = o.leader || [e.leader || d.name, e.leader || d.name];
         const cap = o.capital || [e.hq || (d.cities && d.cities[0]) || name, d.base[0], d.base[1]];
@@ -11703,7 +11711,7 @@ const ENT_CONTROL = {
         Object.keys(STATES).forEach(id => {
             const T = STATES[id], C = ENT_CONTROL[id], d = PROXY_DEFS.find(x => x.id === id); if (!C || !d) return;
             const hosts = (C.clip ? C.clip.map(byName) : d.host.map(byIso)).filter(Boolean); if (!hosts.length) return;
-            const parts = T.parts || [{ code: T.code, name: T.name, ring: null }];
+            const parts = T.parts || [{ code: T.code, name: T.name, ring: null, iso2: T.iso2, leader: T.leader }];
             parts.forEach(pt => {
                 const masks = (pt.ring === null ? C.mask : [C.mask[pt.ring]]).map(r => [ll2xy(r)]);
                 let zone = PC.intersection(hosts.flatMap(f => polysOf(f.geometry)), masks);
@@ -11722,6 +11730,32 @@ const ENT_CONTROL = {
     entAt = function () { return null; };
     // a group is not a "non-state actor" inside the state it governs (e.g. Hamas in the Gaza Strip)
     const _proxiesIn = proxiesIn; proxiesIn = iso => _proxiesIn(iso).filter(p => !(PROXY_STATE[p.id] || []).includes(iso));
+    // South Lebanon is not Hezbollah's alone: the Lebanese state and Hezbollah share influence there
+    const SHARED = {
+        HZB: { title: 'Lebanese government & Hezbollah', sides: [
+            { name: 'Lebanese government', who: 'President Joseph Aoun · PM Nawaf Salam', pct: 45, color: '#60a5fa', note: 'Army deployed south of the Litani under the 2024 ceasefire' },
+            { name: 'Hezbollah', who: 'Secretary-General Naim Qassem', pct: 55, color: '#eab308', note: 'Dominant in the south, the Bekaa and southern Beirut; refuses to disarm' }] }
+    };
+    try { POWER_OVERRIDE.HZB = ['Joseph Aoun', 'Shared influence']; } catch (e) { }
+    try { REGIME_OF.HZB = REGIME_OF.LBN || regimeOf('LBN'); } catch (e) { }   // governed under Lebanon's system
+    const _sharedUTI = updateTargetUI;
+    updateTargetUI = function (c) {
+        _sharedUTI.apply(this, arguments);
+        try {
+            const iso = resolveIso(c || state.target || ''), S = SHARED[iso];
+            let el = document.getElementById('target-shared');
+            if (!el) { const a = document.getElementById('target-conflicts'); if (!a) return; el = document.createElement('div'); el.id = 'target-shared'; a.parentNode.insertBefore(el, a); }
+            if (!S || iso === state.playerIso) { el.innerHTML = ''; el.style.display = 'none'; return; }
+            el.style.display = '';
+            const nameEl = document.getElementById('target-leader-name'), roleEl = document.getElementById('target-leader-role'), noteEl = document.getElementById('target-leader-note');
+            if (roleEl) roleEl.textContent = 'Shared influence';
+            if (nameEl) nameEl.textContent = S.sides.map(x => x.who.split(' · ')[0].replace(/^(President|Secretary-General) /, '')).join(' & ');
+            if (noteEl) noteEl.textContent = S.title;
+            el.innerHTML = `<div class="gs-section" style="margin-top:4px">Shared influence</div>
+                <div style="display:flex;height:8px;border-radius:2px;overflow:hidden;margin:4px 0 6px">${S.sides.map(x => `<div style="width:${x.pct}%;background:${x.color}"></div>`).join('')}</div>` +
+                S.sides.map(x => `<div class="text-[11px]" style="border-left:3px solid ${x.color};padding-left:6px;margin-bottom:5px"><b style="color:${x.color}">${esc(x.name)}</b> · ${x.pct}%<br><span class="text-slate-300">${esc(x.who)}</span><br><span class="text-slate-500">${esc(x.note)}</span></div>`).join('');
+        } catch (e) { }
+    };
     // older saves: pick up the corrected host (Hamas now sits in the Gaza Strip)
     const _mig = entsMigrate;
     entsMigrate = function () { _mig(); (state.proxies || []).forEach(p => { const d = PROXY_DEFS.find(x => x.id === p.id); if (d && p.id === 'hamas') { p.host = d.host.slice(); p.hostArea = d.hostArea; } }); };
