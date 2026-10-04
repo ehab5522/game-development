@@ -10509,7 +10509,7 @@ function customTreatyHTML() {
     let h = `<div class="gs-stat-lbl mb-1 mt-3">✍ Write your own agreement</div>
         <div class="text-[10.5px] text-slate-500 mb-2">Write your idea in a sentence or two, the way you would say it. Your legal staff turn it into a formal draft at once${aiReady() ? `, then <b>${esc(aiLabel())}</b> rewrites it in full treaty language in the background` : ''}. Send it or clear it.</div>
         <div class="flex flex-wrap gap-2 items-center mb-2"><span class="text-[11px] text-slate-400">With</span><select id="ct-country" class="gs-btn" onchange="ctGrab()">${cands.map(i => `<option value="${i}" ${d.iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
-            <span class="text-[11px] text-slate-400 ml-2">Duration</span><select id="ct-years" class="gs-btn" onchange="ctGrab()">${[5, 10, 15, 25].map(y => `<option value="${y}" ${(d.years || 10) === y ? 'selected' : ''}>${y} years</option>`).join('')}</select></div>
+            <span class="text-[11px] text-slate-400 ml-2">Duration</span><input id="ct-dur-n" type="number" min="1" max="1200" step="1" class="tc-in" style="width:70px;padding:3px 6px;font-size:12px" value="${(d.dur || CT_DUR0).n}" onchange="ctGrab()"><select id="ct-dur-u" class="gs-btn" onchange="ctGrab()"><option value="months" ${(d.dur || CT_DUR0).u === 'months' ? 'selected' : ''}>months</option><option value="years" ${(d.dur || CT_DUR0).u === 'years' ? 'selected' : ''}>years</option></select></div>
         <textarea id="ct-idea" class="tc-in w-full" rows="2" maxlength="400" placeholder="Your idea, e.g. cheap oil for them in exchange for lower tariffs on our goods" style="resize:vertical;font-size:12px" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();ctWrite();}">${esc(d.idea || '')}</textarea>
         <div class="mt-1 mb-2" style="line-height:1.9">${CT_EXAMPLES.map(x => `<button type="button" class="gs-btn" style="padding:2px 6px;font-size:10px;text-transform:none;letter-spacing:0" onclick="ctUseExample(this.textContent)">${esc(x)}</button>`).join(' ')}</div>
         <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" onclick="ctWrite()">${R && R.valid ? 'Rewrite the draft' : 'Write the draft'}</button></div>`;
@@ -10527,12 +10527,17 @@ function customTreatyHTML() {
 }
 function ctGrab() {
     state.ctDraft = state.ctDraft || {}; const d = state.ctDraft, v = id => { const e = document.getElementById(id); return e ? e.value : null; };
-    const iso = v('ct-country'), idea = v('ct-idea'), years = v('ct-years');
-    if (iso !== null) d.iso = iso; if (idea !== null) d.idea = idea.trim(); if (years !== null) d.years = +years || 10;
+    const iso = v('ct-country'), idea = v('ct-idea'), n = v('ct-dur-n'), u = v('ct-dur-u');
+    if (iso !== null) d.iso = iso; if (idea !== null) d.idea = idea.trim(); if (n !== null || u !== null) d.dur = ctDur(n !== null ? n : (d.dur || CT_DUR0).n, u || (d.dur || CT_DUR0).u);
     return d;
 }
 function ctUseExample(t) { const d = ctGrab(); d.idea = t; ctWrite(); }
-function ctClear() { const d = ctGrab(); state.ctDraft = { iso: d.iso, years: d.years }; renderSociety(); }
+// treaty length chosen by the player: any number of months or years
+const CT_DUR0 = { n: 10, u: 'years' };
+function ctDur(n, u) { u = u === 'months' ? 'months' : 'years'; n = Math.round(+n); if (!(n >= 1)) n = 1; n = Math.min(n, u === 'months' ? 1200 : 100); return { n, u }; }
+function ctDurText(D) { return `${D.n} ${D.n === 1 ? D.u.slice(0, -1) : D.u}`; }
+function ctDurDays(D) { return D.u === 'months' ? Math.round(D.n * 30.44) : Math.round(D.n * 365.25); }
+function ctClear() { const d = ctGrab(); state.ctDraft = { iso: d.iso, dur: d.dur }; renderSociety(); }
 function ctCategory(text) { let best = 'other', hits = 0; Object.keys(CT_CATS).forEach(k => { const m = text.match(new RegExp(CT_CATS[k].re.source, 'gi')); if (m && m.length > hits) { hits = m.length; best = k; } }); return best; }
 // split a plain idea into who-does-what: [{ by: 'A' | 'B' | 'both', what }]
 function ctParseIdea(idea, iso) {
@@ -10577,7 +10582,7 @@ function ctClause(idea, party, A, B) {
     s = s.replace(/^let\s+(.+?)\s+(use|access|enter|operate|station|dock|visit|buy|sell|invest|work|travel|study|fish|fly|land|open|build)\b/i, 'allow $1 to $2').replace(/^let\b/i, 'allow');
     return verb.test(s) ? `${party} shall ${s}.` : `${party} shall provide ${s}.`;
 }
-function ctOfflineDraft(idea, parts, iso, years) {
+function ctOfflineDraft(idea, parts, iso, D) {
     const A = state.player, B = shortName(iso), cat = ctCategory(idea), topic = CT_NAME[cat] === 'General' ? 'Cooperation' : `${CT_NAME[cat]} Cooperation`;
     const by = k => parts.filter(p => p.by === k).map(p => p.what);
     const list = (xs, party) => xs.map((x, i) => `${xs.length > 1 ? `(${String.fromCharCode(97 + i)}) ` : ''}${ctClause(x, party, A, B)}`).join('\n');
@@ -10586,26 +10591,29 @@ function ctOfflineDraft(idea, parts, iso, years) {
     if (by('A').length) articles.push({ heading: `Undertakings of ${A}`, text: list(by('A'), A) });
     if (by('B').length) articles.push({ heading: `Undertakings of ${B}`, text: list(by('B'), B) });
     articles.push({ heading: 'Implementation', text: `The Parties shall establish a Joint Commission, meeting at least once a year, to oversee the implementation of this Agreement and agree any detailed arrangements.` },
-        { heading: 'Duration and termination', text: `This Agreement shall remain in force for ${years} years and shall be renewed automatically for further periods of five years unless either Party gives six months' written notice of termination.` },
+        { heading: 'Duration and termination', text: `This Agreement shall remain in force for a period of ${ctDurText(D)} from its entry into force. The Parties may extend it by mutual written agreement before it expires. Either Party may terminate it earlier by giving ${ctDurDays(D) <= 62 ? "seven days'" : ctDurDays(D) <= 366 ? "one month's" : "six months'"} written notice.` },
         { heading: 'Settlement of disputes', text: `Any dispute concerning the interpretation or application of this Agreement shall be settled amicably through consultation and negotiation between the Parties.` },
         { heading: 'Entry into force', text: `This Agreement shall enter into force on the date of its signature.` });
-    return { valid: true, category: cat, title: `Agreement between the Government of ${A} and the Government of ${B} on ${topic}`, preamble: `The Government of ${A} and the Government of ${B}, hereinafter "the Parties", have agreed as follows:`, articles, summary: `${CT_NAME[cat]} agreement for ${years} years.`, note: 'Drafted by your legal staff.' };
+    return { valid: true, category: cat, title: `Agreement between the Government of ${A} and the Government of ${B} on ${topic}`, preamble: `The Government of ${A} and the Government of ${B}, hereinafter "the Parties", have agreed as follows:`, articles, summary: `${CT_NAME[cat]} agreement for ${ctDurText(D)}.`, note: 'Drafted by your legal staff.' };
 }
 function ctFinish(R) { R.terms = R.articles.map(a => (a.heading ? a.heading + ': ' : '') + a.text.replace(/\n/g, ' ')); return R; }
 async function ctWrite() {
-    const d = ctGrab(), idea = (d.idea || '').trim(), years = d.years || 10; if (!d.iso) return;
-    const yrs = idea.match(/\b(\d{1,2})[- ]years?\b/i); const Y = yrs ? clamp(+yrs[1], 1, 50) : years;
+    const d = ctGrab(), idea = (d.idea || '').trim(); if (!d.iso) return;
+    // a length written in the idea ("for 18 months", "for 15 years") wins over the duration box
+    const said = idea.match(/\b(\d{1,4})[- ](months?|years?)\b/i);
+    const Y = said ? ctDur(said[1], /^m/i.test(said[2]) ? 'months' : 'years') : (d.dur || CT_DUR0);
+    if (said) d.dur = Y;
     const parts = ctParseIdea(idea, d.iso), problem = ctCheckIdea(idea, parts, d.iso);
     playClick();
     if (problem) { d.review = { valid: false, problem }; d.polishing = false; renderSociety(); return; }
     // instant draft from the legal staff…
-    d.review = ctFinish(ctOfflineDraft(idea, parts, d.iso, Y)); const req = d.req = (d.req || 0) + 1;
+    d.review = ctFinish(ctOfflineDraft(idea, parts, d.iso, Y)); d.review.dur = Y; const req = d.req = (d.req || 0) + 1;
     d.polishing = aiReady(); renderSociety();
     if (!d.polishing) return;
     // …then the AI expands it into full treaty language in the background
     const B = shortName(d.iso);
     const sys = `You are the chief legal adviser of ${state.player}'s foreign ministry (${fmtDate(state.date)}). The minister gives a short idea for an agreement with ${B}. Work out what ${state.player} is trying to obtain and what it offers, and expand the idea into a concise formal bilateral treaty. If the idea cannot make sense between these two governments in January 2026 (terms they cannot deliver, binding third countries, absurd), say why instead.`;
-    const user = `Idea: "${idea}"\nDuration: ${Y} years.\nJSON: {"valid":true|false,"problem":"if invalid, one sentence","title":"Agreement between the Government of ${state.player} and the Government of ${B} on ...","category":${JSON.stringify(Object.keys(CT_CATS).concat('other'))} (pick one),"preamble":"one sentence","articles":[{"heading":"...","text":"..."}] (4 to 6 short articles: each side's undertakings with concrete figures where sensible, implementation, duration, entry into force)}`;
+    const user = `Idea: "${idea}"\nDuration: ${ctDurText(Y)}.\nJSON: {"valid":true|false,"problem":"if invalid, one sentence","title":"Agreement between the Government of ${state.player} and the Government of ${B} on ...","category":${JSON.stringify(Object.keys(CT_CATS).concat('other'))} (pick one),"preamble":"one sentence","articles":[{"heading":"...","text":"..."}] (4 to 6 short articles: each side's undertakings with concrete figures where sensible, implementation, duration, entry into force)}`;
     const j = await callAI(sys, user, true, { maxTokens: 900 });
     if (d.req !== req || state.ctDraft !== d) return;          // the player moved on
     d.polishing = false;
@@ -10613,11 +10621,21 @@ async function ctWrite() {
         if (!j.valid) d.review = { valid: false, problem: String(j.problem || 'This idea does not make sense as an agreement between the two governments.').slice(0, 400) };
         else {
             const arts = (Array.isArray(j.articles) ? j.articles : []).map(a => ({ heading: String((a && a.heading) || '').slice(0, 80), text: String((a && a.text) || a || '').slice(0, 900) })).filter(a => a.text).slice(0, 8);
-            if (arts.length >= 3) d.review = ctFinish({ valid: true, category: CT_CATS[j.category] ? j.category : d.review.category, title: String(j.title || '').slice(0, 160) || d.review.title, preamble: String(j.preamble || '').slice(0, 400), articles: arts, summary: d.review.summary, note: `Drafted by ${aiLabel()}.` });
+            if (arts.length >= 3) d.review = ctFinish({ dur: Y, valid: true, category: CT_CATS[j.category] ? j.category : d.review.category, title: String(j.title || '').slice(0, 160) || d.review.title, preamble: String(j.preamble || '').slice(0, 400), articles: arts, summary: d.review.summary, note: `Drafted by ${aiLabel()}.` });
         }
     }
     if (!document.getElementById('soc-modal').classList.contains('hidden')) renderSociety();
 }
+function ctLeft(days) { days = Math.max(0, days); return days >= 730 ? `${Math.round(days / 365.25)} years` : days >= 60 ? `${Math.round(days / 30.44)} months` : `${days} days`; }
+// agreements end when their term runs out
+function ctExpireTick() {
+    (state.treaties || []).forEach(t => {
+        if (t.status !== 'active' || !t.expires || state.dayIndex < t.expires) return;
+        t.status = 'expired';
+        if (t.parties.includes(state.playerIso)) { logEvent(`📜 The <b>${esc(t.name)}</b> has expired after ${esc(ctDurText(t.dur))}. Write a new agreement to continue it.`, 'neutral'); const o = t.parties.find(x => x !== state.playerIso); if (o) queueMessage(o, `The ${t.name} has now expired. We are open to discussing a new agreement.`); }
+    });
+}
+{ const _d = dailyTick; dailyTick = function (catchUp) { _d(catchUp); try { ctExpireTick(); } catch (e) { } }; }
 async function ctSend() {
     const d = ctGrab(), R = d.review, me = state.playerIso, iso = d.iso; if (!R || !R.valid || !iso) return;
     if ((state.treatyCd[iso + 'custom'] || -99) > state.dayIndex) { state.treatyMsg = `${shortName(iso)} wants more time before it looks at another draft from you.`; renderSociety(); return; }
@@ -10632,14 +10650,14 @@ async function ctSend() {
     }
     state.treatyCd[iso + 'custom'] = state.dayIndex + 20; d.busy = null;
     if (accept) {
-        state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, articles: R.articles, preamble: R.preamble, summary: R.summary, day: state.dayIndex, status: 'active' });
+        state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, articles: R.articles, preamble: R.preamble, summary: R.summary, dur: R.dur, expires: R.dur ? state.dayIndex + ctDurDays(R.dur) : null, day: state.dayIndex, status: 'active' });
         addRel(me, iso, 10); state.cred = clamp((state.cred || 60) + 2, 0, 100);
         if (C.growth) state.mods.growth += C.growth; if (C.them) state.gmods[iso] = (state.gmods[iso] || 0) + C.them; if (C.stab) nationIso(me).stability = clamp(nationIso(me).stability + C.stab, 0, 100);
         if (R.category === 'security' || R.category === 'intelligence') rivalsOf(iso).forEach(x => addRel(me, x, -4));
         logEvent(`📜 <b>${esc(R.title)}</b> signed between ${esc(state.player)} and ${esc(shortName(iso))}.`, 'good');
         state.treatyMsg = `${shortName(iso)} signs the ${R.title}.${reply ? ' "' + reply + '"' : ''}`;
         queueMessage(iso, reply || `We have signed the ${R.title}. We expect every clause to be honoured.`);
-        state.ctDraft = { iso: d.iso, years: d.years };
+        state.ctDraft = { iso: d.iso, dur: d.dur };
     } else {
         state.treatyMsg = `${shortName(iso)} declines the ${R.title}${reply ? ': "' + reply + '"' : sc > C.need - 15 ? ' for now; it is close. Improve relations or offer more in return' : ''}${!reply && base.why.length ? ` (${base.why.slice(0, 2).join('; ')})` : ''}.`;
     }
@@ -10826,7 +10844,7 @@ function treatiesHTML() {
     state.offers.forEach(o => { h += `<div class="p-2 mb-2" style="border:1px solid #93b25f;background:rgba(147,178,95,.08)">📨 ${flagHTML(nationIso(o.from), 11)} <b>${esc(shortName(o.from))}</b> proposes a ${esc(TREATY_TYPES[o.type].label.toLowerCase())} <span class="text-slate-500">(${o.exp - state.dayIndex} days)</span>
         <div class="mt-1 flex gap-1"><button type="button" class="gs-btn gs-btn-primary" onclick="treatyAcceptOffer('${o.id}')">Accept</button><button type="button" class="gs-btn" onclick="treatyDeclineOffer('${o.id}')">Decline</button></div></div>`; });
     const mine = treatiesOf(me);
-    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${t.type === 'custom' && t.category ? esc(t.category) + ' agreement' : TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}</span>${t.articles && t.articles.length ? `<details class="text-[10.5px] text-slate-400" style="margin-top:2px"><summary style="cursor:pointer">Read the text (${t.articles.length} articles)</summary>${t.articles.map((a, i) => `<div style="margin:3px 0 0 10px"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}</details>` : t.terms && t.terms.length ? `<ul class="text-[10.5px] text-slate-400" style="margin:2px 0 0 16px;list-style:disc">${t.terms.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
+    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${t.type === 'custom' && t.category ? esc(t.category) + ' agreement' : TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}${t.expires ? ` · ${ctLeft(t.expires - state.dayIndex)} left` : ''}</span>${t.articles && t.articles.length ? `<details class="text-[10.5px] text-slate-400" style="margin-top:2px"><summary style="cursor:pointer">Read the text (${t.articles.length} articles)</summary>${t.articles.map((a, i) => `<div style="margin:3px 0 0 10px"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}</details>` : t.terms && t.terms.length ? `<ul class="text-[10.5px] text-slate-400" style="margin:2px 0 0 16px;list-style:disc">${t.terms.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
     const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 1).sort((a, b) => getRel(me, b) - getRel(me, a)).slice(0, 60);
     h += `<div class="gs-stat-lbl mb-1">Propose a treaty</div><div class="flex flex-wrap gap-2 items-center mb-2"><select id="tr-country" class="gs-btn">${cands.map(i => `<option value="${i}">${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
         <select id="tr-type" class="gs-btn">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `<option value="${k}">${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
