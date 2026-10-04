@@ -10777,10 +10777,11 @@ async function ctSend() {
     const C = CT_CATS[R.category] || { need: 20, growth: 0.0002, them: 0.05 };
     const O = ctOutlook(iso, R), base = O.base, sc = O.score; let accept = sc >= C.need, reply = null;
     if (aiReady()) {
-        const sys = `You are the government of ${shortName(iso)} on ${fmtDate(state.date)}, deciding whether to sign an agreement proposed by ${state.player}. Relations are ${getRel(me, iso)} on a -100..100 scale. Decide as that government realistically would in January 2026, weighing its interests, alliances, rivals and domestic politics.`;
+        const ties = treatiesOf(me).filter(t => t.parties.includes(iso)).map(t => t.name);
+        const sys = `You are the government of ${shortName(iso)} on ${fmtDate(state.date)}, deciding whether to sign an agreement proposed by ${state.player}. Relations are ${getRel(me, iso)} on a -100..100 scale (${relLabel(getRel(me, iso))[0].toLowerCase()})${ties.length ? `; you are already bound to ${state.player} by: ${ties.join(', ')}` : ''}. Behave as the real government would, given the real relationship between the two countries. Decide as that government realistically would in January 2026, weighing its interests, alliances, rivals and domestic politics.`;
         const user = `Agreement: ${R.title}\n${R.terms.map(t => '- ' + t).join('\n').slice(0, 3500)}\nReturn JSON: {"accept": true or false, "reply": "two sentences from ${shortName(iso)}'s leader to ${state.player}"}`;
         const j = await callAI(sys, user, true, { maxTokens: 300 });
-        if (j && typeof j.accept === 'boolean') { accept = j.accept && sc > C.need - 30; reply = j.accept && !accept ? null : String(j.reply || '').slice(0, 400) || null; }
+        if (j && typeof j.accept === 'boolean') { accept = j.accept ? sc > C.need - 30 : sc >= C.need + 30; reply = j.accept !== accept ? null : String(j.reply || '').slice(0, 400) || null; }   // don't show a refusal letter on a signed deal
     }
     state.treatyCd[iso + 'custom'] = state.dayIndex + 20; d.busy = null;
     if (accept) {
@@ -10822,7 +10823,9 @@ function treatyScore(type, iso) {
     treatyPartners(iso).forEach(x => { if (getRel(me, x) < -40) { sc -= 25; why.push(`it is bound to ${shortName(x)}, which dislikes you`); } });
     state.conflicts.forEach(c => { const mine = c.sideA.includes(me) || c.sideB.includes(me), theirs = c.sideA.includes(iso) || c.sideB.includes(iso) || c.backA.includes(iso) || c.backB.includes(iso); if (mine && theirs) { const opp = (c.sideA.includes(me) && (c.sideB.includes(iso) || c.backB.includes(iso))) || (c.sideB.includes(me) && (c.sideA.includes(iso) || c.backA.includes(iso))); if (opp) sc -= 80; } });
     if (['defense', 'alliance'].includes(type)) { if (power(me) > power(iso) * 1.2) sc += 5; if (power(me) < power(iso) * 0.4) sc -= 8; }
-    if (treatiesOf(me).some(t => t.parties.includes(iso) && ['defense', 'alliance'].includes(t.type)) ) sc -= 100;       // already allied
+    // already allied: no second defence pact, but allies sign everything else readily
+    const allied = treatiesOf(me).find(t => t.parties.includes(iso) && ['defense', 'alliance'].includes(t.type));
+    if (allied) { if (['defense', 'alliance'].includes(type)) sc -= 100; else { sc += 20; why.push(`you are allies through the ${allied.name}`); } }
     return { sc, why };
 }
 function treatyPropose(type, iso) {
