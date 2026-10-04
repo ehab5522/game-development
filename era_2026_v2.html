@@ -751,6 +751,7 @@
                     <button type="button" onclick="toggleCommandCenter()" title="Open / close the Command Center" class="gs-btn">⚑<span class="tb-lbl"> Orders</span></button>
                     <button type="button" onclick="openSociety()" title="Government &amp; society: budget, education, health, clean streets, economy" class="gs-btn">🏛<span class="tb-lbl"> Government</span></button>
                     <button type="button" onclick="openSaveMenu()" class="gs-btn gs-btn-sq" title="Save / Load">💾</button>
+                    <button type="button" onclick="openHelp()" class="gs-btn gs-btn-sq" title="How to play and example orders (?)">?</button>
                     <button id="gear-btn" type="button" class="gs-btn gs-btn-sq" title="Settings">⚙</button>
             <div id="settings-menu" class="hidden absolute top-11 right-0 ui-panel rounded-lg p-3 w-52 border border-slate-600/50 z-50">
                 <div class="text-[10px] uppercase font-bold text-slate-500 mb-1">Interface size</div>
@@ -834,6 +835,7 @@
             <button type="button" id="mz-out" title="Zoom out (−)" onclick="mapZoom(-1)">−</button>
             <button type="button" title="Show the whole world" onclick="mapHome()">🌍</button>
             <button type="button" title="Go to my country" onclick="mapMine()">📍</button>
+            <button type="button" id="mz-find-btn" title="Find a country, city or group (F)" onclick="mapFindToggle()">🔍</button>
             <button type="button" id="mz-style" title="Switch map style" onclick="toggleMapStyle()">🛰</button>
         </div>
 
@@ -1289,7 +1291,7 @@
             NPL:["NP","Nepal",45.8,29.6], NLD:["NL","Netherlands",1449.7,18.1], NZL:["NZ","New Zealand",278.6,5.36], NIC:["NI","Nicaragua",24.2,6.81],
             NER:["NE","Niger",24.8,30.2], NGA:["NG","Nigeria",377.4,242.5], PRK:["KP","North Korea",16.4,25.7], MKD:["MK","North Macedonia",21.6,1.81],
             NOR:["NO","Norway",599.4,5.66], OMN:["OM","Oman",117.2,5.41], PAK:["PK","Pakistan",452,266.5], PLW:["PW","Palau",0.38,0.02],
-            PSE:["PS","Palestine",16,5.61], PAN:["PA","Panama",95,4.62], PNG:["PG","Papua New Guinea",34.4,13.1], PRY:["PY","Paraguay",60.5,6.46],
+            PSE:["PS","West Bank",13.6,3.4], GAZ:["PS","Gaza Strip",0.7,2.1], PAN:["PA","Panama",95,4.62], PNG:["PG","Papua New Guinea",34.4,13.1], PRY:["PY","Paraguay",60.5,6.46],
             PER:["PE","Peru",380.9,34.8], PHL:["PH","Philippines",512.2,115.3], POL:["PL","Poland",1134.2,36.2], PRT:["PT","Portugal",380.6,10.7],
             QAT:["QA","Qatar",217.4,3.19], ROU:["RO","Romania",480.8,18.7], RUS:["RU","Russia",2656.5,143.4], RWA:["RW","Rwanda",17.3,14.5],
             KNA:["KN","Saint Kitts and Nevis",1.14,0.05], LCA:["LC","Saint Lucia",2.77,0.18], VCT:["VC","Saint Vincent and the Grenadines",1.24,0.11],
@@ -1368,7 +1370,7 @@
             NIC:["Daniel Ortega & Rosario Murillo","Daniel Ortega & Rosario Murillo"], NER:["Abdourahamane Tiani","Ali Lamine Zeine"], NGA:["Bola Tinubu","Bola Tinubu"],
             PRK:["Kim Jong Un","Pak Thae-song"], MKD:["Gordana Siljanovska-Davkova","Hristijan Mickoski"], NOR:["Haakon VIII","Jonas Gahr Støre"],
             OMN:["Haitham bin Tariq","Haitham bin Tariq"], PAK:["Asif Ali Zardari","Shehbaz Sharif"], PLW:["Surangel Whipps Jr.","Surangel Whipps Jr."],
-            PSE:["Mahmoud Abbas","Mohammad Mustafa"], PAN:["José Raúl Mulino","José Raúl Mulino"], PNG:["Charles III","James Marape"],
+            PSE:["Mahmoud Abbas","Mohammad Mustafa"], GAZ:["Khalil al-Hayya (Hamas)","Hamas leadership council"], PAN:["José Raúl Mulino","José Raúl Mulino"], PNG:["Charles III","James Marape"],
             PRY:["Santiago Peña","Santiago Peña"], PER:["Keiko Fujimori","Keiko Fujimori"], PHL:["Bongbong Marcos","Bongbong Marcos"],
             POL:["Karol Nawrocki","Donald Tusk"], PRT:["António José Seguro","Luís Montenegro"], QAT:["Tamim bin Hamad Al Thani","Mohammed bin Abdulrahman Al Thani"],
             ROU:["Nicușor Dan","Ilie Bolojan"], RUS:["Vladimir Putin","Mikhail Mishustin"], RWA:["Paul Kagame","Justin Nsengiyumva"],
@@ -1438,7 +1440,7 @@
             "the bahamas":"BHS", "bahamas":"BHS", "east timor":"TLS", "timor leste":"TLS", "burma":"MMR", "viet nam":"VNM",
             "lao pdr":"LAO", "lao peoples democratic republic":"LAO", "syrian arab republic":"SYR", "iran islamic republic of":"IRN",
             "brunei darussalam":"BRN", "cape verde":"CPV", "cabo verde":"CPV", "federated states of micronesia":"FSM",
-            "palestine":"PSE", "state of palestine":"PSE", "west bank":"PSE", "gaza":"PSE", "gaza strip":"PSE",
+            "palestine":"PSE", "state of palestine":"PSE", "west bank":"PSE", "gaza":"GAZ", "gaza strip":"GAZ", "palestine west bank":"PSE",
             "hong kong sar":"HKG", "hong kong s a r":"HKG", "macao s a r":"MAC", "macau s a r":"MAC", "hong kong sar china":"HKG", "macao sar":"MAC", "macao":"MAC", "falkland islands":"FLK", "falkland islands malvinas":"FLK",
             "turkiye":"TUR", "united republic of tanzania":"TZA", "western sahara":"ESH", "sao tome and principe":"STP",
             "saint kitts and nevis":"KNA", "vatican":"VAT", "holy see":"VAT", "kosovo":"XKX", "northern cyprus":"CYN", "turkish republic of northern cyprus":"CYN",
@@ -1475,7 +1477,14 @@
         }
 
         // Windows doesn't draw flag emojis (shows "RU" instead), so use real flag images
+        const FLAG_OVERRIDE = {
+            af: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200"><rect width="300" height="200" fill="#fff"/><g fill="#000" font-family="Amiri, Scheherazade, Noto Naskh Arabic, Arial, sans-serif" font-weight="700" text-anchor="middle" direction="rtl"><text x="150" y="88" font-size="40">لا إله إلا الله</text><text x="150" y="146" font-size="40">محمد رسول الله</text></g></svg>')
+        };
         function flagHTML(t, h = 14) {
+            if (t && t.iso2 && FLAG_OVERRIDE[t.iso2]) {
+                const w = Math.round(h * 4 / 3);
+                return `<img src="${FLAG_OVERRIDE[t.iso2]}" alt="${t.iso2.toUpperCase()}" style="height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)">`;
+            }
             if (t && t.iso2) {
                 const w = Math.round(h * 4 / 3);
                 return `<img src="https://flagcdn.com/w40/${t.iso2}.png" alt="${t.iso2.toUpperCase()}" style="height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)">`;
@@ -2516,9 +2525,9 @@
                   { adm: ['MMR|Kayah'], pts: [['RES', 19.53, 97.15], ['RES', 19.20, 97.35], ['RES', 18.90, 97.45], ['GOV', 19.67, 97.21]] },
                   { adm: ['MMR|Kayin'], pts: [['RES', 18.07, 97.44], ['RES', 17.50, 97.90], ['RES', 16.30, 98.40], ['RES', 18.70, 97.10], ['GOV', 16.89, 97.63], ['GOV', 16.69, 98.51], ['GOV', 17.20, 97.30], ['GOV', 15.70, 98.20]] },
                   { adm: ['MMR|Sagaing'], pts: [['RES', 23.20, 94.60], ['RES', 23.90, 95.40], ['RES', 22.70, 94.90], ['RES', 22.50, 95.60], ['RES', 24.70, 95.00], ['GOV', 22.11, 95.13], ['GOV', 21.88, 95.98], ['GOV', 23.19, 94.06], ['GOV', 24.18, 96.33], ['GOV', 25.90, 95.70], ['GOV', 23.70, 95.90]] }],
-            PSE: [{ k: 'ISR', poly: [[34.47, 31.61], [34.505, 31.555], [34.482, 31.53], [34.480, 31.50], [34.462, 31.47], [34.430, 31.44], [34.390, 31.41], [34.355, 31.375], [34.330, 31.345], [34.290, 31.330], [34.240, 31.330], [34.180, 31.300], [34.200, 31.200], [34.620, 31.200], [34.640, 31.620], [34.47, 31.61]] },   // Gaza east of the yellow line + Rafah
-                  { k: 'HAMAS', poly: [[34.15, 31.30], [34.24, 31.33], [34.29, 31.33], [34.33, 31.345], [34.355, 31.375], [34.39, 31.41], [34.43, 31.44], [34.462, 31.47], [34.48, 31.50], [34.482, 31.53], [34.505, 31.555], [34.47, 31.61], [34.40, 31.60], [34.15, 31.30]] },
-                  { k: 'ISR', poly: [[35.45, 32.40], [35.60, 32.40], [35.60, 31.75], [35.42, 31.75], [35.47, 31.95], [35.44, 32.20], [35.45, 32.40]] },     // Jordan Valley (Area C)
+            GAZ: [{ k: 'ISR', poly: [[34.47, 31.61], [34.505, 31.555], [34.482, 31.53], [34.480, 31.50], [34.462, 31.47], [34.430, 31.44], [34.390, 31.41], [34.355, 31.375], [34.330, 31.345], [34.290, 31.330], [34.240, 31.330], [34.180, 31.300], [34.200, 31.200], [34.620, 31.200], [34.640, 31.620], [34.47, 31.61]] },   // Gaza east of the yellow line + Rafah
+                  ],
+            PSE: [{ k: 'ISR', poly: [[35.45, 32.40], [35.60, 32.40], [35.60, 31.75], [35.42, 31.75], [35.47, 31.95], [35.44, 32.20], [35.45, 32.40]] },     // Jordan Valley (Area C)
                   { k: 'GOV', poly: [[35.42, 31.83], [35.48, 31.83], [35.48, 31.90], [35.42, 31.90], [35.42, 31.83]] },                                 // Jericho (Palestinian Authority)
                   { k: 'ISR', poly: [[35.25, 31.75], [35.42, 31.75], [35.40, 31.35], [35.28, 31.35], [35.25, 31.75]] }],                                // Judean desert / Dead Sea (Area C)
             ETH: [{ k: 'TIGRAY', adm: ['ETH|Tigray'] },
@@ -2590,7 +2599,7 @@
         };
         const OCC_START = [
             { conf: 'ukr', iso: 'UKR', by: 'RUS', bias: 0.2 }, { conf: 'sdn', iso: 'SDN', by: 'RSF', bias: 0.05 }, { conf: 'sdn', iso: 'SDN', by: 'SPLMN' },
-            { conf: 'yem', iso: 'YEM', by: 'HOUTHI' }, { conf: 'drc', iso: 'COD', by: 'M23' }, { conf: 'gaza', iso: 'PSE', by: 'ISR' },
+            { conf: 'yem', iso: 'YEM', by: 'HOUTHI' }, { conf: 'drc', iso: 'COD', by: 'M23' }, { conf: 'gaza', iso: 'GAZ', by: 'ISR' },
             { conf: 'syr', iso: 'SYR', by: 'SDF' }, { conf: 'mmr', iso: 'MMR', by: 'AA' }, { conf: 'mmr', iso: 'MMR', by: 'KIA' }, { conf: 'mmr', iso: 'MMR', by: 'RES' },
             { conf: 'som', iso: 'SOM', by: 'SHABAAB' }, { conf: null, iso: 'GEO', by: 'ABKH' }, { conf: null, iso: 'GEO', by: 'SOSS' }, { conf: null, iso: 'MDA', by: 'TRANSNISTRIA' }
         ];
@@ -2803,14 +2812,14 @@
             x.beginPath(); x.moveTo(-1, s + 1); x.lineTo(s + 1, -1); x.moveTo(-1, 1); x.lineTo(1, -1); x.moveTo(s - 1, s + 1); x.lineTo(s + 1, s - 1); x.stroke();
             return HATCH[key] = ctx.createPattern(c, 'repeat');
         }
-        function drawCtlTile(cv, coords, dpr) {
+        function drawCtlTile(cv, coords, dpr, grp) {
             const S = 256 * dpr, z2 = Math.pow(2, coords.z), sc = 256 * z2 * dpr, ox = coords.x * S, oy = coords.y * S;
             const tb = [coords.x / z2, coords.y / z2, (coords.x + 1) / z2, (coords.y + 1) / z2];
             const hit = b => !(b[2] < tb[0] || b[0] > tb[2] || b[3] < tb[1] || b[1] > tb[3]);
             const ctx = cv.getContext('2d'), mode = MAPVIEW;
             const path = (c, rings) => rings.forEach(r => r.forEach((p, k) => k ? c.lineTo(p[0] * sc - ox, p[1] * sc - oy) : c.moveTo(p[0] * sc - ox, p[1] * sc - oy)));
             const gapW = Math.max(1, 0.012 / 360 * sc);            // closes hairline gaps between neighbouring provinces (~1 km)
-            viewIsos().forEach(iso => {
+            (grp ? grp.isos : viewIsos()).forEach(iso => {
                 const G = ctlGeo(iso); if (!G || !hit(G.cbox)) return;
                 const masks = {}, mk = k => masks[k] || (masks[k] = (() => { const c = document.createElement('canvas'); c.width = c.height = S; return c.getContext('2d'); })());
                 const paint = (k, drawShape) => {             // k gets the shape; every other group loses it
@@ -2848,6 +2857,7 @@
                 const keys = Object.keys(masks); if (!keys.length) return;
                 const clipCountry = c => { c.save(); c.globalCompositeOperation = 'destination-in'; c.beginPath(); path(c, G.country); c.fillStyle = '#000'; c.fill('evenodd'); c.restore(); };
                 keys.forEach(k => clipCountry(masks[k]));
+                if (grp) { grpPaintTile(ctx, masks, iso, S, dpr); return; }
                 const lineCol = mode === 'front' ? 'rgba(255,59,48,0.95)' : 'rgba(18,14,8,0.9)', w = Math.max(1, 1.3 * dpr);
                 keys.forEach(k => {
                     const M = masks[k].canvas;
@@ -3040,8 +3050,9 @@
             'SYR|DRUZE': 'Suwayda province', 'SYR|ISR': 'the Quneitra / UN buffer zone and Mount Hermon',
             'IRQ|KRG': 'Erbil, Duhok, Sulaymaniyah and Halabja',
             'LBN|HEZ': 'South Lebanon, Nabatieh, Baalbek-Hermel and Beirut\'s southern suburbs (Dahiyeh) — influence, the Lebanese army is deployed in the south',
-            'PSE|ISR': 'eastern Gaza behind the "yellow line" incl. Rafah, Beit Hanoun and east Khan Younis; Area C of the West Bank incl. the Jordan Valley',
-            'PSE|HAMAS': 'western Gaza: Gaza City, Deir al-Balah, west Khan Younis and al-Mawasi',
+            'GAZ|ISR': 'eastern Gaza behind the "yellow line" incl. Rafah, Beit Hanoun and east Khan Younis',
+            'PSE|ISR': 'Area C of the West Bank incl. the Jordan Valley and the Dead Sea shore',
+            
             'YEM|HOUTHI': 'Sanaa, Saada, Amran, Hajjah, Hodeidah, Mahwit, Raymah, Dhamar, Ibb, Bayda, Jawf and parts of Taiz, Marib and Dhale',
             'YEM|STC': 'Aden, Lahij, Abyan, Shabwa, Hadramawt (incl. Mukalla and Seiyun), Mahra, Socotra and southern Dhale',
             'SDN|RSF': 'all five Darfur states (El Fasher, Nyala, Geneina, Zalingei, Ed Daein), West Kordofan (Babanusa, El Fula, Heglig) and much of North Kordofan (Bara)',
@@ -3437,6 +3448,35 @@
         function cancelPendingClick() { if (pendingCountryClick) { clearTimeout(pendingCountryClick); pendingCountryClick = null; } }
         function clickAllowed() { return !mapMoving && Date.now() > mapBusyUntil; }
 
+        // Map corrections for 1 January 2026:
+        //  · Palestine is split: the West Bank (Palestinian Authority, Mahmoud Abbas) and the Gaza Strip (Hamas) are separate nations
+        //  · Akrotiri and Dhekelia are British Sovereign Base Areas, so they belong to the United Kingdom
+        //  · the UN buffer zone on Cyprus is not a country: it is drawn as part of Cyprus and cannot be selected on its own
+        function geoFixups(data) {
+            const F = data && data.features; if (!F || data._fixed) return data;
+            const byName = n => F.find(f => f.properties && (f.properties.name === n || f.properties.ADMIN === n));
+            const polysOf = g => !g ? [] : g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+            const ps = byName('Palestine');
+            if (ps) {
+                const parts = polysOf(ps.geometry), isGaza = pl => pl[0].every(c => c[0] < 34.7);
+                const gz = parts.filter(isGaza), wb = parts.filter(pl => !isGaza(pl));
+                if (gz.length && wb.length) {
+                    ps.properties = { ...ps.properties, name: 'West Bank' }; ps.geometry = { type: 'MultiPolygon', coordinates: wb };
+                    F.push({ type: 'Feature', properties: { name: 'Gaza Strip', 'ISO3166-1-Alpha-3': 'GAZ', 'ISO3166-1-Alpha-2': 'PS' }, geometry: { type: 'MultiPolygon', coordinates: gz } });
+                }
+            }
+            const uk = byName('United Kingdom'), cy = byName('Cyprus');
+            ['Akrotiri Sovereign Base Area', 'Dhekelia Sovereign Base Area'].forEach(n => {
+                const f = byName(n); if (!f || !uk) return;
+                uk.geometry = { type: 'MultiPolygon', coordinates: polysOf(uk.geometry).concat(polysOf(f.geometry)) };
+                F.splice(F.indexOf(f), 1);
+            });
+            const nm = byName('Cyprus No Mans Area');
+            if (nm) { if (cy) cy.geometry = { type: 'MultiPolygon', coordinates: polysOf(cy.geometry).concat(polysOf(nm.geometry)) }; F.splice(F.indexOf(nm), 1); }
+            data._fixed = true;
+            return data;
+        }
+
         let geojsonLayer, playerFeature = null, targetFeature = null;
 
         function getHighlightStyle(type) {
@@ -3465,6 +3505,7 @@
 
         loadCountryGeo()
             .then(data => {
+                data = geoFixups(data);
                 RAW_GEO = data;
                 initStrategyMap(data);
                 geojsonLayer = L.geoJSON(simplifyGeo(data), (COUNTRY_OPTS = {
@@ -4094,7 +4135,7 @@
             "RUS|UKR":-95, "USA|UKR":30, "ISR|IRN":-95, "USA|IRN":-75, "ISR|USA":65, "CHN|TWN":-70, "CHN|USA":-30, "CHN|JPN":-45,
             "CHN|RUS":55, "CHN|PRK":40, "CHN|PAK":60, "IND|PAK":-65, "CHN|IND":-15, "IND|RUS":30, "IND|USA":0, "AFG|PAK":-55,
             "KOR|PRK":-60, "JPN|PRK":-60, "USA|VEN":-85, "CUB|USA":-60, "IRN|SAU":-15, "ARE|SDN":-50, "EGY|SDN":40, "ERI|ETH":-60,
-            "EGY|ETH":-35, "COD|RWA":-55, "KHM|THA":-50, "ARM|AZE":5, "AZE|TUR":70, "GRC|TUR":-10, "SRB|XKX":-60, "ISR|PSE":-80,
+            "EGY|ETH":-35, "COD|RWA":-55, "KHM|THA":-50, "ARM|AZE":5, "AZE|TUR":70, "GRC|TUR":-10, "SRB|XKX":-60, "ISR|PSE":-80, "GAZ|ISR":-95, "GAZ|PSE":-35, "EGY|GAZ":-10, "GAZ|IRN":60, "GAZ|QAT":45, "GAZ|TUR":35,
             "ISR|LBN":-60, "ISR|SYR":-30, "SYR|TUR":40, "ISR|TUR":-50, "ISR|QAT":-30, "QAT|USA":40, "DNK|USA":-5, "GRL|USA":-15,
             "MEX|USA":10, "CAN|USA":5, "BRA|USA":-20, "COL|USA":-35, "USA|ZAF":-30, "NGA|USA":-5, "ARG|USA":50, "SAU|USA":45,
             "PAK|USA":25, "POL|RUS":-60, "EST|RUS":-60, "LTU|RUS":-60, "LVA|RUS":-60, "FIN|RUS":-50, "GEO|RUS":-25, "MDA|RUS":-40,
@@ -4108,6 +4149,84 @@
         };
 
         for (const k of Object.keys(PAIRS)) { const n = k.split('|').sort().join('|'); if (n !== k) { PAIRS[n] = PAIRS[k]; delete PAIRS[k]; } }
+        // ---------- how close countries are on 1 January 2026, beyond alliances ----------
+        // Alignment between the Western camp (+1) and the Russia/China/Iran camp (-1); 0 = non-aligned.
+        const ALIGN = (() => {
+            const m = {}, set = (v, list) => list.split(' ').forEach(i => m[i] = v);
+            set(1, 'USA CAN GBR FRA DEU ITA ESP PRT NLD BEL LUX DNK NOR ISL POL CZE SVK ROU BGR GRC EST LVA LTU SVN HRV ALB MNE MKD FIN SWE AUT IRL CYP MLT CHE LIE AND MCO SMR JPN KOR AUS NZL TWN ISR UKR MDA');
+            set(0.6, 'HUN TUR PHL SGP ARG PRY ECU SLV PAN CRI DOM GTM JOR MAR XKX BIH KEN GHA CIV SEN BWA');
+            set(0.4, 'SAU ARE QAT KWT BHR OMN EGY IRQ IND THA MYS PER CHL URY COL MEX GEO ARM AZE KAZ UZB NGA RWA BEN HND BOL LBN SYR SOM SOL');
+            set(0.1, 'BRA IDN VNM PAK BGD LKA NPL MNG TUN DZA ETH TZA ZMB AGO MOZ SDN TKM KGZ TJK SRB');
+            set(-0.3, 'ZAF COD ZWE UGA NAM LAO KHM AFG TCD');
+            set(-0.7, 'MLI BFA NER CAF ERI MMR GIN');
+            set(-0.9, 'CHN VEN CUB NIC');
+            set(-1, 'RUS IRN PRK BLR');
+            return m;
+        })();
+        // regional families: friendly by default unless a specific pair says otherwise
+        const REGION_GROUPS = {
+            AU: { bonus: 8, list: 'DZA AGO BEN BWA BFA BDI CPV CMR CAF TCD COM COG COD CIV DJI EGY GNQ ERI SWZ ETH GAB GMB GHA GIN GNB KEN LSO LBR LBY MDG MWI MLI MRT MUS MAR MOZ NAM NER NGA RWA STP SEN SYC SLE SOM ZAF SSD SDN TZA TGO TUN UGA ZMB ZWE' },
+            ARAB: { bonus: 12, list: 'DZA BHR COM DJI EGY IRQ JOR KWT LBN LBY MRT MAR OMN PSE QAT SAU SOM SDN SYR TUN ARE YEM' },
+            LATAM: { bonus: 10, list: 'ARG BOL BRA CHL COL CRI CUB DOM ECU SLV GTM HTI HND MEX NIC PAN PRY PER URY VEN' },
+            CARIB: { bonus: 15, list: 'ATG BHS BRB BLZ DMA GRD GUY HTI JAM KNA LCA VCT SUR TTO' },
+            SCO: { bonus: 6, list: 'CHN RUS IND PAK IRN KAZ KGZ TJK UZB BLR' },
+            NORDIC: { bonus: 20, list: 'DNK FIN ISL NOR SWE' },
+            ANGLO: { bonus: 12, list: 'USA GBR CAN AUS NZL' },
+            TURKIC: { bonus: 15, list: 'TUR AZE KAZ KGZ UZB TKM CYN' },
+            PACIFIC: { bonus: 12, list: 'FJI PNG SLB VUT WSM TON KIR TUV NRU FSM MHL PLW AUS NZL' },
+            CENTRALASIA: { bonus: 10, list: 'KAZ KGZ TJK UZB TKM' }
+        };
+        Object.values(REGION_GROUPS).forEach(g => g.set = new Set(g.list.split(' ')));
+        // more specific bilateral relationships on 1 January 2026
+        const PAIRS_2026 = {
+            // United States (second Trump term: tariffs, Ukraine talks, Gaza ceasefire, pressure on Venezuela)
+            "USA|CAN":0, "USA|GBR":60, "USA|FRA":30, "USA|DEU":35, "USA|ITA":45, "USA|POL":60, "USA|HUN":55, "USA|ESP":15, "USA|CHE":15, "USA|NOR":40, "USA|NLD":40,
+            "USA|AUS":45, "USA|NZL":40, "USA|TWN":50, "USA|PHL":55, "USA|VNM":15, "USA|IDN":15, "USA|SGP":45, "USA|THA":25, "USA|MYS":15, "USA|IND":5,
+            "USA|ARE":50, "USA|EGY":35, "USA|JOR":45, "USA|IRQ":15, "USA|AZE":35, "USA|ARM":30, "USA|KAZ":25, "USA|UZB":25, "USA|MAR":45, "USA|KEN":30,
+            "USA|ETH":10, "USA|RWA":20, "USA|SDN":-10, "USA|LBN":20, "USA|PSE":-40, "USA|AFG":-50, "USA|BLR":-30, "USA|PRK":-80, "USA|NIC":-60, "USA|SLV":60,
+            "USA|ECU":40, "USA|BOL":30, "USA|CHL":20, "USA|PER":20, "USA|PRY":40, "USA|HND":30, "USA|GTM":30, "USA|DOM":35, "USA|PAN":10, "USA|CRI":30,
+            "USA|YEM":-10, "USA|SOM":10,             // Russia
+            "RUS|BLR":85, "RUS|KAZ":30, "RUS|KGZ":40, "RUS|TJK":35, "RUS|UZB":30, "RUS|TKM":20, "RUS|ARM":-10, "RUS|AZE":-30, "RUS|SRB":40, "RUS|HUN":15,
+            "RUS|SVK":10, "RUS|TUR":20, "RUS|IND":35, "RUS|ISR":0, "RUS|SAU":25, "RUS|ARE":35, "RUS|EGY":30, "RUS|DZA":35, "RUS|CAF":60, "RUS|SDN":20,
+            "RUS|ETH":25, "RUS|ZAF":25, "RUS|BRA":15, "RUS|CUB":50, "RUS|NIC":50, "RUS|JPN":-40, "RUS|KOR":-20, "RUS|AUS":-50, "RUS|CAN":-55, "RUS|ITA":-40,
+            "RUS|ESP":-45, "RUS|NLD":-55, "RUS|SWE":-60, "RUS|NOR":-50, "RUS|DNK":-55, "RUS|CZE":-55, "RUS|ROU":-50, "RUS|BGR":-30, "RUS|GRC":-20,
+            "RUS|TWN":-30, "RUS|MNG":30, "RUS|VNM":30, "RUS|LAO":30, "RUS|CYN":10,
+            // Ukraine
+            "UKR|GBR":60, "UKR|SVK":-10, "UKR|TUR":30, "UKR|JPN":40, "UKR|CAN":55, "UKR|AUS":40, "UKR|ISR":10, "UKR|CHN":-20, "UKR|IND":5, "UKR|GEO":10,
+            "UKR|MDA":50, "UKR|AZE":30, "UKR|NOR":55,             // Europe
+            "HUN|POL":5, "SRB|CHN":55, "SRB|HRV":-20, "SRB|BIH":10, "SRB|ALB":-25, "GRC|CYP":80, "CYP|TUR":-50, "CYN|TUR":90, "CYN|CYP":-60, "ARM|FRA":40,
+            "AZE|ISR":50, "AZE|IRN":-20, "ARM|TUR":0, "ARM|IRN":20, "GBR|ARG":-10, "GBR|IRL":40, "FRA|DZA":-35, "FRA|MAR":45, "ESP|MAR":30, "FRA|LBN":50,
+            "DEU|ISR":35, "GBR|ISR":15, "FRA|ISR":-10, "CAN|ISR":-10, "AUS|ISR":-10, "HUN|ISR":50, "CZE|ISR":40, "CHN|LTU":-40, "CHN|CZE":-10,
+            // Middle East
+            "SAU|ISR":-10, "SAU|QAT":30, "SAU|TUR":40, "ARE|QAT":20, "EGY|SAU":50, "EGY|ARE":55, "EGY|TUR":30, "EGY|QAT":30, "JOR|SAU":50, "IRQ|TUR":20,
+            "IRQ|SAU":20, "SYR|SAU":50, "SYR|QAT":55, "LBN|SAU":35, "LBN|SYR":10, "TUR|QAT":70, "TUR|PAK":50, "IRN|PAK":10, "IRN|AFG":10, "ISR|MAR":20,
+            "ISR|BHR":20, "ISR|IND":50, "QAT|IRN":20, "OMN|IRN":25,             "SAU|YEM":40,
+            // Asia
+            "CHN|KOR":5, "JPN|KOR":30, "CHN|JPN":-50, "JPN|IND":45, "JPN|AUS":60, "JPN|PHL":50, "JPN|TWN":50, "IND|NPL":15, "IND|LKA":30, "IND|MDV":20,
+            "IND|ARE":50, "IND|SAU":35, "IND|IRN":20, "IND|FRA":50, "IND|AUS":40, "CHN|IND":-5, "AFG|PAK":-65, "PAK|BGD":25, "PAK|AZE":50, "CHN|LAO":60,
+            "CHN|THA":30, "CHN|MYS":30, "CHN|IDN":25, "CHN|SGP":20, "CHN|VNM":5, "CHN|NZL":10, "CHN|KAZ":40, "CHN|BRA":35, "CHN|ARG":0, "CHN|ZAF":40,
+            "CHN|ETH":40, "CHN|NGA":20, "CHN|HUN":35, "CHN|SAU":30, "CHN|ARE":30, "CHN|EGY":30, "CHN|BGD":30, "CHN|NPL":25, "CHN|LKA":25, "CHN|MNG":30,
+            "CHN|GBR":-10, "CHN|DEU":5, "CHN|FRA":5, "CHN|CAN":-20, "MMR|THA":10, "CAN|IND":-5,             // Africa
+            "SDN|SAU":30, "SDN|TUR":30, "SDN|ETH":-10, "SDN|SSD":0, "SDN|TCD":-30, "ETH|SOL":40, "SOM|SOL":-50,
+            "COD|RWA":-45, "COD|UGA":10, "KEN|SOM":10, "NGA|NER":-20, "ZAF|ZWE":30, "ZAF|NGA":20, "GHA|NGA":30, "MAR|ESH":-90,
+            "DZA|ESH":70,             // Americas
+            "VEN|COL":10, "VEN|BRA":-15, "VEN|ARG":-60, "VEN|NIC":50, "VEN|BOL":-20, "VEN|ECU":-40, "VEN|PER":-40, "VEN|CHL":-30, "VEN|PAN":-30, "ARG|BRA":-10,
+            "ARG|CHL":30, "BRA|COL":30, "MEX|ECU":-40, "MEX|ESP":-10, "MEX|CUB":30, "COL|ECU":-10, "CUB|NIC":50, "ISR|ZAF":-60, "ISR|COL":-60, "ISR|BOL":-50,
+            "ISR|BRA":-40, "ISR|ARG":60
+        };
+        Object.keys(PAIRS_2026).forEach(k => { const n = k.split('|').sort().join('|'); PAIRS[n] = PAIRS_2026[k]; });
+        const BASE_REL_CACHE = {};
+        // main faith of each country (used for the religion term in starting relations)
+        const FAITH_TBL = {
+            sunni: 'SAU ARE QAT KWT OMN JOR EGY LBY TUN DZA MAR MRT SDN SOM DJI TUR SYR PSE GAZ AFG PAK BGD IDN MYS BRN MDV SEN GMB GIN MLI NER BFA TCD SLE KAZ UZB TKM TJK KGZ ALB XKX BIH COM ESH YEM CYN SOL'.split(' '),
+            shia: 'IRN IRQ AZE BHR'.split(' '),
+            catholic: 'ITA ESP PRT FRA BEL AUT IRL POL LTU SVK SVN HRV HUN MLT LUX VAT MCO SMR AND LIE MEX GTM HND SLV NIC CRI PAN COL VEN ECU PER BOL PRY URY ARG CHL BRA CUB DOM HTI PHL TLS COD AGO COG GAB BDI RWA GNQ CPV STP SYC MOZ CAF'.split(' '),
+            orthodox: 'RUS UKR BLR SRB MNE MKD BGR ROU MDA GRC CYP GEO ARM ETH ERI'.split(' '),
+            protestant: 'USA GBR DEU NLD DNK NOR SWE FIN ISL EST LVA CAN AUS NZL ZAF NAM BWA ZMB ZWE KEN UGA TZA GHA LBR JAM TTO BHS BRB PNG FJI SLB VUT WSM TON MWI MDG SSD NGA CMR CHE CZE'.split(' '),
+            judaism: ['ISR'], hinduism: ['IND', 'NPL', 'MUS'],
+            buddhism: 'THA MMR LKA KHM LAO BTN MNG JPN'.split(' ')
+        };
+        const FAITH_OF = {}; Object.keys(FAITH_TBL).forEach(k => FAITH_TBL[k].forEach(i => FAITH_OF[i] = k));
 
         // Military weight multipliers (combat power is roughly sqrt(GDP) × this)
         const MILF = { USA:3, CHN:2.5, RUS:3, IND:2, GBR:1.8, FRA:1.8, ISR:2.6, PRK:2.2, PAK:1.9, IRN:1.6, TUR:1.7, KOR:1.6, JPN:1.3,
@@ -4125,7 +4244,7 @@
               backA:['EGY','TUR','SAU'], backB:['ARE'], mediators:['USA','SAU','EGY','ARE'],
               brief:"After the RSF seized El Fasher in October 2025, the army holds Khartoum and the east while the RSF controls Darfur and much of Kordofan. Famine is spreading; the Quad (US, Saudi Arabia, UAE, Egypt) is pushing a humanitarian truce.",
               flavor:["RSF drones strike infrastructure in Port Sudan.","Fighting intensifies around El Obeid in North Kordofan.","UN warns famine is spreading across Darfur and Kordofan.","Quad mediators float a three-month humanitarian truce."] },
-            { id:'gaza', name:'Gaza Ceasefire (Israel–Hamas)', type:'ceasefire', intensity:55, sideA:['ISR'], sideB:[], location:['PSE'], nonState:'Hamas',
+            { id:'gaza', name:'Gaza Ceasefire (Israel–Hamas)', type:'ceasefire', intensity:55, sideA:['ISR'], sideB:[], location:['GAZ'], nonState:'Hamas',
               backA:['USA'], backB:['IRN'], mediators:['USA','QAT','EGY','TUR'],
               brief:"The October 2025 ceasefire holds on paper but Israeli strikes continue. Phase two — Hamas disarmament, an International Stabilization Force and the Trump-chaired Board of Peace — is stalled. Settlement expansion is accelerating in the West Bank.",
               flavor:["Israeli strikes in Gaza kill several people despite the ceasefire.","Talks on the International Stabilization Force stall over troop contributors.","Aid convoys delayed at the Kerem Shalom crossing.","Settler violence reported in the northern West Bank."] },
@@ -4293,7 +4412,7 @@
             "phnom penh":"KHM", kinshasa:"COD", kigali:"RWA", nairobi:"KEN", copenhagen:"DNK", nuuk:"GRL", minsk:"BLR", belgrade:"SRB",
             ottawa:"CAN", "mexico city":"MEX", brasilia:"BRA", "buenos aires":"ARG", bogota:"COL", "kuwait city":"KWT", muscat:"OMN",
             amman:"JOR", sanaa:"YEM", tripoli:"LBY", algiers:"DZA", rabat:"MAR", canberra:"AUS", jakarta:"IDN", bamako:"MLI",
-            hamas:"PSE", gaza:"PSE", "west bank":"PSE", houthi:"YEM", houthis:"YEM", hezbollah:"LBN", taliban:"AFG", "united states":"USA",
+            hamas:"GAZ", gaza:"GAZ", "gaza city":"GAZ", "west bank":"PSE", ramallah:"PSE", houthi:"YEM", houthis:"YEM", hezbollah:"LBN", taliban:"AFG", "united states":"USA",
             america:"USA", usa:"USA", "u s":"USA", uk:"GBR", britain:"GBR", "south korea":"KOR", "north korea":"PRK", congo:"COD", drc:"COD",
             uae:"ARE", emirates:"ARE", "saudi arabia":"SAU", "ivory coast":"CIV", "czech republic":"CZE", burma:"MMR", russia:"RUS", syria:"SYR",
             iran:"IRN", turkiye:"TUR", vatican:"VAT", "holy see":"VAT", m23:"RWA" };
@@ -4347,6 +4466,7 @@
         function baseRelation(a, b) {
             if (a === b) return 100;
             const key = [a, b].sort().join('|');
+            if (BASE_REL_CACHE[key] !== undefined) return BASE_REL_CACHE[key];
             let r = 0;
             for (const bl in BLOCS) {
                 const ia = inBloc(bl, a), ib = inBloc(bl, b);
@@ -4356,6 +4476,17 @@
             if ((inBloc('USPAC', a) && (b === 'CHN' || b === 'PRK')) || (inBloc('USPAC', b) && (a === 'CHN' || a === 'PRK'))) r -= 20;
             if ((a === 'UKR' && inBloc('EU', b)) || (b === 'UKR' && inBloc('EU', a))) r += 35;
             if (PAIRS[key] !== undefined) r = PAIRS[key] + (r > 0 ? Math.min(r, 15) : 0);
+            else {
+                // no specific relationship recorded: closeness comes from camp, region, neighbourhood and faith
+                const xa = ALIGN[a] || 0, xb = ALIGN[b] || 0;
+                r += 22 * xa * xb;                                                     // same camp +, rival camps -
+                for (const g in REGION_GROUPS) { const G = REGION_GROUPS[g]; if (G.set.has(a) && G.set.has(b)) r += G.bonus; }
+                let near = false, geo = false; try { geo = !!GEO_INDEX; near = geo ? bordersWith(a, b) : distKm(a, b) < 900; } catch (e) { }
+                if (near) r += 6;                                                      // neighbours trade and talk more
+                if (FAITH_OF[a] && FAITH_OF[a] === FAITH_OF[b]) r += 4;
+                r = clamp(r, -40, 70);
+                if (geo) { r = clamp(Math.round(r), -100, 100); BASE_REL_CACHE[key] = r; return r; }   // stable once the map is loaded
+            }
             return clamp(Math.round(r), -100, 100);
         }
         function getRel(a, b) {
@@ -4666,6 +4797,8 @@
                 const base = classifyOrderBase(text);
                 return { ...base, targets: base.targets.filter(t => !t.inferred), cat: 'military', kind: WITHDRAW_RX.test(s) ? 'withdraw' : 'move', unitType: unitT || 'ground', covert: COVERT_RX.test(s) };
             }
+            { const un = unscOrderOf(text); if (un) return un; }
+            { const px = proxyOrderOf(text); if (px) return px; }
             // Domestic policy orders ("increase education spending", "clean the streets", "raise taxes by 2%")
             if (!(type && BUILD_RX.test(s)) && !(state.playerIso && detectCountries(text).filter(f => f.iso !== state.playerIso).length)) {
                 const pol = policyOf(text);
@@ -4834,6 +4967,7 @@
                 if (main && main.stance === 'hostile' && ['strike', 'invasion', 'blockade'].includes(o.kind)) {
                     const sev = { strike: 1, blockade: 0.8, invasion: 2.2 }[o.kind] * o.scale;
                     try { fxForOrder(o, outcome, main.iso); } catch (e) { console.warn('fx', e); }
+                    try { treatyOnAttack(me, main.iso); } catch (e) { console.warn(e); }
                     const hidden = o.covert && Math.random() < 0.6 && o.kind !== 'invasion';
                     // Relations with the target collapse
                     const dRel = -Math.round(30 * sev);
@@ -4850,6 +4984,7 @@
                               brief: `Hostilities began on ${state.date.toDateString()} after ${state.player} ordered: "${o.text}".`, flavor: [`Fighting continues between ${shortName(me)} and ${tName}.`, `Casualty figures rise on both sides of the ${shortName(me)}–${tName} front.`] };
                         state.conflicts.push(c);
                         fx(`New conflict: ${c.name}`, false);
+                        try { treatyOnWar(c, me, main.iso); unscAgainstPlayer(c, main.iso); } catch (e) { console.warn(e); }
                     }
                     const existingWar = !!c && c.type === 'war';
                     if (c) { c.intensity = clamp(c.intensity + 12 * sev, 0, 100); if (o.kind === 'invasion') c.type = 'war'; }
@@ -5590,7 +5725,7 @@
             HKG:2.1, LKA:3.1, NPL:4.0, MNG:6.0, GHA:4.5, CIV:6.4, SEN:3.0, RWA:7.0, UGA:7.5, TZA:6.0, COD:5.0, ZMB:6.0, ZWE:4.5, AGO:2.5,
             MOZ:2.0, BWA:3.0, NER:6.6, MLI:2.5, BFA:4.0, PRK:1.0, KHM:4.5, LAO:3.5, AZE:2.5, ARM:5.0, GEO:6.0, BLR:1.5, SRB:3.0, BGR:2.5,
             HRV:2.7, SVK:1.5, SVN:1.8, LTU:2.5, LVA:1.8, EST:1.5, LUX:1.5, ISL:2.0, CYP:3.0, MLT:4.0, JOR:2.7, BHR:3.0, LBY:4.0, TUN:1.5,
-            SOM:3.5, SSD:-2.0, ERI:3.0, TCD:3.0, CMR:4.0, PSE:-5.0, GRL:1.5, MAC:3.0, TKM:5.0, TJK:6.0, KGZ:5.5 };
+            SOM:3.5, SSD:-2.0, ERI:3.0, TCD:3.0, CMR:4.0, PSE:-5.0, GAZ:-15.0, GRL:1.5, MAC:3.0, TKM:5.0, TJK:6.0, KGZ:5.5 };
         function baseGrowth(iso) {
             if (BASE_GROWTH[iso] !== undefined) return BASE_GROWTH[iso];
             const n = nationIso(iso), pc = n.pop ? n.gdp / n.pop : 0;
@@ -5742,7 +5877,7 @@
             ['Islamabad','PAK',33.68,73.05],['Karachi','PAK',24.86,67.01],['Lahore','PAK',31.55,74.34],['Gwadar','PAK',25.13,62.32],['Kabul','AFG',34.56,69.21],['Dhaka','BGD',23.81,90.41],
             ['Riyadh','SAU',24.71,46.68],['Jeddah','SAU',21.49,39.19],['NEOM','SAU',28.00,35.20],['Dammam','SAU',26.42,50.09],['Dubai','ARE',25.20,55.27],['Abu Dhabi','ARE',24.45,54.38],['Doha','QAT',25.29,51.53],['Kuwait City','KWT',29.38,47.99],['Muscat','OMN',23.59,58.41],['Manama','BHR',26.23,50.59],
             ['Baghdad','IRQ',33.31,44.36],['Basra','IRQ',30.51,47.78],['Erbil','IRQ',36.19,44.01],['Damascus','SYR',33.51,36.28],['Aleppo','SYR',36.20,37.13],['Latakia','SYR',35.52,35.79],['Beirut','LBN',33.89,35.50],
-            ['Jerusalem','ISR',31.77,35.21],['Tel Aviv','ISR',32.09,34.78],['Haifa','ISR',32.79,34.99],['Eilat','ISR',29.56,34.95],['Gaza','PSE',31.50,34.47],['Amman','JOR',31.95,35.93],
+            ['Jerusalem','ISR',31.77,35.21],['Tel Aviv','ISR',32.09,34.78],['Haifa','ISR',32.79,34.99],['Eilat','ISR',29.56,34.95],['Gaza','GAZ',31.50,34.47],['Ramallah','PSE',31.90,35.20],['Amman','JOR',31.95,35.93],
             ['Ankara','TUR',39.93,32.86],['Istanbul','TUR',41.01,28.98],['Izmir','TUR',38.42,27.14],['Cairo','EGY',30.04,31.24],['Alexandria','EGY',31.20,29.92],['Suez','EGY',29.97,32.55],
             ['Khartoum','SDN',15.50,32.56],['Port Sudan','SDN',19.62,37.22],['Addis Ababa','ETH',9.03,38.74],['Asmara','ERI',15.32,38.93],['Djibouti','DJI',11.59,43.15],['Mogadishu','SOM',2.05,45.32],['Nairobi','KEN',-1.29,36.82],['Mombasa','KEN',-4.04,39.67],
             ['Lagos','NGA',6.52,3.38],['Abuja','NGA',9.08,7.40],['Kinshasa','COD',-4.44,15.27],['Goma','COD',-1.68,29.22],['Kigali','RWA',-1.95,30.06],['Johannesburg','ZAF',-26.20,28.05],['Cape Town','ZAF',-33.92,18.42],['Luanda','AGO',-8.84,13.23],['Bamako','MLI',12.64,-8.00],['Dakar','SEN',14.72,-17.47],['Algiers','DZA',36.75,3.06],['Rabat','MAR',34.02,-6.83],['Casablanca','MAR',33.57,-7.59],['Tunis','TUN',36.81,10.18],['Tripoli','LBY',32.89,13.19],['Accra','GHA',5.60,-0.19],['Abidjan','CIV',5.36,-4.01],
@@ -5869,7 +6004,8 @@ IRQ:Baghdad,33.31,44.36,7.5;Basra,30.51,47.81,1.4;Mosul,36.34,43.13,1.7;Erbil,36
 SYR:Damascus,33.51,36.29,2.5;Aleppo,36.20,37.13,2.1;Homs,34.73,36.72,0.8;Hama,35.13,36.75,0.85;Latakia,35.53,35.79,0.4;Tartus,34.89,35.89,0.12;Idlib,35.93,36.63,0.2;Raqqa,35.95,39.01,0.3;Deir ez-Zor,35.34,40.14,0.2;Qamishli,37.05,41.23,0.2;Daraa,32.63,36.10,0.1
 LBN:Beirut,33.89,35.50,2.4;Tripoli,34.44,35.85,0.73;Sidon,33.56,35.37,0.27;Tyre,33.27,35.20,0.2;Zahlé,33.85,35.90,0.15;Baalbek,34.00,36.21,0.1
 ISR:Jerusalem,31.77,35.21,1.0;Tel Aviv,32.09,34.78,4.2;Haifa,32.79,34.99,1.1;Be'er Sheva,31.25,34.79,0.4;Ashdod,31.80,34.65,0.23;Nazareth,32.70,35.30,0.08;Eilat,29.56,34.95,0.05
-PSE:Ramallah,31.90,35.20,0.04;Gaza,31.50,34.47,0.6;Khan Yunis,31.34,34.31,0.2;Rafah,31.29,34.25,0.17;Hebron,31.53,35.10,0.2;Nablus,32.22,35.26,0.16;Jenin,32.46,35.30,0.05
+PSE:Ramallah,31.90,35.20,0.04;Hebron,31.53,35.10,0.2;Nablus,32.22,35.26,0.16;Jenin,32.46,35.30,0.05
+GAZ:Gaza,31.50,34.47,0.6;Khan Yunis,31.34,34.31,0.2;Rafah,31.29,34.25,0.17;Deir al-Balah,31.42,34.35,0.08
 JOR:Amman,31.95,35.93,4.0;Zarqa,32.07,36.09,0.6;Irbid,32.56,35.85,0.5;Aqaba,29.53,35.01,0.15;Ma'an,30.19,35.73,0.04
 SAU:Riyadh,24.71,46.68,7.7;Jeddah,21.49,39.19,4.7;Mecca,21.39,39.86,2.4;Medina,24.47,39.61,1.5;Dammam,26.43,50.10,1.3;Hofuf,25.38,49.59,1.2;Tabuk,28.38,36.57,0.6;Abha,18.22,42.50,0.4;Jizan,16.89,42.55,0.17;Ha'il,27.52,41.69,0.4;Yanbu,24.09,38.06,0.3;Najran,17.49,44.13,0.4
 ARE:Abu Dhabi,24.45,54.38,1.5;Dubai,25.20,55.27,3.6;Sharjah,25.35,55.42,1.8;Al Ain,24.21,55.74,0.8;Ras Al Khaimah,25.79,55.94,0.35;Fujairah,25.12,56.33,0.2
@@ -6579,7 +6715,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             ['Naval Station Norfolk','naval','USA','USA',36.946,-76.303,'active','World\'s largest naval base.'],['Fort Bragg','base','USA','USA',35.140,-79.006],
             ['Fort Hood','base','USA','USA',31.135,-97.776],['Naval Base San Diego','naval','USA','USA',32.684,-117.129],['Nellis Air Force Base','airbase','USA','USA',36.236,-115.034],
             ['Camp Simba (Manda Bay)','base','USA','KEN',-2.252,40.913],['Pine Gap','base','USA','AUS',-23.799,133.737,'active','Joint US–Australian intelligence facility.'],
-            ['RAF Akrotiri','airbase','GBR','CYP',34.590,32.988],['HMNB Clyde (Faslane)','naval','GBR','GBR',56.067,-4.817,'active','Home of the UK\'s Trident submarines.'],
+            ['RAF Akrotiri','airbase','GBR','GBR',34.590,32.988,'active','British Sovereign Base Area (Western SBA) — UK territory on Cyprus.'],['Dhekelia Garrison','base','GBR','GBR',34.990,33.745,'active','British Sovereign Base Area (Eastern SBA) — UK territory on Cyprus.'],['HMNB Clyde (Faslane)','naval','GBR','GBR',56.067,-4.817,'active','Home of the UK\'s Trident submarines.'],
             ['RAF Brize Norton','airbase','GBR','GBR',51.750,-1.584],['Île Longue','naval','FRA','FRA',48.306,-4.510,'active','French ballistic-missile submarine base.'],
             ['Toulon Naval Base','naval','FRA','FRA',43.118,5.917],['French Forces in Djibouti','base','FRA','DJI',11.545,43.150],
             ['Camp de la Paix (Abu Dhabi)','naval','FRA','ARE',24.525,54.395],['Baltiysk Naval Base','naval','RUS','RUS',54.650,19.910,'active','Baltic Fleet HQ (Kaliningrad).'],
@@ -7053,7 +7189,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             'IRL','PRT','GRC','POL','CZE','HUN','SVK','SVN','HRV','BGR','EST','LVA','LTU','MNE','MKD','ALB','XKX','GEO','ARM','IRQ','THA','KHM','MYS','SGP','MNG',
             'LSO','MUS','BTN','AND','TON','SAU','LBY','TGO','HTI','BIH','SMR','LUX','MLT','ISL','SAM','WSM','FJI','PNG','SLB','TUV','VUT','BHS','JAM','BRB','TTO',
             'GRL','FRO','HKG','MAC','PRI','GUM','VIR','ASM','PYF','NCL','ABW','CUW','SXM','BMU','GIB','IMN','JEY','GGY','CYM','TCA','VGB','AIA','MSR','COK','NIU','ALA','DMA','GRD','LCA','VCT','KNA','ATG','BLZ']);
-        const POWER_OVERRIDE = { VNM: ['Tô Lâm', 'General Secretary of the Communist Party'] };
+        const POWER_OVERRIDE = { VNM: ['Tô Lâm', 'General Secretary of the Communist Party'], GAZ: ['Khalil al-Hayya', 'Head of Hamas in Gaza'] };
         const LEADER_TITLE = { USA:'President', RUS:'President', CHN:'General Secretary & President', FRA:'President', TUR:'President', UKR:'President', BRA:'President',
             MEX:'President', ARG:'President', KOR:'President', TWN:'President', EGY:'President', IDN:'President', IRN:'Supreme Leader', PRK:'Supreme Leader', AFG:'Supreme Leader',
             SAU:'Crown Prince & Prime Minister', ARE:'President', QAT:'Emir', KWT:'Emir', JOR:'King', MAR:'King', BHR:'King', OMN:'Sultan', BRN:'Sultan', SWZ:'King',
@@ -7160,7 +7296,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             MEX:.789, AZE:.789, COL:.788, BRA:.786, MDA:.785, UKR:.779, ECU:.777, LKA:.776, DOM:.776, GUY:.776, TON:.769, VNM:.766, MDV:.766, TKM:.764, FJI:.763,
             DZA:.763, CUB:.762, PRY:.756, JOR:.754, EGY:.754, LBN:.752, MNG:.747, TUN:.746, ZAF:.741, UZB:.740, BOL:.733, GAB:.733, BWA:.731, IDN:.728, JAM:.720,
             PHL:.720, KGZ:.720, LBY:.721, SUR:.722, BLZ:.721, MAR:.710, VEN:.709, WSM:.708, NIC:.706, BTN:.698, IRQ:.695, TJK:.691, IND:.685, BGD:.685, SLV:.678,
-            EQG:.674, GNQ:.674, PSE:.674, CPV:.668, NAM:.665, GTM:.662, HND:.645, COG:.649, SWZ:.639, STP:.637, TLS:.634, KEN:.628, GHA:.628, NPL:.622, LAO:.621,
+            EQG:.674, GNQ:.674, PSE:.674, GAZ:.55, CPV:.668, NAM:.665, GTM:.662, HND:.645, COG:.649, SWZ:.639, STP:.637, TLS:.634, KEN:.628, GHA:.628, NPL:.622, LAO:.621,
             VUT:.621, AGO:.616, MMR:.609, KHM:.606, COM:.603, ZWE:.598, ZMB:.595, CMR:.588, SLB:.584, UGA:.582, CIV:.582, RWA:.578, PNG:.576, TGO:.571, SYR:.564,
             MRT:.563, NGA:.560, TZA:.555, HTI:.554, LSO:.550, PAK:.544, GMB:.524, DJI:.513, COD:.522, MWI:.517, BEN:.515, SDN:.511, LBR:.510, ERI:.503, GIN:.500,
             AFG:.496, ETH:.497, MOZ:.493, MDG:.487, YEM:.470, SLE:.467, BFA:.459, BDI:.439, MLI:.419, NER:.419, TCD:.416, CAF:.414, SOM:.404, SSD:.388, TWN:.926 };
@@ -7176,7 +7312,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
 
         // Baseline political stability (0–100) for fragile / special cases, Jan 2026 (informed by fragility indices)
         const STAB_BASE = { SOM:12, SSD:12, YEM:14, SYR:24, AFG:22, SDN:12, COD:20, CAF:18, HTI:12, MLI:24, BFA:24, NER:28, MMR:20, LBY:28, IRQ:38, LBN:34, VEN:28,
-            ETH:30, NGA:36, PAK:36, UKR:38, RUS:52, IRN:30, PRK:48, ERI:34, TCD:24, CMR:36, MOZ:38, ZWE:40, GNB:26, GIN:34, BDI:30, PSE:12, ISR:50, CUB:40, NIC:42,
+            ETH:30, NGA:36, PAK:36, UKR:38, RUS:52, IRN:30, PRK:48, ERI:34, TCD:24, CMR:36, MOZ:38, ZWE:40, GNB:26, GIN:34, BDI:30, PSE:24, GAZ:6, ISR:50, CUB:40, NIC:42,
             COL:50, MEX:50, BGD:42, MDG:32, GAB:44, BOL:45, PER:44, ECU:46, HND:42, GTM:46, SLV:55, TUR:52, EGY:48, KEN:48, BLR:46, GEO:50, ARM:52, AZE:52, SRB:55,
             NPL:40, LKA:52, THA:55, KHM:52, PHL:52, IDN:58, IND:56, CHN:64, SAU:62, ARE:72, QAT:74, KWT:66, OMN:70, JOR:56, MAR:58, DZA:52, TUN:46, USA:62, FRA:62, GBR:70,
             DEU:76, KOR:66, TWN:66, BRA:56, ARG:52, ZAF:54, XKX:52, BIH:48, MDA:50, CYN:50, SOL:42, ESH:30 };
@@ -7512,7 +7648,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 aiNews('ISR', `Israeli airstrikes hit Hezbollah positions in southern Lebanon.`, 'neutral');
             } },
             { actor: 'ISR', w: 1.5, when: () => !!conflictById('gaza'), run: () => {
-                bump('gaza', rint(2, 6)); aiHit('PSE', 0.004, 0.4);
+                bump('gaza', rint(2, 6)); aiHit('GAZ', 0.004, 0.4);
                 aiNews('ISR', `Israeli strikes in Gaza strain the ceasefire; dozens reported killed.`, 'bad');
             } },
             { actor: 'QAT', w: 1.5, when: () => (conflictById('gaza')?.intensity || 0) > 35, run: () => {
@@ -9386,7 +9522,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         const REGION_LIST = {
             gulf: ['SAU', 'ARE', 'KWT', 'QAT', 'BHR', 'IRQ', 'IRN'],
             indian: ['IND', 'PAK', 'BGD', 'LKA', 'MDV', 'OMN', 'YEM', 'DJI', 'ERI', 'SOM', 'KEN', 'TZA', 'MOZ', 'MDG', 'MUS', 'SYC', 'SDN', 'ETH', 'MMR', 'SSD', 'UGA', 'RWA', 'BDI', 'MWI', 'ZMB', 'ZWE', 'NPL', 'BTN', 'COM'],
-            med_me: ['EGY', 'ISR', 'PSE', 'LBN', 'SYR', 'JOR', 'CYP', 'TUR', 'LBY', 'TUN', 'DZA', 'MAR', 'MLT'],
+            med_me: ['EGY', 'ISR', 'PSE', 'GAZ', 'LBN', 'SYR', 'JOR', 'CYP', 'TUR', 'LBY', 'TUN', 'DZA', 'MAR', 'MLT'],
             blacksea: ['UKR', 'GEO', 'MDA'],
             russia: ['RUS'],
             inland: ['KAZ', 'UZB', 'TKM', 'KGZ', 'TJK', 'AFG', 'AZE', 'ARM', 'MNG'],
@@ -10773,7 +10909,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         //  GEOGRAPHY & DISPUTE TYPES — so advice and AI prompts stay realistic
         // =====================================================================
         const BORDER_CACHE = {}, CELL_CACHE = {};
-        const NEIGHBOR_FALLBACK = { CHN: ['RUS', 'MNG', 'KAZ', 'KGZ', 'TJK', 'AFG', 'PAK', 'IND', 'NPL', 'BTN', 'MMR', 'LAO', 'VNM', 'PRK'], USA: ['CAN', 'MEX'], ISR: ['LBN', 'SYR', 'JOR', 'EGY', 'PSE'], LBN: ['ISR', 'SYR'] };
+        const NEIGHBOR_FALLBACK = { CHN: ['RUS', 'MNG', 'KAZ', 'KGZ', 'TJK', 'AFG', 'PAK', 'IND', 'NPL', 'BTN', 'MMR', 'LAO', 'VNM', 'PRK'], USA: ['CAN', 'MEX'], ISR: ['LBN', 'SYR', 'JOR', 'EGY', 'PSE', 'GAZ'], LBN: ['ISR', 'SYR'] };
         function cellsOf(iso) {
             if (CELL_CACHE[iso]) return CELL_CACHE[iso];
             const idx = GEO_INDEX || buildGeoIndex(); if (!idx) return null;
@@ -11024,7 +11160,7 @@ const SOC_DEF_PCT = { USA:3.4, CHN:1.7, RUS:6.3, IND:2.3, GBR:2.3, DEU:2.1, FRA:
 const SOC_INFL = { ARG:30, TUR:33, IRN:40, VEN:120, NGA:22, EGY:14, PAK:6, ETH:18, GHA:15, SYR:30, SDN:70, SSD:50, MMR:25, LBN:15, MWI:28, ZWE:15, RUS:8.5, UKR:10,
     BRA:5, MEX:4, IND:4, CHN:0.3, JPN:2.5, USA:3, GBR:3.3, DEU:2.2, FRA:1.2, ZAF:3, SAU:2, ISR:3.5, KOR:2, CHE:0.2, YEM:20, HTI:25, AFG:5, COD:12, ANG:20, AGO:20 };
 const SOC_UNEMP = { ZAF:32, ESP:11, GRC:9, ITA:6.3, FRA:7.5, TUR:8.5, EGY:6.5, NGA:5, IND:4.5, BRA:6.5, USA:4.2, GBR:4.4, DEU:3.5, JPN:2.5, CHN:5.2, RUS:2.5, SAU:3.5,
-    PSE:40, LBN:15, IRN:9, ARG:7, COL:9, SRB:9, MKD:12, BIH:12, DZA:11, TUN:16, JOR:21, IRQ:15, LKA:5, MAR:13, SYR:25, YEM:17, HTI:15, ARM:12 };
+    PSE:25, GAZ:80, LBN:15, IRN:9, ARG:7, COL:9, SRB:9, MKD:12, BIH:12, DZA:11, TUN:16, JOR:21, IRQ:15, LKA:5, MAR:13, SYR:25, YEM:17, HTI:15, ARM:12 };
 const SOC_DEBT = { JPN:236, ITA:137, USA:123, FRA:113, GBR:101, ESP:101, BEL:105, GRC:150, SGP:170, CAN:107, CHN:90, IND:82, BRA:87, DEU:63, KOR:54, AUS:48, RUS:20, SAU:26,
     TUR:25, EGY:85, ARG:85, NGA:50, PAK:70, ZAF:75, ISR:68, UKR:95, LBN:170, VEN:160, SDN:100, PRT:95, AUT:80, FIN:82, NLD:45, CHE:38, NOR:40, SWE:34, DNK:30, POL:55,
     HUN:73, ROU:55, MEX:57, COL:58, IDN:40, THA:62, MYS:63, PHL:60, VNM:36, BGD:40, ETH:40, KEN:70, GHA:80, ZMB:100, LKA:100, JOR:90, MAR:68, TUN:80, IRN:30, IRQ:42 };
@@ -11493,6 +11629,7 @@ function socApplyPolicy(o, m, fx) {
     let d = 0;
     if (mEff === 0) { fx(`The legislature stalls the measure — nothing changes`, false); return -1; }
     (o.policies || []).forEach(p => {
+        { const cost = p.k === 'tax' && p.dir > 0 ? 5 * (p.mag || 1) : p.k === 'austerity' ? 12 : (p.dir < 0 && ['welfare', 'edu', 'health', 'clean', 'safety', 'infra'].includes(p.k)) ? 6 : 0; if (cost && typeof polSpend === 'function' && !polSpend(cost)) { fx(`Parliament blocks the measure — not enough political capital (${Math.round(cost)} needed)`, false); d -= 1; return; } }
         if (p.k === 'print') {
             s.print = clamp(s.print + p.dir * 1.0 * mEff, 0, 10); fx(p.dir > 0 ? `Central bank monetises ${s.print.toFixed(1)}% of GDP a year (inflation risk)` : `Money printing ${s.print > 0 ? 'reduced to ' + s.print.toFixed(1) + '% of GDP' : 'stopped'}`, p.dir < 0); d += p.dir > 0 ? 0 : 0;
         } else if (p.k === 'rate') {
@@ -11620,9 +11757,12 @@ function socCard(ind, iso, big) {
 function renderSociety() {
     const body = document.getElementById('soc-body'); if (!body) return;
     const iso = state.playerIso, s = socOf(iso), n = nationIso(iso);
-    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['world', 'World rankings']];
+    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['world', 'World rankings'], ['politics', 'Politics'], ['treaties', 'Treaties & UN'], ['actors', 'Non-state actors']];
     let h = `<div class="flex flex-wrap gap-1 mb-3">${tabs.map(([k, l]) => `<button type="button" class="gs-btn ${socTab === k ? 'gs-btn-primary' : ''}" onclick="socSetTab('${k}')">${l}</button>`).join('')}</div>`;
-    if (socTab === 'overview') {
+    if (socTab === 'politics') h += politicsHTML();
+    else if (socTab === 'treaties') h += treatiesHTML() + unHTML();
+    else if (socTab === 'actors') h += proxiesHTML();
+    else if (socTab === 'overview') {
         const gr = getGrowth(iso);
         h += `<div class="text-[11.5px] text-slate-300 mb-2">Life in <b>${esc(state.player)}</b>: population ${formatPop(n.pop)} · GDP per capita ${formatPerCapita(n.gdp, n.pop)} · approval ${Math.round(n.stability)}%. Every index runs 0–100 unless noted; arrows compare with 1 January 2026.</div>
             <div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">${SOC_IND.map(i => socCard(i, iso)).join('')}</div>
@@ -12140,6 +12280,980 @@ async function fxPump() {
             } catch (e) { }
         }
         try { map.on('zoomend', updateZoomUI); setTimeout(updateZoomUI, 300); } catch (e) { }
+
+
+// =====================================================================
+//  NON-STATE ACTORS — armed groups, breakaway states and autonomous regions (situation on 1 January 2026)
+//  · their ground is the territorial-control map above (CTRL_LAYERS), so nothing is drawn twice
+//  · a click inside a group's area selects the group like a state, ruled by its leader
+//  · groups that already are states on the map (Hamas → Gaza Strip, Northern Cyprus, Somaliland,
+//    Polisario → Western Sahara) are governed through those states
+//  Leadership data reflects reporting up to late 2025 and may be out of date.
+// =====================================================================
+const PROXY_DEFS = [
+    { id: 'hamas', name: 'Hamas', short: 'Hamas', kind: 'militant movement', host: ['GAZ'], state: 'GAZ', patrons: ['IRN', 'QAT'], color: '#2e9e44', conf: 'gaza', S: 38, fighters: 20000, popShare: 0.8, aims: 'Armed resistance to Israel; still rules the half of Gaza west of the "yellow line" after the October 2025 ceasefire.', cities: ['Gaza City', 'Khan Younis', 'Deir al-Balah'], base: [31.5, 34.46],
+        leader: 'Khalil al-Hayya', title: 'Head of Hamas in Gaza', gov: 'Movement-run de facto authority', hq: 'Gaza City', ideology: 'Islamist nationalism', founded: 1987, em: 'HM', wiki: 'Khalil al-Hayya' },
+    { id: 'rsf', name: 'Rapid Support Forces (RSF)', short: 'RSF', state_name: 'Sudan (RSF)', kind: 'paramilitary', host: ['SDN'], key: 'RSF', patrons: ['ARE'], conf: 'sdn', S: 62, fighters: 100000, popShare: 0.3, aims: 'Seize Sudan from the army; rules all of Darfur and much of Kordofan through its "Tasis" parallel government.', cities: ['El Fasher', 'Nyala', 'El Geneina', 'Babanusa'], base: [12.05, 24.88],
+        leader: 'Mohamed Hamdan Dagalo ("Hemedti")', title: 'RSF commander · Chairman of the Presidential Council', gov: 'Parallel government ("Tasis" alliance)', hq: 'Nyala', ideology: 'Paramilitary power-seeking', founded: 2013, em: 'RSF', wiki: 'Mohamed Hamdan Dagalo' },
+    { id: 'splmn', name: 'SPLM-North (al-Hilu)', short: 'SPLM-N', state_name: 'Nuba Mountains (SPLM-N)', kind: 'rebel movement', host: ['SDN'], key: 'SPLMN', patrons: [], conf: 'sdn', S: 40, fighters: 30000, popShare: 0.03, aims: 'Secular self-rule for the Nuba Mountains; allied with the RSF since 2025.', cities: ['Kauda'], base: [11.03, 30.5],
+        leader: 'Abdelaziz al-Hilu', title: 'Chairman, SPLM-North', gov: 'Rebel administration in the Nuba Mountains', hq: 'Kauda', ideology: 'Secular regional autonomy', founded: 2011, em: 'SPL', wiki: 'Abdelaziz al-Hilu' },
+    { id: 'houthi', name: 'Houthis (Ansar Allah)', short: 'Houthis', state_name: 'Yemen (Houthis)', kind: 'insurgent government', host: ['YEM'], key: 'HOUTHI', patrons: ['IRN'], conf: 'yem', S: 66, fighters: 200000, popShare: 0.65, aims: 'Rule Yemen; confront Israel and shipping in the Red Sea.', cities: ["Sana'a", 'Saada', 'Hodeidah'], base: [15.35, 44.2],
+        leader: 'Abdul-Malik al-Houthi', title: 'Leader of Ansar Allah', gov: "Revolutionary government ruling Sana'a", hq: "Sana'a", ideology: 'Zaidi Shia Islamism', founded: 2004, em: 'AA', wiki: 'Abdul-Malik al-Houthi' },
+    { id: 'stc', name: 'Southern Transitional Council', short: 'STC', state_name: 'South Yemen (STC)', kind: 'separatist authority', host: ['YEM'], key: 'STC', patrons: ['ARE'], conf: 'yem', S: 50, fighters: 90000, popShare: 0.2, aims: 'Restore an independent South Yemen; on 1 January 2026 it held Aden and the whole south and east.', cities: ['Aden', 'Mukalla'], base: [12.8, 45.03],
+        leader: 'Aidarus al-Zubaidi', title: 'President of the Southern Transitional Council', gov: 'Southern separatist council', hq: 'Aden', ideology: 'Southern secessionism', founded: 2017, em: 'STC', wiki: 'Aidarus al-Zoubaidi' },
+    { id: 'm23', name: 'M23 / Congo River Alliance', short: 'M23', state_name: 'Kivu (M23)', kind: 'rebel movement', host: ['COD'], key: 'M23', patrons: ['RWA'], conf: 'drc', S: 58, fighters: 8000, popShare: 0.06, aims: 'Control the Kivus; parallel administration in Goma and Bukavu.', cities: ['Goma', 'Bukavu'], base: [-1.68, 29.22],
+        leader: 'Corneille Nangaa', title: 'Coordinator, Congo River Alliance (M23/AFC)', gov: 'Rebel parallel administration', hq: 'Goma', ideology: 'Armed rebel movement', founded: 2012, em: 'M23', wiki: 'Corneille Nangaa' },
+    { id: 'hezbollah', name: 'Hezbollah', short: 'Hezbollah', state_name: 'Hezbollah areas (Lebanon)', kind: 'militant movement & political party', host: ['LBN'], key: 'HEZ', patrons: ['IRN'], conf: 'lbn', S: 40, fighters: 40000, popShare: 0.3, aims: 'Armed wing and political party; strongest in the south, the Bekaa and Beirut\'s southern suburbs. Refuses to disarm.', cities: ['Tyre', 'Nabatieh', 'Baalbek'], base: [33.38, 35.48],
+        leader: 'Naim Qassem', title: 'Secretary-General', gov: 'Party-militia inside a state', hq: 'Beirut (Dahiyeh)', ideology: 'Shia Islamism', founded: 1985, em: 'HZ', wiki: 'Naim Qassem',
+        shared: { title: 'Lebanese government & Hezbollah', sides: [
+            { name: 'Lebanese government', who: 'President Joseph Aoun · PM Nawaf Salam', pct: 45, color: '#60a5fa', note: 'Army deployed south of the Litani under the 2024 ceasefire' },
+            { name: 'Hezbollah', who: 'Secretary-General Naim Qassem', pct: 55, color: '#e8c22e', note: 'Dominant in the south, the Baalbek–Hermel Bekaa and Dahiyeh; refuses to disarm' }] } },
+    { id: 'jnim', name: 'JNIM (al-Qaeda affiliate)', short: 'JNIM', state_name: 'Sahel (JNIM)', kind: 'jihadist insurgency', host: ['MLI', 'BFA'], key: 'JNIM', patrons: [], conf: 'sahel', S: 60, fighters: 6000, popShare: 0.25, aims: 'Impose sharia; blockade Bamako; hold rural Mali and Burkina Faso.', cities: ['Djibo', 'Kayes region'], base: [14.4, -1.6],
+        leader: 'Iyad Ag Ghaly', title: 'Emir of JNIM', gov: 'Jihadist emirate-style rule', hq: 'Central Mali (undisclosed)', ideology: 'Salafi-jihadism', founded: 2017, em: 'JN', wiki: 'Iyad Ag Ghaly' },
+    { id: 'shabaab', name: 'al-Shabaab', short: 'al-Shabaab', state_name: 'Somalia (al-Shabaab)', kind: 'jihadist insurgency', host: ['SOM'], key: 'SHABAAB', patrons: [], conf: 'som', S: 55, fighters: 12000, popShare: 0.2, aims: 'Overthrow the federal government; governs rural central and southern Somalia.', cities: ['Jilib', 'Bu\'aale'], base: [0.49, 42.77],
+        leader: 'Ahmed Diriye (Abu Ubaidah)', title: 'Emir of al-Shabaab', gov: 'Jihadist shadow state', hq: 'Jilib area', ideology: 'Salafi-jihadism', founded: 2006, em: 'AS', wiki: 'Ahmed Umar Abu Ubaidah' },
+    { id: 'sdf', name: 'Syrian Democratic Forces (SDF)', short: 'SDF', state_name: 'North-East Syria (SDF)', kind: 'autonomous Kurdish-led force', host: ['SYR'], key: 'SDF', patrons: ['USA'], conf: 'syr', S: 52, fighters: 60000, popShare: 0.12, aims: 'Autonomy for north-east Syria; integration talks with Damascus have stalled.', cities: ['Hasakah', 'Qamishli', 'Raqqa'], base: [36.5, 40.7],
+        leader: 'Mazloum Abdi', title: 'Commander-in-chief, SDF', gov: 'Autonomous Administration of North and East Syria', hq: 'Qamishli', ideology: 'Democratic confederalism', founded: 2015, em: 'SDF', wiki: 'Mazloum Abdi' },
+    // after the July 2025 massacres the Druze of Jabal al-Arab run their own affairs under Sheikh Hikmat al-Hijri,
+    // with a "National Guard" and Israeli backing (air strikes on government forces, aid, calls for a "Jabal Bashan" state)
+    { id: 'sweida', name: 'Suwayda Druze (National Guard)', short: 'Suwayda', state_name: 'Suwayda (Druze)', kind: 'breakaway Druze authority', host: ['SYR'], key: 'DRUZE', patrons: ['ISR'], conf: 'syr', S: 35, fighters: 12000, popShare: 0.02, aims: 'Druze self-rule in Jabal al-Arab after the July 2025 massacres; Sheikh al-Hijri calls for an independent "Jabal Bashan" under Israeli protection.', cities: ['Suwayda', 'Shahba', 'Salkhad'], base: [32.71, 36.57],
+        leader: 'Hikmat al-Hijri', title: 'Druze spiritual leader · head of the Supreme Legal Committee', gov: 'Druze self-administration (Supreme Legal Committee, National Guard)', hq: 'Suwayda', ideology: 'Druze self-determination, backed by Israel', founded: 2025, em: 'DZ', wiki: 'Hikmat al-Hijri' },
+    { id: 'krg', name: 'Kurdistan Regional Government', short: 'KRG', state_name: 'Kurdistan Region', kind: 'autonomous region', host: ['IRQ'], key: 'KRG', patrons: ['USA', 'TUR'], conf: null, S: 30, fighters: 150000, popShare: 0.15, aims: 'Autonomous Kurdish government in northern Iraq with its own Peshmerga.', cities: ['Erbil', 'Sulaymaniyah', 'Duhok'], base: [36.19, 44.01],
+        leader: 'Nechirvan Barzani', title: 'President of the Kurdistan Region (PM: Masrour Barzani)', gov: 'Autonomous parliamentary region', hq: 'Erbil', ideology: 'Kurdish autonomy', founded: 1992, em: 'KRG', wiki: 'Nechirvan Barzani' },
+    { id: 'aa', name: 'Arakan Army', short: 'Arakan Army', state_name: 'Arakan (Arakan Army)', kind: 'ethnic armed organisation', host: ['MMR'], key: 'AA', patrons: [], conf: 'mmr', S: 55, fighters: 30000, popShare: 0.04, aims: 'Self-rule for Rakhine; controls 14 of its 17 townships.', cities: ['Mrauk-U', 'Paletwa'], base: [20.59, 93.19],
+        leader: 'Twan Mrat Naing', title: 'Commander-in-chief, Arakan Army', gov: 'United League of Arakan administration', hq: 'Rakhine State', ideology: 'Rakhine self-rule', founded: 2009, em: 'AA', wiki: 'Twan Mrat Naing' },
+    { id: 'kia', name: 'Kachin Independence Army', short: 'KIA', state_name: 'Kachin (KIA)', kind: 'ethnic armed organisation', host: ['MMR'], key: 'KIA', patrons: [], conf: 'mmr', S: 50, fighters: 30000, popShare: 0.012, aims: 'Kachin self-rule in northern Myanmar; fighting the junta.', cities: ['Laiza', 'Bhamo area'], base: [24.77, 97.56],
+        leader: "N'Ban La", title: 'Commander-in-chief, Kachin Independence Army', gov: 'Kachin Independence Organisation administration', hq: 'Laiza', ideology: 'Kachin self-rule', founded: 1961, em: 'KIA', wiki: "N'Ban La" },
+    { id: 'uwsa', name: 'United Wa State Army', short: 'Wa State', state_name: 'Wa State', kind: 'autonomous armed region', host: ['MMR'], key: 'UWSA', patrons: ['CHN'], conf: 'mmr', S: 55, fighters: 30000, popShare: 0.012, aims: 'Self-governing Wa region on the Chinese border, effectively a one-party state.', cities: ['Pangkham'], base: [22.17, 99.18],
+        leader: 'Bao Youxiang', title: 'Chairman, United Wa State Party', gov: 'One-party autonomous region', hq: 'Pangkham', ideology: 'Wa autonomy', founded: 1989, em: 'UWS', wiki: 'Bao Youxiang' },
+    { id: 'lna', name: 'Libyan National Army', short: 'LNA', state_name: 'Eastern Libya (LNA)', kind: 'rival government force', host: ['LBY'], key: 'LNA', patrons: ['ARE', 'EGY', 'RUS'], conf: null, S: 60, fighters: 80000, popShare: 0.4, aims: 'Eastern authority in Benghazi that rules Cyrenaica and Fezzan separately from Tripoli.', cities: ['Benghazi', 'Tobruk', 'Sabha'], base: [32.1, 20.1],
+        leader: 'Khalifa Haftar', title: 'Field Marshal, LNA commander', gov: 'Eastern military-backed government', hq: 'Benghazi', ideology: 'Military authority', founded: 2014, em: 'LNA', wiki: 'Khalifa Haftar' },
+    { id: 'polisario', name: 'Polisario Front', short: 'Polisario', kind: 'separatist movement', host: ['ESH'], state: 'ESH', patrons: ['DZA'], conf: null, S: 30, fighters: 7000, popShare: 1, aims: 'Independence for Western Sahara; holds the "Free Zone" east of the Moroccan berm.', cities: ['Tifariti'], base: [26.15, -10.55],
+        leader: 'Brahim Ghali', title: 'Secretary-General · President of the SADR', gov: 'Government-in-exile with camps near Tindouf', hq: 'Tifariti / Rabouni', ideology: 'Sahrawi independence', founded: 1973, em: 'PF', wiki: 'Brahim Ghali' },
+    { id: 'tplf', name: 'Tigray authorities (TPLF)', short: 'TPLF', state_name: 'Tigray (TPLF)', kind: 'regional authority', host: ['ETH'], key: 'TIGRAY', patrons: ['ERI'], conf: 'eth', S: 35, fighters: 50000, popShare: 0.06, aims: 'Autonomy for Tigray; split with the federal government.', cities: ['Mekelle'], base: [13.5, 39.47],
+        leader: 'Debretsion Gebremichael', title: 'TPLF chairman (interim administration led by Tadesse Werede)', gov: 'Regional administration', hq: 'Mekelle', ideology: 'Tigrayan autonomy', founded: 1975, em: 'TPL', wiki: 'Debretsion Gebremichael' },
+    { id: 'transnistria', name: 'Transnistria', short: 'Transnistria', state_name: 'Transnistria', kind: 'breakaway state', host: ['MDA'], key: 'TRANSNISTRIA', patrons: ['RUS'], conf: null, S: 25, fighters: 7500, popShare: 0.12, aims: 'Unrecognised breakaway state with a Russian garrison.', cities: ['Tiraspol', 'Bender'], base: [46.84, 29.63],
+        leader: 'Vadim Krasnoselsky', title: 'President (unrecognised)', gov: 'Presidential republic, unrecognised', hq: 'Tiraspol', ideology: 'Russia-aligned separatism', founded: 1990, em: 'PMR', wiki: 'Vadim Krasnoselsky' },
+    { id: 'abkhazia', name: 'Abkhazia', short: 'Abkhazia', state_name: 'Abkhazia', kind: 'breakaway state', host: ['GEO'], key: 'ABKH', patrons: ['RUS'], conf: null, S: 25, fighters: 4000, popShare: 0.065, aims: 'Russian-backed breakaway republic on the Black Sea, recognised by Russia since 2008.', cities: ['Sukhumi', 'Gagra'], base: [43.0, 41.02],
+        leader: 'Badra Gunba', title: 'President of Abkhazia (unrecognised)', gov: 'Presidential republic recognised by Russia', hq: 'Sukhumi', ideology: 'Russia-aligned separatism', founded: 1992, em: 'AB', wiki: 'Badra Gunba' },
+    { id: 'sossetia', name: 'South Ossetia', short: 'South Ossetia', state_name: 'South Ossetia', kind: 'breakaway state', host: ['GEO'], key: 'SOSS', patrons: ['RUS'], conf: null, S: 25, fighters: 2500, popShare: 0.014, aims: 'Russian-backed breakaway region north of Tbilisi; Russian troops since 2008.', cities: ['Tskhinvali', 'Akhalgori'], base: [42.23, 43.97],
+        leader: 'Alan Gagloev', title: 'President of South Ossetia (unrecognised)', gov: 'Presidential republic recognised by Russia', hq: 'Tskhinvali', ideology: 'Union with North Ossetia (Russia)', founded: 1991, em: 'SO', wiki: 'Alan Gagloev' },
+    { id: 'vivansanm', name: 'Viv Ansanm gang coalition', short: 'Viv Ansanm', state_name: 'Port-au-Prince (Viv Ansanm)', kind: 'criminal armed groups', host: ['HTI'], key: 'GANGS', patrons: [], conf: 'hti', S: 62, fighters: 12000, popShare: 0.35, aims: 'Control Port-au-Prince and the roads out of it.', cities: ['Port-au-Prince', 'Mirebalais'], base: [18.54, -72.34],
+        leader: 'Jimmy "Barbecue" Chérizier', title: 'Leader of the Viv Ansanm coalition', gov: 'Gang coalition extorting districts', hq: 'Port-au-Prince', ideology: 'Criminal rule', founded: 2024, em: 'VA', wiki: 'Jimmy Chérizier' },
+    { id: 'sinaloa', name: 'Sinaloa cartel factions', short: 'Sinaloa cartel', kind: 'criminal organisation', host: ['MEX'], patrons: [], conf: null, S: 48, fighters: 30000, popShare: 0.03, aims: 'Drug trafficking; dominates parts of Sinaloa and Sonora.', cities: ['Culiacán'], base: [24.8, -107.39], color: '#94a3b8',
+        leader: 'Iván Archivaldo Guzmán', title: 'Leader, Los Chapitos faction (rival: La Mayiza)', gov: 'Criminal organisation, split into factions', hq: 'Culiacán', ideology: 'Drug trafficking', founded: 1989, em: 'SC', wiki: 'Iván Archivaldo Guzmán Salazar' },
+    { id: 'eln', name: 'ELN & FARC dissidents', short: 'ELN/FARC dissidents', kind: 'guerrilla groups', host: ['COL'], patrons: ['VEN'], conf: null, S: 40, fighters: 6000, popShare: 0.03, aims: 'Guerrilla control around Catatumbo, Cauca and the Venezuelan border.', cities: ['Tibú'], base: [8.65, -72.73], color: '#65a30d',
+        leader: 'Antonio García', title: 'ELN commander (FARC dissidents: Iván Mordisco)', gov: 'Guerrilla commands', hq: 'Arauca / Catatumbo', ideology: 'Marxist guerrilla / criminal economy', founded: 1964, em: 'ELN', wiki: 'Antonio García (guerrilla)' },
+    { id: 'trnc', name: 'Northern Cyprus (TRNC)', short: 'N. Cyprus', kind: 'breakaway state', host: ['CYN'], state: 'CYN', patrons: ['TUR'], conf: null, S: 30, fighters: 3500, popShare: 1, aims: 'Turkish-Cypriot state in the north of Cyprus since 1974, protected by Turkish troops.', cities: ['North Nicosia', 'Kyrenia'], base: [35.2, 33.5],
+        leader: 'Tufan Erhürman', title: 'President of Northern Cyprus (unrecognised)', gov: 'Parliamentary republic recognised only by Türkiye', hq: 'North Nicosia', ideology: 'Turkish-Cypriot statehood', founded: 1983, em: 'TR', wiki: 'Tufan Erhürman' },
+    { id: 'somaliland', name: 'Somaliland', short: 'Somaliland', kind: 'breakaway state', host: ['SOL'], state: 'SOL', patrons: [], conf: null, S: 40, fighters: 20000, popShare: 1, aims: 'Self-declared independent republic since 1991; unrecognised.', cities: ['Hargeisa', 'Berbera'], base: [9.56, 44.06],
+        leader: 'Abdirahman Mohamed Abdullahi "Irro"', title: 'President of Somaliland', gov: 'Presidential republic, unrecognised', hq: 'Hargeisa', ideology: 'Independence from Somalia', founded: 1991, em: 'SL', wiki: 'Abdirahman Mohamed Abdullahi' }
+];
+PROXY_DEFS.forEach(d => { if (!d.color) d.color = d.key && CTRL_META[d.key] ? CTRL_META[d.key][1] : '#94a3b8'; });
+const PROXY_ALIASES = { hamas: ['hamas'], rsf: ['rsf', 'rapid support forces', 'hemedti'], splmn: ['splm n', 'splm north', 'spla n', 'al hilu'], houthi: ['houthi', 'houthis', 'ansar allah'], stc: ['stc', 'southern transitional council', 'south yemen'],
+    m23: ['m23', 'afc', 'congo river alliance'], hezbollah: ['hezbollah', 'hizballah', 'hizbollah'], jnim: ['jnim'], shabaab: ['al shabaab', 'shabaab'], sdf: ['sdf', 'syrian democratic forces', 'syrian kurds'],
+    sweida: ['suwayda', 'sweida', 'as suwayda', 'druze', 'syrian druze', 'jabal bashan', 'druze national guard', 'hijri'], krg: ['krg', 'kurdistan regional government', 'kurdistan region', 'iraqi kurdistan', 'peshmerga'],
+    aa: ['arakan army'], kia: ['kia', 'kachin independence army', 'kachin'], uwsa: ['wa state', 'united wa state army', 'uwsa'], lna: ['lna', 'haftar', 'libyan national army'], polisario: ['polisario'], tplf: ['tplf', 'tigray authorities'],
+    transnistria: ['transnistria'], abkhazia: ['abkhazia'], sossetia: ['south ossetia'], vivansanm: ['viv ansanm', 'haitian gangs', 'haiti gangs', 'barbecue'], sinaloa: ['sinaloa cartel', 'sinaloa'], eln: ['eln', 'farc dissidents'],
+    trnc: ['trnc'], somaliland: [] };
+const PROXY_FLAVOR = ['{s} fighters ambush a convoy near {c}.', '{s} drones strike {h} positions around {c}.', '{s} imposes taxes on traders in {c}.', '{s} announces a new offensive near {c}.', 'Aid agencies report {s} checkpoints blocking supplies to {c}.', '{s} recruits hundreds of new fighters in {c}.'];
+// the area each group governs on the control map: "host|key" → group
+const GROUP_AT = {}, GROUP_HOSTS = new Set();
+PROXY_DEFS.forEach(d => { if (d.key) d.host.forEach(h => { GROUP_AT[h + '|' + d.key] = d.id; GROUP_HOSTS.add(h); }); });
+
+// text colour for a group: very dark map colours (JNIM, al-Shabaab) are lifted so names stay readable on the dark UI
+function pxText(col) { const [r, g, b] = hex2rgb(col || '#94a3b8'); return 0.299 * r + 0.587 * g + 0.114 * b < 95 ? '#b9b19a' : col; }
+function proxyList() { return state.proxies || []; }
+function proxyById(id) { return proxyList().find(p => p.id === id); }
+// a group is not a "non-state actor" inside the state it governs (e.g. Hamas in the Gaza Strip)
+function proxiesIn(iso) { return proxyList().filter(p => p.host.includes(iso) && p.status !== 'dissolved' && p.state !== iso); }
+function proxyNew(d) {
+    const p = { ...JSON.parse(JSON.stringify(d)), S0: d.S, status: 'active', aid: {}, pressure: 0, legit: 40 };
+    p.patrons.forEach(x => p.aid[x] = 0.6); return p;
+}
+function proxyInit() { state.proxies = PROXY_DEFS.map(proxyNew); }
+// older saves: add new groups, refresh the descriptive fields (never the live numbers)
+function proxyMigrate() {
+    if (!state.proxies) return proxyInit();
+    state.proxies = state.proxies.filter(p => PROXY_DEFS.some(d => d.id === p.id));
+    PROXY_DEFS.forEach(d => {
+        const p = proxyById(d.id);
+        if (!p) { state.proxies.push(proxyNew(d)); return; }
+        ['name', 'short', 'state_name', 'kind', 'host', 'state', 'key', 'color', 'conf', 'aims', 'cities', 'base', 'leader', 'title', 'gov', 'hq', 'ideology', 'founded', 'em', 'wiki', 'shared', 'popShare', 'fighters'].forEach(k => { if (d[k] !== undefined) p[k] = JSON.parse(JSON.stringify(d[k])); });
+    });
+}
+function proxyGrowth(p) { return clamp(p.S / Math.max(1, p.S0), 0.3, 1.8); }
+// land and people the group holds, read off the same control map the player sees
+function proxyTerritory(p) {
+    if (p.state && WORLD[p.state]) return { share: 1, km2: 0, pop: nationIso(p.state).pop, where: shortName(p.state) };
+    let km2 = 0, share = 0;
+    if (p.key) p.host.forEach(h => { try { const x = territoryOf(h).others.find(o => o.key === p.key); if (x) { km2 += x.km2; share = Math.max(share, x.pct / 100); } } catch (e) { } });
+    const hostPop = p.host.reduce((a, h) => a + (WORLD[h] ? nationIso(h).pop : 0), 0);
+    return { share, km2, pop: Math.round(hostPop * clamp(p.popShare * proxyGrowth(p), 0, 0.95)), where: p.host.map(shortName).join(' & ') };
+}
+function powerBase(iso) { const w = WORLD[iso]; return w ? Math.sqrt(w[2]) * (MILF[iso] || 1) : 1; }
+
+function proxiesMonthly() {
+    if (!state.proxies) proxyInit();
+    const me = state.playerIso;
+    state.proxies.forEach(p => {
+        if (p.status === 'dissolved') return;
+        const host = p.host[0]; if (!WORLD[host]) return;
+        const prev = p.S;
+        const aid = p.patrons.concat(Object.keys(p.aid).filter(x => !p.patrons.includes(x))).reduce((a, x) => a + (p.aid[x] || 0) * (x === me ? 1 : Math.max(0.3, 0.5 + getRel(x, host) / -200)), 0);
+        const aid0 = p.patrons.length * 0.6 * 0.7;
+        const hostRatio = Math.log(Math.max(0.3, power(host) / Math.max(1, powerBase(host))));
+        const T = p.S0 + 22 * (aid - aid0) - 18 * Math.min(2, p.pressure) - 14 * hostRatio;
+        p.S = clamp(p.S + 0.07 * (T - p.S) + (Math.random() - 0.5) * 1.6, 3, 95);
+        p.pressure *= 0.88;
+        p.legit = clamp(p.legit + (Math.random() - 0.5) * 2, 0, 100);
+        const c = p.conf && state.conflicts.find(k => k.id === p.conf);
+        if (c) c.intensity = clamp(c.intensity + 0.2 * (p.S - prev), 0, 100);
+        // monthly headlines
+        if (Math.random() < 0.28) {
+            const city = pick(p.cities), hf = flagHTML(nationIso(host), 10);
+            if (p.S - p.S0 > 6 && Math.random() < 0.3) logEvent(`${hf} <b>${esc(p.short)}</b> gains ground near ${esc(city)}.`, 'bad');
+            else if (p.S0 - p.S > 6 && Math.random() < 0.3) logEvent(`${hf} ${esc(p.short)} loses ground near ${esc(city)} to ${esc(shortName(host))} forces.`, 'good');
+            else logEvent(`${hf} ${esc(PROXY_FLAVOR[rint(0, PROXY_FLAVOR.length - 1)].replace('{s}', p.short).replace('{c}', city).replace('{h}', shortName(host)))}`, 'neutral');
+        }
+        // Houthi maritime pressure on trade and oil
+        if (p.id === 'houthi' && p.S > 45 && Math.random() < 0.12) { state.oilShock = Math.max(state.oilShock || 0, 0.25); logEvent(`Houthi missile and drone attacks disrupt Red Sea shipping; insurers raise war-risk premiums.`, 'bad'); }
+        if (p.id === 'm23' && p.S > 55 && Math.random() < 0.08) logEvent(`Mineral smuggling through M23-held areas is reported to be worth tens of millions of dollars a month.`, 'neutral');
+        // host government stability
+        const hn = nationIso(host); hn.stability = clamp(hn.stability + (p.S - prev) * -0.15, 0, 100);
+    });
+}
+
+// ---- orders: "Arm the Houthis", "Strike Hezbollah", "Open talks with the SDF", "Sanction Hamas" ----
+const PROXY_ACT = [
+    ['cut', /\b(stop|cut|end|halt|withdraw|suspend|cease)\b.{0,25}\b(support|aid|funding|fund|arms|weapons|backing)/],
+    ['strike', /\b(strike|bomb|attack|raid|destroy|hit|target|eliminate|assassinat\w*|airstrike|decapitat\w*)/],
+    ['arm', /\b(arm|arms|weapons|supply|equip|train|deliver|drones|missiles|ammunition)\b/],
+    ['fund', /\b(fund|finance|bankroll|back|support|subsidi[sz]e|money|cash|aid)\b/],
+    ['sanction', /\b(sanction|designate|blacklist|terror(ist)? list|freeze|embargo)/],
+    ['negotiate', /\b(negotiate|talks|talk|ceasefire|truce|engage|meet|mediate|dialogue|deal)\b/],
+    ['recognize', /\b(recogni[sz]e|recognition)\b/]
+];
+function proxyOrderOf(text) {
+    if (!state.proxies || !state.playerIso) return null;
+    const s = ' ' + normName(text) + ' ';
+    const p = state.proxies.find(x => x.status !== 'dissolved' && !(x.state && x.state === state.playerIso) && (PROXY_ALIASES[x.id] || []).some(a => s.includes(' ' + a + ' ')));
+    if (!p) return null;
+    // a group that is a state on the map (Hamas → Gaza Strip, Polisario → Western Sahara…) takes ordinary military orders
+    // through that state, except for the actions only a group can receive
+    const t = text.toLowerCase();
+    const act = (PROXY_ACT.find(([k, rx]) => rx.test(t)) || [])[0];
+    if (!act) return null;
+    if (p.state && act === 'strike') return null;
+    if (p.host.includes(state.playerIso) && ['arm', 'fund'].includes(act) && p.id !== 'krg') return null;   // arming rebels against yourself makes no sense
+    return { cat: 'intelligence', kind: 'proxy', proxyId: p.id, act, hostIso: p.host[0], targets: [], scale: /massive|major|large|full|heavy/.test(t) ? 1.6 : /limited|small|modest|quiet/.test(t) ? 0.6 : 1, covert: /covert|secret|quiet|deniable|clandestine/.test(t), blocs: [] };
+}
+const PROXY_COST = { strike: 0.0006, arm: 0.0012, fund: 0.0008, sanction: 0.00005, negotiate: 0.00003, cut: 0.00001, recognize: 0.00001 };
+function proxyResolve(o) {
+    const me = state.playerIso, pn = nationIso(me), a = proxyById(o.proxyId), host = o.hostIso;
+    if (!a) { o.outcome = 'Failure'; o.effects = [{ txt: 'The group no longer exists', good: false }]; return o; }
+    const prob = clamp(0.62 + (pn.stability - 50) / 300 + D().prob + (o.act === 'negotiate' ? 0.05 : 0) + (o.covert ? 0.05 : 0), 0.08, 0.92);
+    const outcome = rollOutcome(prob), m = OUT_MULT[outcome], mE = Math.max(m, 0);
+    o.outcome = outcome; const effects = []; const fx = (txt, good) => effects.push({ txt, good });
+    const hn = shortName(host), hostRel = getRel(me, host), others = a.patrons.filter(x => x !== me && WORLD[x]);
+    const exposed = o.covert ? Math.random() < (outcome === 'Failure' ? 0.5 : 0.12) : true;
+    const selfHost = host === me;
+    switch (o.act) {
+        case 'arm': case 'fund': {
+            const dS = (o.act === 'arm' ? 4 : 2.5) * mE * o.scale;
+            a.aid[me] = clamp((a.aid[me] || 0) + (o.act === 'arm' ? 0.25 : 0.18) * mE * o.scale, 0, 1); if (mE > 0 && !a.patrons.includes(me)) a.patrons.push(me);
+            a.S = clamp(a.S + dS, 3, 95);
+            if (mE > 0) fx(`${a.short} strength +${dS.toFixed(1)}; ${state.player} is now a patron (${Math.round(a.aid[me] * 100)}% support level)`, true);
+            else fx(`The ${o.act === 'arm' ? 'shipment was intercepted' : 'money never reached'} ${a.short}`, false);
+            if (!selfHost && WORLD[host]) {
+                if (exposed) { const d = -Math.round((hostRel > 20 ? 30 : 14) * Math.max(mE, 0.3)); addRel(me, host, d); fx(`Relations with the government of ${hn} ${d} (backing its armed rival)`, false); state.cred = clamp((state.cred || 60) - 2, 0, 100); }
+                else fx('The shipment remained deniable', true);
+            }
+            a.pressure = Math.max(0, a.pressure - 0.1);
+            break; }
+        case 'strike': {
+            o.proxyBase = { lat: a.base[0], lng: a.base[1], name: (a.hq || a.short) + ' (' + a.short + ')' };
+            const dS = 7 * mE * o.scale;
+            a.S = clamp(a.S - dS, 3, 95); a.pressure += 0.35 * mE * o.scale;
+            const civ = Math.round((60 + Math.random() * 300) * (mE > 0 ? 1 : 0) * o.scale);
+            if (civ && WORLD[host]) { const n = nationIso(host); n.pop = Math.max(1000, n.pop - civ); try { socOf(host).killedCiv += civ; } catch (e) { } }
+            fx(mE > 0 ? `${a.short} struck: strength −${dS.toFixed(1)}${civ ? `, about ${civ.toLocaleString()} civilians killed` : ''}` : `The strike failed to hurt ${a.short}`, mE > 0);
+            if (!selfHost && WORLD[host]) { if (hostRel > 30) { addRel(me, host, 4); fx(`${hn} privately welcomes the strike`, true); } else { addRel(me, host, -15); fx(`${hn} protests a violation of its sovereignty (−15)`, false); } }
+            others.forEach(x => addRel(me, x, -10)); if (others.length) fx(`${others.map(shortName).join(', ')} ${others.length > 1 ? 'condemn' : 'condemns'} the attack on its ally (−10)`, false);
+            try { fxForOrder(o, outcome, host); } catch (e) { }
+            break; }
+        case 'cut': { a.aid[me] = 0; a.patrons = a.patrons.filter(x => x !== me || (PROXY_DEFS.find(d => d.id === a.id) || { patrons: [] }).patrons.includes(me)); fx(`${state.player} ends all support for ${a.short}`, true); a.S = clamp(a.S - 2, 3, 95); break; }
+        case 'sanction': { a.S = clamp(a.S - 2.5 * mE, 3, 95); a.legit = clamp(a.legit - 8 * mE, 0, 100); others.forEach(x => addRel(me, x, -6)); fx(`${a.short}'s finances squeezed: strength −${(2.5 * mE).toFixed(1)}, legitimacy −${Math.round(8 * mE)}`, mE > 0); if (!selfHost && WORLD[host]) addRel(me, host, 5 * mE); break; }
+        case 'negotiate': {
+            const c = a.conf && state.conflicts.find(k => k.id === a.conf);
+            a.legit = clamp(a.legit + 6 * mE, 0, 100);
+            if (c && mE > 0) { c.intensity = clamp(c.intensity - 10 * mE, 0, 100); fx(`Contacts with ${a.short} lower the intensity of the ${c.name} by ${Math.round(10 * mE)}`, true); if (c.intensity < 30 && c.type === 'war') { c.type = 'ceasefire'; fx(`${c.name}: ceasefire reached`, true); } }
+            else fx(mE > 0 ? `Back-channel with ${a.short} opened (legitimacy of the group +${Math.round(6 * mE)})` : `${a.short} refuses to talk`, mE > 0);
+            if (a.id !== 'krg' && !selfHost && WORLD[host]) addRel(me, host, -4);
+            break; }
+        case 'recognize': {
+            if (!selfHost && WORLD[host]) { addRel(me, host, -45); fx(`${state.player} recognises ${a.short}: relations with ${hn} −45`, false); }
+            a.legit = clamp(a.legit + 25, 0, 100); fx(`${a.short} legitimacy +25`, true);
+            others.forEach(x => addRel(me, x, 8)); break; }
+    }
+    pn.treasury = Math.max(0, pn.treasury);
+    o.effects = effects; o.doneDay = state.dayIndex; updateEconomyUI();
+    if (ENT.sel === a.id) setTimeout(() => { try { entSelect(a.id, true); } catch (e) { } }, 0);
+    return o;
+}
+{
+    const _plan = planOrder;
+    planOrder = function (text) {
+        const o = _plan(text);
+        if (o && o.kind === 'proxy') { const g = nationIso(state.playerIso).gdp; o.cost = Math.max(1e6, Math.round(g * (PROXY_COST[o.act] || 0.0001) * o.scale * D().cost)); o.days = o.act === 'strike' ? rint(1, 3) : rint(3, 8); }
+        return o;
+    };
+    const _res = resolveOrder;
+    resolveOrder = function (o) { if (o && o.kind === 'proxy') return proxyResolve(o); return _res(o); };
+    const _ft = fxTargetFor;
+    fxTargetFor = function (o, iso) { if (o && o.proxyBase) return { ...o.proxyBase, iso }; return _ft(o, iso); };
+}
+
+// ---- groups as states on the map: hover shows the ruler, a click selects the group ----
+const ENT = { sel: null, hover: null, tiles: null, sig: '' };
+function grpAt(ll) {
+    if (!state.proxies || !ll) return null;
+    let pc = null; try { pc = preciseCountryAt(ll); } catch (e) { }
+    const iso = pc ? (pc.iso && WORLD[pc.iso] ? pc.iso : resolveIso(pc.name)) : null;
+    if (!iso || !GROUP_HOSTS.has(iso)) return null;
+    let k = 'GOV'; try { k = keyAtPoint(iso, ll); } catch (e) { }
+    const id = GROUP_AT[iso + '|' + k]; if (!id) return null;
+    const p = proxyById(id); return p && p.status !== 'dissolved' ? { p, iso, key: k } : null;
+}
+// the selected group is outlined like a selected country; in the political view every group area gets a
+// border and a light tint of its own, so it reads as a state of its own
+function grpTileSig() {
+    const ctl = {}; GROUP_HOSTS.forEach(h => { if (state.control && state.control[h]) ctl[h] = state.control[h]; });
+    return [ENT.sel, MAPVIEW, JSON.stringify(ctl), proxyList().filter(p => p.status === 'dissolved').map(p => p.id).join(',')].join('|');
+}
+function grpRefresh(force) {
+    if (!state.playerIso || typeof map === 'undefined' || !map || !L.GridLayer) return;
+    if (!ENT.tiles) {
+        try { const pn = map.createPane('grpPane'); pn.style.zIndex = 404; pn.style.pointerEvents = 'none'; } catch (e) { }
+        const T = L.GridLayer.extend({
+            createTile(coords) {
+                const dpr = Math.min(2, window.devicePixelRatio || 1), c = document.createElement('canvas'); c.width = c.height = 256 * dpr; c.style.width = c.style.height = '256px';
+                try { drawCtlTile(c, coords, dpr, { isos: [...GROUP_HOSTS] }); } catch (e) { console.warn('group tile', e); }
+                return c;
+            }
+        });
+        ENT.tiles = new T({ pane: 'grpPane', tileSize: 256, updateWhenZooming: false, keepBuffer: 2, noWrap: true, bounds: [[-85, -180], [85, 180]] });
+    }
+    if (typeof geojsonLayer === 'undefined' || !geojsonLayer) return;
+    const sig = grpTileSig();
+    if (!map.hasLayer(ENT.tiles)) { ENT.tiles.addTo(map); ENT.sig = sig; return; }
+    if (force || sig !== ENT.sig) { ENT.sig = sig; ENT.tiles.redraw(); }
+}
+// called from drawCtlTile with the per-group masks of one host country (already clipped to its border)
+function grpPaintTile(ctx, masks, iso, S, dpr) {
+    const pol = MAPVIEW === 'political';
+    Object.keys(masks).forEach(k => {
+        const id = GROUP_AT[iso + '|' + k]; if (!id) return;
+        const p = proxyById(id); if (!p || p.status === 'dissolved') return;
+        const sel = ENT.sel === id; if (!sel && !pol) return;
+        // grow the area by about a pixel: closes the hairline gaps where neighbouring province shapes do not quite meet
+        const M = document.createElement('canvas'); M.width = M.height = S; const mx = M.getContext('2d'), r = 1.2 * dpr;
+        [[0, 0], [-r, 0], [r, 0], [0, -r], [0, r]].forEach(([dx, dy]) => mx.drawImage(masks[k].canvas, dx, dy));
+        // edge just inside the group's area: its pixels that touch the outside. The outside is grown rather than the area
+        // shrunk, so the borders of the 256-px map tiles never show up as lines
+        const w = Math.max(1, (sel ? 2.4 : 1.1) * dpr);
+        const out = document.createElement('canvas'); out.width = out.height = S; const ox = out.getContext('2d');
+        ox.fillStyle = '#000'; ox.fillRect(0, 0, S, S); ox.globalCompositeOperation = 'destination-out'; ox.drawImage(M, 0, 0);
+        const grow = document.createElement('canvas'); grow.width = grow.height = S; const gx = grow.getContext('2d');
+        [[-w, 0], [w, 0], [0, -w], [0, w], [-w * .7, -w * .7], [w * .7, w * .7], [-w * .7, w * .7], [w * .7, -w * .7]].forEach(([dx, dy]) => gx.drawImage(out, dx, dy));
+        const edge = document.createElement('canvas'); edge.width = edge.height = S; const ex = edge.getContext('2d');
+        ex.drawImage(M, 0, 0); ex.globalCompositeOperation = 'destination-in'; ex.drawImage(grow, 0, 0);
+        ex.globalCompositeOperation = 'source-in'; ex.fillStyle = sel ? '#ff7a45' : 'rgba(250,240,205,0.85)'; ex.fillRect(0, 0, S, S);
+        const f = document.createElement('canvas'); f.width = f.height = S; const fx = f.getContext('2d');
+        fx.globalAlpha = sel ? 0.34 : 0.2; fx.fillStyle = sel ? '#d9733f' : p.color; fx.fillRect(0, 0, S, S);
+        fx.globalAlpha = 1; fx.globalCompositeOperation = 'destination-in'; fx.drawImage(M, 0, 0);
+        ctx.drawImage(f, 0, 0); ctx.drawImage(edge, 0, 0);
+    });
+}
+(function () {
+    const cont = map.getContainer(); let tip = null, lastMove = 0;
+    const skip = t => t && t.closest && t.closest('.leaflet-marker-icon, .leaflet-popup, .leaflet-control, .leaflet-tooltip, path.leaflet-interactive');
+    cont.addEventListener('click', ev => {
+        if (state.phase !== 'playing' || state.pinMode || skip(ev.target)) return;
+        const ll = map.mouseEventToLatLng(ev), g = grpAt(ll); if (!g) return;
+        ev.stopPropagation(); ev.preventDefault();
+        if (!clickAllowed()) return;                 // click that ended a zoom/pan
+        cancelPendingClick();
+        pendingCountryClick = setTimeout(() => { pendingCountryClick = null; if (clickAllowed()) { playClick(); entSelect(g.p.id); } }, 190);
+    }, true);
+    const hide = () => { if (ENT.hover) { ENT.hover = null; cont.style.cursor = ''; } if (tip) { map.removeLayer(tip); tip = null; } };
+    cont.addEventListener('mouseleave', hide);
+    cont.addEventListener('mousemove', ev => {
+        const now = performance.now(); if (now - lastMove < 70) return; lastMove = now;
+        if (state.phase !== 'playing' || mapMoving || skip(ev.target)) { hide(); return; }
+        const ll = map.mouseEventToLatLng(ev), g = grpAt(ll);
+        if (!g) { hide(); return; }
+        try { if (geojsonLayer) geojsonLayer.eachLayer(l => l.isTooltipOpen && l.isTooltipOpen() && l.closeTooltip()); } catch (e) { }
+        if (ENT.hover === g.p.id && tip) { tip.setLatLng(ll); return; }
+        ENT.hover = g.p.id; cont.style.cursor = 'pointer';
+        if (tip) map.removeLayer(tip);
+        const p = g.p, ruler = p.shared ? p.shared.sides.map(x => x.who.split(' · ')[0].replace(/^(President|Secretary-General) /, '')).join(' & ') : p.leader;
+        tip = L.tooltip({ className: 'country-tooltip', direction: 'top', offset: [0, -8] }).setLatLng(ll)
+            .setContent(`<b>${esc(p.state_name || p.name)}</b><br>${p.shared ? 'Shared influence: ' : 'Ruled by '}${esc(ruler || '—')}<br><span style="color:#94a3b8">${esc(p.kind)} · inside ${esc(p.host.map(shortName).join(' & '))}</span>`).addTo(map);
+    });
+})();
+
+// ---- the profile panel: who rules here, like any country ----
+function entRelation(p) {
+    const me = state.playerIso; if ((p.aid[me] || 0) > 0) return [60, 'Your client'];
+    if (p.host.includes(me)) { const r = -Math.round(30 + p.S * 0.6); return [r, relLabel(r)[0]]; }
+    const pats = p.patrons.filter(x => (p.aid[x] || 0) > 0 && x !== me && WORLD[x]); let r = 0;
+    if (pats.length) r += pats.reduce((a, x) => a + getRel(me, x), 0) / pats.length * 0.6;
+    if (WORLD[p.host[0]]) r -= getRel(me, p.host[0]) * 0.4;
+    r = Math.round(clamp(r, -100, 100)); return [r, relLabel(r)[0]];
+}
+function entSelect(id, keepView) {
+    const p = proxyById(id); if (!p) return;
+    if (p.state && WORLD[p.state]) { const nm = isoToName(p.state); try { const l = nameLayer[nm]; if (l) l.fire('click', { latlng: l.getBounds().getCenter(), _now: true, _exact: true, target: l }); else updateTargetUI(nm); } catch (e) { updateTargetUI(nm); } return; }
+    // un-highlight the country that was selected before
+    try { if (targetFeature && targetFeature !== playerFeature) geojsonLayer.resetStyle(targetFeature); targetFeature = null; if (playerFeature) playerFeature.setStyle(getHighlightStyle('player')); } catch (e) { }
+    ENT.sel = id; state.targetProxy = id; state.target = null;     // the daily panel refresh and society tiles then leave the group's profile alone
+    document.getElementById('target-placeholder').classList.add('hidden'); document.getElementById('target-data').classList.remove('hidden');
+    document.getElementById('target-flag').innerHTML = `<span class="px-emblem" style="background:${p.color}">${esc((p.em || p.short).slice(0, 3))}</span>`;
+    document.getElementById('target-country-name').textContent = p.state_name || p.name;
+    const roleEl = document.getElementById('target-leader-role'), nameEl = document.getElementById('target-leader-name'), noteEl = document.getElementById('target-leader-note'), img = document.getElementById('target-portrait'), fb = document.getElementById('target-portrait-fallback'), credit = document.getElementById('portrait-credit');
+    if (p.shared) { roleEl.textContent = 'Shared influence'; nameEl.textContent = p.shared.sides.map(x => x.who.split(' · ')[0].replace(/^(President|Secretary-General) /, '')).join(' & '); noteEl.textContent = p.shared.title; }
+    else { roleEl.textContent = 'Ruler'; nameEl.textContent = p.leader || 'Unknown'; noteEl.textContent = p.title || p.kind; }
+    if (ENT.portraitFor !== id) {
+    ENT.portraitFor = id;
+    fb.textContent = initials(p.leader || p.short); img.classList.add('hidden'); fb.classList.remove('hidden'); credit.classList.add('hidden');
+    const req = ++portraitReq; fetchPortrait(p.wiki || p.leader).then(url => { if (req !== portraitReq || !url) return; img.onload = () => { if (req === portraitReq) { img.classList.remove('hidden'); fb.classList.add('hidden'); credit.classList.remove('hidden'); } }; img.onerror = () => { img.classList.add('hidden'); fb.classList.remove('hidden'); }; img.src = url; }).catch(() => { });
+    }
+    const [rv, rl] = entRelation(p), col = relLabel(rv)[1]; document.getElementById('target-relation').innerHTML = `<span style="color:${col}">${rv > 0 ? '+' : ''}${rv} · ${rl}</span>`;
+    const c = p.conf && state.conflicts.find(k => k.id === p.conf), T = proxyTerritory(p), host = p.host[0], hn = nationIso(host);
+    document.getElementById('target-conflicts').innerHTML = (c ? `<span class="cc-pill" style="border-color:#f9731655;color:#fdba74">⚔ ${esc(c.name)}</span>` : '') + `<span class="cc-pill" style="border-color:${p.color}88;color:${pxText(p.color)}">${esc(p.kind)}</span>`;
+    const tile = (l, v, s, col, bar) => `<div class="gs-stat"><div class="gs-stat-lbl">${l}</div><div class="gs-stat-val" style="color:${col}">${v}</div><div class="gs-stat-sub">${s}</div>${bar !== undefined ? `<div class="gs-stat-bar"><div style="width:${bar}%;background:${col}"></div></div>` : ''}</div>`;
+    document.getElementById('target-status').innerHTML = tile('Strength', Math.round(p.S) + '<span class="gs-stat-of">/100</span>', `${p.S >= p.S0 ? '▲' : '▼'} ${Math.abs(p.S - p.S0).toFixed(0)} since start`, socColor(100 - p.S + 20), p.S) +
+        tile('Legitimacy', Math.round(p.legit), 'local & foreign standing', socColor(p.legit), p.legit) +
+        tile('Territory', T.share ? Math.round(T.share * 100) + '%' : '—', `of ${esc(T.where)}${T.km2 ? ` · ${T.km2.toLocaleString()} km²` : ''}`, p.color, T.share * 100) +
+        tile('Fighters', Math.round(p.fighters * p.S / p.S0).toLocaleString(), 'est. armed personnel', '#d8b45a');
+    const soc = document.getElementById('target-soc'); if (soc) soc.innerHTML = '';
+    const popC = T.pop, gdpC = hn.gdp * (hn.pop ? popC / hn.pop : 0) * 0.45;
+    document.getElementById('target-gdp').textContent = formatVal(gdpC); document.getElementById('target-pop').textContent = formatPop(popC); document.getElementById('target-per-capita').textContent = formatPerCapita(gdpC, popC);
+    const gEl = document.getElementById('target-growth'); gEl.textContent = 'n/a'; gEl.style.color = '';
+    // who rules, how, from where — and what you can do about it
+    let ex = document.getElementById('proxy-extra');
+    if (!ex) { ex = document.createElement('div'); ex.id = 'proxy-extra'; const anchor = document.getElementById('target-status').parentNode; anchor.parentNode.insertBefore(ex, anchor.nextSibling); }
+    const pats = p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).map(x => `${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} (${Math.round(p.aid[x] * 100)}%)`).join(', ') || 'none known';
+    const row = (k, v) => `<div class="pe-row"><span>${k}</span><span style="text-align:right">${v}</span></div>`;
+    const sh = p.shared ? `<div class="gs-section" style="margin-top:6px">Shared influence</div><div style="display:flex;height:8px;border-radius:2px;overflow:hidden;margin:4px 0 6px">${p.shared.sides.map(x => `<div style="width:${x.pct}%;background:${x.color}"></div>`).join('')}</div>` +
+        p.shared.sides.map(x => `<div class="text-[11px]" style="border-left:3px solid ${x.color};padding-left:6px;margin-bottom:5px"><b style="color:${x.color}">${esc(x.name)}</b> · ${x.pct}%<br><span class="text-slate-300">${esc(x.who)}</span><br><span class="text-slate-500">${esc(x.note)}</span></div>`).join('') : '';
+    const hostLink = `<a href="#" onclick="event.preventDefault();entHost('${p.id}')" style="color:#d8b45a">${flagHTML(nationIso(host), 10)} ${esc(shortName(host))}</a>`;
+    const acts = p.host.includes(state.playerIso) ? [['Talk', 'Open talks with the ' + p.short], ['Strike', 'Strike the ' + p.short], ['Sanction', 'Sanction the ' + p.short]]
+        : [['Arm', 'Arm the ' + p.short], ['Fund', 'Fund the ' + p.short], ['Talk', 'Open talks with the ' + p.short], ['Strike', 'Strike the ' + p.short], ['Sanction', 'Sanction the ' + p.short], ['Cut aid', 'Stop funding the ' + p.short]];
+    ex.innerHTML = sh + `<div class="gs-section" style="margin-top:6px">Who rules here</div>${row('Ruler', esc(p.leader || '—'))}${row('Office', esc(p.title || '—'))}${row('Government', esc(p.gov || p.kind))}${row('Capital / HQ', esc(p.hq || (p.cities || [])[0] || '—'))}${row('Ideology', esc(p.ideology || '—'))}${row('Founded', p.founded || '—')}
+        ${row('Holds', esc((p.cities || []).join(', ')))}${row('Patrons', pats)}${row('Inside', `${hostLink} — ${esc(cleanLeaderName(hn.hog) || hn.hog)}`)}
+        <div class="text-[10.5px] text-slate-400 mt-1">${esc(p.aims)}</div><div class="text-[9.5px] text-slate-600 mt-1">Leadership reflects reporting through late 2025 and may be out of date.</div>
+        <div class="gs-section" style="margin-top:8px">Act on it</div><div class="flex flex-wrap gap-1">${acts.map(([l, t]) => `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" onclick="helpFill('${t.replace(/'/g, "\\'")}')">${l}</button>`).join('')}</div>`;
+    ex.classList.remove('hidden');
+    const btn = document.querySelector('#target-data > .gs-btn-wide'); if (btn) btn.classList.add('hidden');
+    const tp = document.getElementById('target-prox'); if (tp) tp.innerHTML = '';
+    const ts = document.getElementById('target-shared'); if (ts) { ts.innerHTML = ''; ts.style.display = 'none'; }
+    if (!keepView) { try { const rp = document.getElementById('right-panel'); if (rp) rp.classList.remove('hidden'); } catch (e) { } }
+    grpRefresh();
+}
+function entHost(id) { const p = proxyById(id); if (!p) return; const nm = isoToName(p.host[0]), l = nameLayer[nm]; playClick(); if (l) l.fire('click', { latlng: l.getBounds().getCenter(), _now: true, _exact: true, target: l }); else updateTargetUI(nm); }
+function entCenter(p) { return p.base; }
+function proxyFocus(id) { const p = proxyById(id); if (!p) return; closeSociety(); map.flyTo(entCenter(p), p.state ? 6 : 6, { duration: 1.3 }); setTimeout(() => entSelect(id, true), 1400); }
+
+// ---- the country panel: shared influence (Lebanon) and the groups inside a country ----
+const SHARED = {
+    // the rest of Lebanon: the state governs, but Hezbollah keeps a say through its political wing
+    LBN: { label: 'Political influence', sides: [
+        { name: 'Lebanese state', who: 'President Joseph Aoun · PM Nawaf Salam · Speaker Nabih Berri (Amal)', pct: 78, color: '#60a5fa', note: 'Government formed in February 2025; the army is the only force meant to bear arms' },
+        { name: 'Hezbollah political wing', who: 'Loyalty to the Resistance bloc (Mohammad Raad) · 15 of 128 seats', pct: 22, color: '#e8c22e', note: 'With Amal the "Shia duo" holds all 27 Shia seats and names the Shia ministers, so it can block decisions' }] }
+};
+{
+    const _ut = updateTargetUI;
+    updateTargetUI = function (cName) {
+        const wasGroup = ENT.sel; ENT.sel = null; ENT.portraitFor = null; state.targetProxy = null;
+        const ex = document.getElementById('proxy-extra'); if (ex) ex.classList.add('hidden');
+        const btn = document.querySelector('#target-data > .gs-btn-wide'); if (btn) btn.classList.remove('hidden');
+        _ut.apply(this, arguments);
+        try {
+            const iso = resolveIso(cName || '');
+            // Lebanon: shared influence with Hezbollah's political wing
+            let el = document.getElementById('target-shared');
+            if (!el) { const a = document.getElementById('target-conflicts'); if (a) { el = document.createElement('div'); el.id = 'target-shared'; a.parentNode.insertBefore(el, a); } }
+            const S = SHARED[iso];
+            if (el) {
+                if (!S || state.phase !== 'playing') { el.innerHTML = ''; el.style.display = 'none'; }
+                else {
+                    el.style.display = '';
+                    el.innerHTML = `<div class="gs-section" style="margin-top:4px">${S.label}</div>
+                        <div style="display:flex;height:8px;border-radius:2px;overflow:hidden;margin:4px 0 6px">${S.sides.map(x => `<div style="width:${x.pct}%;background:${x.color}"></div>`).join('')}</div>` +
+                        S.sides.map(x => `<div class="text-[11px]" style="border-left:3px solid ${x.color};padding-left:6px;margin-bottom:5px"><b style="color:${x.color}">${esc(x.name)}</b> · ${x.pct}%<br><span class="text-slate-300">${esc(x.who)}</span><br><span class="text-slate-500">${esc(x.note)}</span></div>`).join('');
+                }
+            }
+            // non-state actors inside the country
+            let tp = document.getElementById('target-prox');
+            if (!tp) { const ts = document.getElementById('target-soc'); if (ts) { tp = document.createElement('div'); tp.id = 'target-prox'; ts.parentNode.insertBefore(tp, ts.nextSibling); } }
+            const ps = iso && state.phase === 'playing' ? proxiesIn(iso) : [];
+            if (tp) tp.innerHTML = ps.length ? `<div class="gs-section" style="margin-top:8px">Non-state actors here</div>` + ps.map(p => { const T = proxyTerritory(p); return `<div class="text-[11px]" style="border-left:3px solid ${p.color};padding-left:6px;margin:3px 0;cursor:pointer" onclick="entSelect('${p.id}')"><b style="color:${pxText(p.color)}">${esc(p.short)}</b> — ${esc(p.leader || '—')}${T.share ? ` · holds ≈${Math.round(T.share * 100)}%` : ''} · strength ${Math.round(p.S)}${p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).length ? ` · backed by ${p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).map(shortName).join(', ')}` : ''}</div>`; }).join('') : '';
+            // political system and next election
+            const note = document.getElementById('target-leader-note');
+            if (note && iso && iso !== state.playerIso && state.phase === 'playing' && WORLD[iso]) {
+                const R = regimeOf(iso), I = REGIME_INFO[R], k = ELECT_KNOWN[iso];
+                let t = I.label; if (I.elections && k) t += ` · next election ${MONTHS3[k[1] - 1]} ${k[0]}`;
+                if (!note.textContent.startsWith(t)) note.textContent = t + ' · ' + note.textContent;
+            }
+        } catch (e) { console.warn(e); }
+        if (wasGroup) grpRefresh();
+    };
+}
+
+// =====================================================================
+//  TREATIES & ALLIANCES — real pacts on 1 January 2026, credibility, AI offers, calls to arms
+// =====================================================================
+const TREATY_TYPES = {
+    nonaggression: { label: 'Non-aggression pact', need: 8, rel: 8, icon: '🕊', desc: 'Neither side attacks the other. Breaking it costs you credibility everywhere.' },
+    entente: { label: 'Strategic partnership', need: 28, rel: 15, icon: '🤝', desc: 'Closer trade, intelligence and diplomatic coordination; small growth boost.' },
+    defense: { label: 'Mutual defense pact', need: 48, rel: 22, icon: '🛡', desc: 'If one is attacked the other must respond. Ignoring the call wrecks your credibility.' },
+    alliance: { label: 'Military alliance', need: 64, rel: 30, icon: '⚔', desc: 'Mutual defense plus joint planning. Allies are expected to fight beside each other.' },
+    energy: { label: 'Energy partnership', need: 14, rel: 10, icon: '⚡', desc: 'Long-term oil, gas, power and renewables supply and investment. Growth boost for both, larger when the partner is a big energy exporter.' },
+    tech: { label: 'Technology-sharing agreement', need: 30, rel: 12, icon: '🔬', desc: 'Joint research, chips, AI and licences. Lifts your growth (more if the partner is the stronger power); the partner\'s rivals take note.' },
+    intel: { label: 'Intelligence-sharing agreement', need: 40, rel: 14, icon: '🛰', desc: 'Pooled intelligence on terrorism, crime and common threats. Small boost to stability; the partner\'s rivals resent it.' }
+};
+const ENERGY_EXPORTERS = new Set('RUS SAU ARE QAT KWT NOR USA CAN IRQ IRN KAZ DZA NGA AZE OMN LBY VEN AUS TKM AGO BRN GUY'.split(' '));
+// what a signed treaty does beyond the relations boost (also used for accepted offers)
+function treatyEffects(type, iso) {
+    const me = state.playerIso, n = nationIso(me);
+    if (type === 'entente') { state.gmods[iso] = (state.gmods[iso] || 0) + 0.15; state.mods.growth += 0.0005; }
+    if (type === 'energy') { const big = ENERGY_EXPORTERS.has(iso), mine = ENERGY_EXPORTERS.has(me); state.mods.growth += big && !mine ? 0.0008 : 0.0004; state.gmods[iso] = (state.gmods[iso] || 0) + (mine && !big ? 0.15 : 0.08); }
+    if (type === 'tech') { state.mods.growth += power(iso) > power(me) ? 0.0008 : 0.0004; state.gmods[iso] = (state.gmods[iso] || 0) + 0.1; rivalsOf(iso).forEach(x => addRel(me, x, -3)); }
+    if (type === 'intel') { n.stability = clamp(n.stability + 2, 0, 100); rivalsOf(iso).forEach(x => addRel(me, x, -5)); }
+}
+const TREATY_CD = 14;
+function treatyCdStart(key, why) { state.treatyCd[key] = state.dayIndex + TREATY_CD; state.treatyCdFrom = state.treatyCdFrom || {}; state.treatyCdFrom[key] = state.dayIndex; state.treatyCdWhy = state.treatyCdWhy || {}; state.treatyCdWhy[key] = why || 'refused'; }
+function treatyCdLeft(key) { const end = (state.treatyCd || {})[key]; return end && end > state.dayIndex ? end - state.dayIndex : 0; }
+function treatyCdBar(key, iso, what) {
+    const left = treatyCdLeft(key); if (!left) return '';
+    const from = ((state.treatyCdFrom || {})[key]) ?? (state.treatyCd[key] - TREATY_CD), total = Math.max(1, left, state.treatyCd[key] - from), done = total - left;
+    return `<div class="mb-2" style="max-width:520px"><div class="flex justify-between text-[11px]"><span class="text-slate-300">${(() => { const w = (state.treatyCdWhy || {})[key], n = esc(shortName(iso)), t = esc(what); return w === 'signed' ? `${n} signed the ${t}` : w === 'declined' ? `You declined ${n}'s ${t}` : `${n} turned down your ${t}`; })()} · cooldown before the next one</span><span class="font-mono" style="color:#d8b45a">day ${done} of ${total} · ${left} day${left === 1 ? '' : 's'} left</span></div>
+        <div class="gs-stat-bar" style="margin-top:3px"><div style="width:${Math.round(done / total * 100)}%;background:#d8b45a"></div></div></div>`;
+}
+function treatyInit() {
+    state.treaties = []; state.obl = []; state.offers = []; state.cred = 60; state.treatyCd = {}; let id = 0;
+    const add = (type, parties, name) => state.treaties.push({ id: 't' + (++id), type, parties: parties.filter(x => socEligible(x)), name, day: 0, status: 'active', multi: parties.length > 2 });
+    add('alliance', BLOCS.NATO, 'North Atlantic Treaty (NATO)');
+    add('defense', BLOCS.CSTO, 'Collective Security Treaty (CSTO)');
+    ['JPN', 'KOR', 'AUS', 'PHL', 'NZL'].forEach(x => add('defense', ['USA', x], `US–${shortName(x)} Security Treaty`));
+    add('defense', ['RUS', 'PRK'], 'Russia–North Korea Comprehensive Partnership'); add('defense', ['CHN', 'PRK'], 'China–North Korea Treaty of Friendship');
+    add('defense', ['SAU', 'PAK'], 'Saudi–Pakistan Strategic Mutual Defense Agreement'); add('entente', ['RUS', 'IRN'], 'Russia–Iran Strategic Partnership'); add('entente', ['CHN', 'RUS'], 'China–Russia "No Limits" Partnership');
+    add('defense', BLOCS.GCC, 'Gulf Cooperation Council defense pact'); add('alliance', ['USA', 'ISR'], 'US–Israel security relationship'); add('defense', ['TUR', 'AZE'], 'Shusha Declaration (Turkey–Azerbaijan)');
+    add('entente', BLOCS.AES, 'Alliance of Sahel States (AES)');
+    add('alliance', ['RUS', 'BLR'], 'Union State of Russia and Belarus'); add('entente', ['CHN', 'PAK'], 'China–Pakistan "All-Weather" Strategic Partnership');
+    add('intel', ['USA', 'GBR', 'CAN', 'AUS', 'NZL'], 'Five Eyes intelligence alliance'); add('tech', ['AUS', 'GBR', 'USA'], 'AUKUS technology partnership');
+    add('energy', ['RUS', 'CHN'], 'Power of Siberia gas agreement'); add('defense', ['FRA', 'GRC'], 'France–Greece Strategic Partnership (mutual assistance)');
+    state.treaties.forEach(t => { t.day = 0; });
+}
+function treatiesOf(iso) { return (state.treaties || []).filter(t => t.status === 'active' && t.parties.includes(iso)); }
+function treatyPartners(iso, types) { const s = new Set(); treatiesOf(iso).filter(t => !types || types.includes(t.type)).forEach(t => t.parties.forEach(x => { if (x !== iso) s.add(x); })); return [...s]; }
+function treatyScore(type, iso) {
+    const me = state.playerIso; let sc = getRel(me, iso) * 0.7; const why = [];
+    const rm = rivalsOf(me), rt = rivalsOf(iso), shared = rm.filter(x => rt.includes(x)).length;
+    if (shared) { sc += 6 * Math.min(shared, 4); why.push(`${shared} shared rival(s)`); }
+    sc += ((state.cred || 60) - 50) * 0.25;
+    Object.keys(BLOCS).forEach(b => { if (inBloc(b, me) && inBloc(b, iso)) sc += 6; });
+    treatyPartners(iso).forEach(x => { if (getRel(me, x) < -40) { sc -= 25; why.push(`it is bound to ${shortName(x)}, which dislikes you`); } });
+    state.conflicts.forEach(c => { const mine = c.sideA.includes(me) || c.sideB.includes(me), theirs = c.sideA.includes(iso) || c.sideB.includes(iso) || (c.backA || []).includes(iso) || (c.backB || []).includes(iso); if (mine && theirs) { const opp = (c.sideA.includes(me) && (c.sideB.includes(iso) || (c.backB || []).includes(iso))) || (c.sideB.includes(me) && (c.sideA.includes(iso) || (c.backA || []).includes(iso))); if (opp) sc -= 80; } });
+    if (['defense', 'alliance'].includes(type)) { if (power(me) > power(iso) * 1.2) sc += 5; if (power(me) < power(iso) * 0.4) sc -= 8; }
+    // already allied: no second defence pact, but allies sign everything else readily
+    const allied = treatiesOf(me).find(t => t.parties.includes(iso) && ['defense', 'alliance'].includes(t.type));
+    if (allied) { if (['defense', 'alliance'].includes(type)) sc -= 100; else { sc += 20; why.push(`you are allies through the ${allied.name}`); } }
+    return { sc, why };
+}
+function treatyPropose(type, iso) {
+    const T = TREATY_TYPES[type], me = state.playerIso;
+    if (!T || !iso || iso === me) return;
+    state.trSel = { iso, type };
+    if (treatyCdLeft(iso + type)) { renderSociety(); return; }
+    { const cover = treatiesOf(me).find(t => t.parties.includes(iso) && ['defense', 'alliance'].includes(t.type)); if (cover && ['defense', 'alliance'].includes(type)) { state.treatyMsg = `You are already allied with ${shortName(iso)} through the ${cover.name}.`; renderSociety(); return; } }
+    if (state.treaties.some(t => t.status === 'active' && t.parties.includes(me) && t.parties.includes(iso) && t.type === type)) { state.treatyMsg = `You already have this treaty with ${shortName(iso)}.`; renderSociety(); return; }
+    const r = treatyScore(type, iso), ok = r.sc >= T.need;
+    treatyCdStart(iso + type, ok ? 'signed' : 'refused');
+    if (ok) {
+        state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type, parties: [me, iso], name: `${state.player}–${shortName(iso)} ${T.label.toLowerCase()}`, day: state.dayIndex, status: 'active' });
+        addRel(me, iso, T.rel); state.cred = clamp((state.cred || 60) + 2, 0, 100);
+        // rivals of the new partners react
+        rivalsOf(iso).forEach(x => { if (type === 'defense' || type === 'alliance') addRel(me, x, -4); });
+        treatyEffects(type, iso);
+        logEvent(`📜 <b>${esc(T.label)}</b> signed between ${esc(state.player)} and ${esc(shortName(iso))}.`, 'good');
+        state.treatyMsg = `${shortName(iso)} agrees. The ${T.label.toLowerCase()} is signed.`;
+        queueMessage(iso, `Our governments have signed the ${T.label.toLowerCase()}. We expect it to be honoured.`);
+    } else state.treatyMsg = `${shortName(iso)} declines the ${T.label.toLowerCase()}${r.sc > T.need - 15 ? ' for now — it is close; improve relations or find common rivals first' : ''}${r.why.length ? ` (${r.why.slice(0, 2).join('; ')})` : ''}.`;
+    renderSociety();
+}
+function treatyDenounce(id) {
+    const t = state.treaties.find(x => x.id === id); if (!t) return;
+    t.status = 'denounced'; const me = state.playerIso; t.parties.filter(x => x !== me).forEach(x => addRel(me, x, -20));
+    state.cred = clamp((state.cred || 60) - (['defense', 'alliance', 'nonaggression'].includes(t.type) ? 10 : 4), 0, 100);
+    logEvent(`📜 ${esc(state.player)} withdraws from the ${esc(t.name)}.`, 'bad'); renderSociety();
+}
+function treatyAcceptOffer(id) {
+    const o = state.offers.find(x => x.id === id); if (!o) return; state.offers = state.offers.filter(x => x.id !== id);
+    const T = TREATY_TYPES[o.type], me = state.playerIso;
+    state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: o.type, parties: [me, o.from], name: `${state.player}–${shortName(o.from)} ${T.label.toLowerCase()}`, day: state.dayIndex, status: 'active' });
+    addRel(me, o.from, T.rel); treatyEffects(o.type, o.from); state.cred = clamp((state.cred || 60) + 2, 0, 100); treatyCdStart(o.from + o.type, 'signed'); logEvent(`📜 You accept ${esc(shortName(o.from))}'s offer: ${esc(T.label)} signed.`, 'good'); renderSociety();
+}
+function treatyDeclineOffer(id) { const o = state.offers.find(x => x.id === id); state.offers = state.offers.filter(x => x.id !== id); if (o) { treatyCdStart(o.from + o.type, 'declined'); addRel(state.playerIso, o.from, -2); } renderSociety(); }
+
+// aggressor/victim logic — called when a new war starts
+function treatyOnWar(c, aggressor, victim) {
+    if (!state.treaties) return; const me = state.playerIso;
+    const side = c.sideA.includes(victim) ? 'backA' : 'backB';
+    state.treaties.filter(t => t.status === 'active' && ['defense', 'alliance'].includes(t.type) && t.parties.includes(victim) && !t.parties.includes(aggressor)).forEach(t => {
+        t.parties.filter(x => x !== victim && x !== aggressor).forEach(m => {
+            if (!c[side]) c[side] = [];
+            if (c[side].includes(m) || c.sideA.includes(m) || c.sideB.includes(m)) return;
+            if (m === me) {
+                if (!state.obl.some(o => o.conflict === c.id && o.status === 'pending')) { state.obl.push({ id: 'o' + Date.now() % 1e7, treatyId: t.id, ally: victim, aggressor, conflict: c.id, due: state.dayIndex + 14, status: 'pending' }); logEvent(`⚠ <b>Treaty call:</b> ${esc(shortName(victim))} has been attacked by ${esc(shortName(aggressor))} and invokes the ${esc(t.name)}. You have 14 days to honour it — Government → Treaties &amp; UN.`, 'bad'); }
+                return;
+            }
+            let p = (t.type === 'alliance' ? 0.85 : 0.6) * clamp(0.5 + (-getRel(m, aggressor)) / 150, 0.2, 1.2) * (power(m) < power(aggressor) * 0.3 ? 0.45 : 1) * (fxDist([capitalOf(m).lat, capitalOf(m).lng], [capitalOf(victim).lat, capitalOf(victim).lng]) > 9000 ? 0.6 : 1);
+            if (aggressor === me) p *= clamp(1.1 - (state.cred || 60) / 200, 0.5, 1.1);
+            if (Math.random() < p) {
+                c[side].push(m); addRel(m, aggressor, -25); if (aggressor === me) addRel(me, m, -25);
+                aiNews(m, `${esc(shortName(m))} honours the ${esc(t.name)} and joins ${esc(shortName(victim))} against ${esc(shortName(aggressor))}.`, 'bad');
+                if (aggressor === me) queueMessage(m, `Under the ${t.name}, an attack on ${shortName(victim)} is an attack on us. Stand down, or we will act.`);
+            } else if (Math.random() < 0.6) aiNews(m, `${esc(shortName(m))} condemns the attack on ${esc(shortName(victim))} but stops short of military action.`, 'neutral');
+        });
+    });
+}
+function treatyOnAttack(attacker, victim) {
+    if (!state.treaties) return;
+    state.treaties.filter(t => t.status === 'active' && t.parties.includes(attacker) && t.parties.includes(victim)).forEach(t => {
+        t.status = 'broken'; logEvent(`📜 <b>Treaty broken:</b> ${esc(shortName(attacker))} attacks ${esc(shortName(victim))} in violation of the ${esc(t.name)}.`, 'bad');
+        if (attacker === state.playerIso) { state.cred = clamp((state.cred || 60) - 25, 0, 100); t.parties.forEach(x => { if (x !== attacker) addRel(attacker, x, -15); }); }
+    });
+}
+function treatyHonour(id) {
+    const o = state.obl.find(x => x.id === id); if (!o || o.status !== 'pending') return; const me = state.playerIso, c = state.conflicts.find(k => k.id === o.conflict);
+    o.status = 'honoured'; state.cred = clamp((state.cred || 60) + 6, 0, 100); addRel(me, o.ally, 15); addRel(me, o.aggressor, -25);
+    if (c) { const side = c.sideA.includes(o.ally) ? 'backA' : 'backB'; if (!c[side]) c[side] = []; if (!c[side].includes(me)) c[side].push(me); }
+    nationIso(me).treasury = Math.max(0, nationIso(me).treasury - nationIso(me).gdp * 0.003);
+    logEvent(`🛡 You honour your treaty commitment and join ${esc(shortName(o.ally))} against ${esc(shortName(o.aggressor))}.`, 'good'); queueMessage(o.ally, `Your support in this hour will not be forgotten.`); renderSociety();
+}
+function treatyDecline(id) {
+    const o = state.obl.find(x => x.id === id); if (!o || o.status !== 'pending') return; const me = state.playerIso; o.status = 'declined';
+    state.cred = clamp((state.cred || 60) - 12, 0, 100); addRel(me, o.ally, -22);
+    logEvent(`📜 You decline to honour your commitment to ${esc(shortName(o.ally))}. Your credibility as a treaty partner suffers.`, 'bad'); renderSociety();
+}
+function treatyWeekly() {
+    if (!state.treaties) return; const me = state.playerIso;
+    // a defence partner fighting a war asks you to honour the pact (once per war)
+    state.conflicts.forEach(c => {
+        if (c.type !== 'war' || c.intensity < 55 || c.sideA.includes(me) || c.sideB.includes(me) || (c.backA || []).includes(me) || (c.backB || []).includes(me)) return;
+        state.treaties.filter(t => t.status === 'active' && ['defense', 'alliance'].includes(t.type) && t.parties.includes(me)).forEach(t => {
+            t.parties.filter(x => x !== me && (c.sideA.includes(x) || c.sideB.includes(x))).forEach(ally => {
+                const foe = (c.sideA.includes(ally) ? c.sideB : c.sideA)[0]; if (!foe || t.parties.includes(foe)) return;
+                if (state.obl.some(o => o.conflict === c.id && o.ally === ally)) return;
+                if (Math.random() > (t.type === 'alliance' ? 0.45 : 0.3)) return;
+                state.obl.push({ id: 'o' + Date.now() % 1e7 + rint(0, 99), treatyId: t.id, ally, aggressor: foe, conflict: c.id, due: state.dayIndex + 14, status: 'pending' });
+                logEvent(`⚠ <b>Treaty call:</b> ${esc(shortName(ally))} is at war with ${esc(shortName(foe))} and invokes the ${esc(t.name)}. You have 14 days to answer — Government → Treaties &amp; UN.`, 'bad');
+                queueMessage(ally, `We are under attack by ${shortName(foe)}. Under the ${t.name} we call on you to stand with us.`);
+            });
+        });
+    });
+    state.obl.forEach(o => { if (o.status === 'pending' && state.dayIndex > o.due) { o.status = 'ignored'; state.cred = clamp((state.cred || 60) - 15, 0, 100); addRel(me, o.ally, -30); logEvent(`📜 You failed to answer ${esc(shortName(o.ally))}'s call under the treaty. Allies now doubt your word.`, 'bad'); } });
+    // treaties die when partners fight each other or drift apart
+    state.treaties.forEach(t => { if (t.status !== 'active' || t.multi) return; const [a, b] = t.parties; if (getRel(a, b) < -35) { t.status = 'lapsed'; if (a === me || b === me) logEvent(`📜 The ${esc(t.name)} lapses as relations collapse.`, 'bad'); } });
+    state.offers = state.offers.filter(o => o.exp > state.dayIndex);
+    // allies and partners sometimes ask for deeper ties
+    if (Math.random() < 0.12 && state.offers.length < 3) {
+        const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && getRel(me, i) > 40 && !treatyPartners(me).includes(i));
+        if (cands.length) { const from = pick(cands), type = getRel(me, from) > 60 ? 'defense' : 'entente'; state.offers.push({ id: 'f' + Date.now() % 1e7, from, type, exp: state.dayIndex + 30 }); queueMessage(from, `We would like to propose a ${TREATY_TYPES[type].label.toLowerCase()} with your government. See Government → Treaties & UN.`); logEvent(`📜 ${esc(shortName(from))} proposes a ${esc(TREATY_TYPES[type].label.toLowerCase())}.`, 'good'); }
+    }
+}
+function treatyMonthly() {
+    if (!state.treaties) return;
+    // the wider world forms and drops pacts
+    if (Math.random() < 0.15) {
+        const A = MAJOR_POWERS.concat(['POL', 'ITA', 'ESP', 'KOR', 'AUS', 'IDN', 'EGY', 'ARE', 'ISR', 'VNM', 'PHL']); const a = pick(A), b = pick(A);
+        if (a !== b && a !== state.playerIso && b !== state.playerIso && getRel(a, b) > 55 && !treatyPartners(a).includes(b)) {
+            state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'entente', parties: [a, b], name: `${shortName(a)}–${shortName(b)} strategic partnership`, day: state.dayIndex, status: 'active' });
+            aiNews(a, `${esc(shortName(a))} and ${esc(shortName(b))} sign a strategic partnership.`, 'neutral');
+        }
+    }
+    state.cred = clamp((state.cred || 60) + (state.cred > 60 ? -0.2 : 0.2), 0, 100);
+}
+function treatiesHTML() {
+    const me = state.playerIso; if (!state.treaties) treatyInit();
+    let h = `<div class="flex items-center gap-3 mb-3"><div class="gs-stat" style="padding:6px 10px"><div class="gs-stat-lbl">Treaty credibility</div><div class="gs-stat-val" style="color:${socColor(state.cred)}">${Math.round(state.cred)}<span class="gs-stat-of">/100</span></div><div class="gs-stat-bar"><div style="width:${state.cred}%;background:${socColor(state.cred)}"></div></div></div>
+        <div class="text-[11.5px] text-slate-300">Others sign with governments that keep their word. Honouring calls, abiding by pacts and making peace raise credibility; ignoring allies and attacking treaty partners destroy it.</div></div>`;
+    const pend = state.obl.filter(o => o.status === 'pending');
+    pend.forEach(o => { const t = state.treaties.find(x => x.id === o.treatyId); h += `<div class="p-2 mb-2" style="border:1px solid #e0975a;background:rgba(224,151,90,.08)">⚠ <b>${esc(shortName(o.ally))}</b> invokes <i>${esc(t ? t.name : 'a treaty')}</i> against <b>${esc(shortName(o.aggressor))}</b> — answer within ${Math.max(0, o.due - state.dayIndex)} days.
+        <div class="mt-1 flex gap-1"><button type="button" class="gs-btn gs-btn-primary" onclick="treatyHonour('${o.id}')">Honour it (join the war)</button><button type="button" class="gs-btn" onclick="treatyDecline('${o.id}')">Decline</button></div></div>`; });
+    state.offers.forEach(o => { h += `<div class="p-2 mb-2" style="border:1px solid #93b25f;background:rgba(147,178,95,.08)">📨 ${flagHTML(nationIso(o.from), 11)} <b>${esc(shortName(o.from))}</b> proposes a ${esc(TREATY_TYPES[o.type].label.toLowerCase())} <span class="text-slate-500">(${o.exp - state.dayIndex} days)</span>
+        <div class="mt-1 flex gap-1"><button type="button" class="gs-btn gs-btn-primary" onclick="treatyAcceptOffer('${o.id}')">Accept</button><button type="button" class="gs-btn" onclick="treatyDeclineOffer('${o.id}')">Decline</button></div></div>`; });
+    const mine = treatiesOf(me);
+    h += `<div class="gs-stat-lbl mb-1">Your treaties (${mine.length})</div>` + (mine.length ? `<div class="mb-3">` + mine.map(t => `<div class="flex justify-between items-center border-t border-slate-800 py-1"><span>${TREATY_TYPES[t.type].icon} <b>${esc(t.name)}</b> <span class="text-slate-500">· ${TREATY_TYPES[t.type].label}${t.multi ? ` · ${t.parties.length} members` : ''}</span></span><span>${t.multi ? '' : `<button type="button" class="gs-btn" onclick="treatyDenounce('${t.id}')">Withdraw</button>`}</span></div>`).join('') + `</div>` : `<div class="text-slate-500 mb-3">None yet.</div>`);
+    const cands = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 1).sort((a, b) => getRel(me, b) - getRel(me, a)).slice(0, 60);
+    h += `<div class="gs-stat-lbl mb-1">Propose a treaty</div><div class="flex flex-wrap gap-2 items-center mb-2"><select id="tr-country" class="gs-btn" onchange="state.trSel={iso:this.value,type:document.getElementById('tr-type').value};state.treatyMsg='';renderSociety()">${cands.map(i => `<option value="${i}" ${(state.trSel || {}).iso === i ? 'selected' : ''}>${esc(shortName(i))} (${getRel(me, i) > 0 ? '+' : ''}${getRel(me, i)})</option>`).join('')}</select>
+        <select id="tr-type" class="gs-btn" onchange="state.trSel={iso:document.getElementById('tr-country').value,type:this.value};state.treatyMsg='';renderSociety()">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `<option value="${k}" ${(state.trSel || {}).type === k ? 'selected' : ''}>${TREATY_TYPES[k].label}</option>`).join('')}</select><button type="button" class="gs-btn gs-btn-primary" ${(() => { const sel = state.trSel || {}, iso = cands.includes(sel.iso) ? sel.iso : cands[0], type = sel.type || Object.keys(TREATY_TYPES)[0]; return treatyCdLeft(iso + type) ? 'disabled' : ''; })()} onclick="treatyPropose(document.getElementById('tr-type').value, document.getElementById('tr-country').value)">Propose</button></div>`;
+    { const sel = state.trSel || {}, iso = cands.includes(sel.iso) ? sel.iso : cands[0], type = sel.type || Object.keys(TREATY_TYPES)[0]; h += treatyCdBar(iso + type, iso, TREATY_TYPES[type].label.toLowerCase()); }
+    h += `<div class="text-[10.5px] text-slate-500 mb-2">${Object.keys(TREATY_TYPES).filter(k => !TREATY_TYPES[k].hidden).map(k => `${TREATY_TYPES[k].icon} <b>${TREATY_TYPES[k].label}</b>: ${TREATY_TYPES[k].desc}`).join('<br>')}</div>`;
+    if (state.treatyMsg) h += `<div class="p-2 mb-2" style="border:1px solid #d1ad5b;color:#ece2c4">${esc(state.treatyMsg)}</div>`;
+    const world = state.treaties.filter(t => t.status === 'active' && !t.parties.includes(me)).slice(0, 14);
+    h += `<div class="gs-stat-lbl mb-1 mt-3">Other pacts in the world</div>` + world.map(t => `<div class="text-[11px] text-slate-400">${TREATY_TYPES[t.type].icon} ${esc(t.name)} <span class="text-slate-600">· ${TREATY_TYPES[t.type].label}</span></div>`).join('');
+    return h;
+}
+
+
+// =====================================================================
+//  POLITICS & ELECTIONS, UN SECURITY COUNCIL
+// =====================================================================
+const REGIME_TBL = {
+    democracy: 'USA GBR FRA DEU ITA ESP CAN AUS NZL JPN KOR IND BRA MEX ARG CHL COL POL NLD BEL SWE NOR DNK FIN CHE AUT IRL PRT GRC CZE ISR TWN ZAF IDN PHL EST LVA LTU SVN SVK HRV ROU BGR URY CRI PAN GHA SEN MUS BWA NAM LUX ISL MLT CYP JAM TTO'.split(' '),
+    hybrid: 'RUS TUR ETH PAK BGD SRB HUN GEO ARM MDA UKR NGA KEN TZA ZMB MOZ ZWE LKA NPL PER ECU BOL HND GTM SLV DOM MYS SGP KHM IRQ LBN TUN DZA ALB MKD BIH MNE'.split(' '),
+    autocracy: 'EGY BLR VEN NIC AZE KAZ UZB TKM TJK KGZ SYR ERI CMR UGA RWA AGO COD CAF COG GNQ DJI BDI SSD SOM YEM LBY TGO'.split(' '),
+    'one-party': 'CHN VNM LAO CUB PRK'.split(' '),
+    monarchy: 'SAU ARE QAT KWT OMN BHR JOR MAR BRN SWZ'.split(' '),
+    theocracy: 'IRN AFG VAT'.split(' '),
+    junta: 'MMR MLI BFA NER SDN GIN GAB TCD'.split(' ')
+};
+const REGIME_OF = {}; Object.keys(REGIME_TBL).forEach(k => REGIME_TBL[k].forEach(i => REGIME_OF[i] = k));
+function regimeOf(iso) {
+    if (state.regimes && state.regimes[iso]) return state.regimes[iso];
+    if (REGIME_OF[iso]) return REGIME_OF[iso];
+    const hp = socHP(iso); return hp > 0.65 ? 'democracy' : hp > 0.3 ? 'hybrid' : 'autocracy';
+}
+const REGIME_INFO = {
+    democracy: { label: 'Democracy', elections: true, fair: 1, term: 4, coup: 0.05 }, hybrid: { label: 'Hybrid regime', elections: true, fair: 0.4, term: 5, coup: 0.6 },
+    autocracy: { label: 'Autocracy', elections: false, term: 0, coup: 1.2 }, 'one-party': { label: 'One-party state', elections: false, term: 0, coup: 0.3 },
+    monarchy: { label: 'Monarchy', elections: false, term: 0, coup: 0.3 }, theocracy: { label: 'Theocracy', elections: false, term: 0, coup: 0.4 }, junta: { label: 'Military junta', elections: false, term: 0, coup: 1.8 }
+};
+const ELECT_KNOWN = { USA: [2028, 11], FRA: [2027, 4], BRA: [2026, 10], GBR: [2029, 5], DEU: [2029, 9], JPN: [2028, 10], IND: [2029, 4], KOR: [2030, 6], ITA: [2027, 9], ESP: [2027, 7], CAN: [2029, 10], AUS: [2028, 5], MEX: [2030, 6], POL: [2027, 10], TUR: [2028, 5], ISR: [2026, 10], ZAF: [2029, 5], IDN: [2029, 2], ARG: [2027, 10], RUS: [2030, 3], UKR: [2029, 10] };
+const UNSC_P5 = ['USA', 'GBR', 'FRA', 'RUS', 'CHN'];
+const UNSC_POOL = ['DEU', 'JPN', 'IND', 'BRA', 'ZAF', 'EGY', 'KOR', 'POL', 'DNK', 'PAK', 'ARE', 'ITA', 'ESP', 'IDN', 'NGA', 'MEX', 'TUR', 'SAU', 'CAN', 'AUS', 'ARG', 'GRC', 'SOM', 'PAN', 'SLV', 'GUY', 'LVA', 'SVN', 'MYS', 'ALG', 'ETH', 'KEN', 'UKR'];
+// elected members: the real Council for 2026 (Denmark, Greece, Pakistan, Panama, Somalia + Bahrain, Colombia, DR Congo, Latvia, Liberia);
+// later years keep the 2026–27 intake for a year and rotate the rest
+const UNSC_2026 = ['DNK', 'GRC', 'PAK', 'PAN', 'SOM', 'BHR', 'COL', 'COD', 'LVA', 'LBR'];
+function unscMembers() {
+    const y = state.date.getFullYear(); if (y <= 2026) return UNSC_2026.slice();
+    const pool = UNSC_POOL.filter(i => WORLD[i] && !UNSC_2026.includes(i)), keep = y === 2027 ? UNSC_2026.slice(5) : [], out = keep.slice();
+    for (let i = 0; out.length < 10 && i < 40; i++) { const c = pool[(i * 3 + y * 7) % pool.length]; if (!out.includes(c)) out.push(c); }
+    return out;
+}
+function unscVote(kind, target, proposer, conflict) {
+    const members = [...new Set(UNSC_P5.concat(unscMembers()))].filter(i => WORLD[i]), tally = [], th = { condemn: 0, sanction: 10, ceasefire: -12, peacekeepers: -6 }[kind];
+    let yes = 0, no = 0, abst = 0; const veto = [];
+    members.forEach(m => {
+        let sc = getRel(m, proposer) * 0.35 - getRel(m, target) * 0.45 + (m === proposer ? 60 : 0);
+        treatyPartners(target).forEach(x => { if (x === m) sc -= 40; }); if (treatyPartners(proposer).includes(m)) sc += 15;
+        if (conflict && ((conflict.backA || []).includes(m) || (conflict.backB || []).includes(m)) && (conflict.backB || []).concat(conflict.backA || []).includes(target)) sc -= 25;
+        if (UNSC_P5.includes(m) && ['condemn', 'sanction'].includes(kind) && (getRel(m, target) > 35)) sc -= 40;
+        let v = sc >= th ? 'yes' : sc >= th - 14 ? 'abstain' : 'no';
+        if (v === 'yes') yes++; else if (v === 'abstain') abst++; else { no++; if (UNSC_P5.includes(m)) veto.push(m); }
+        tally.push([m, v]);
+    });
+    return { yes, no, abst, veto, passed: yes >= 9 && !veto.length, tally, total: members.length };
+}
+function unscOrderOf(text) {
+    const s = ' ' + normName(text) + ' '; if (!/(un security council|security council|unsc|united nations| un )/.test(s)) return null;
+    const kind = /sanction|embargo/.test(s) ? 'sanction' : /ceasefire|truce|cease fire|halt|stop the fighting/.test(s) ? 'ceasefire' : /peacekeep|stabili[sz]ation|observer/.test(s) ? 'peacekeepers' : /condemn|resolution|denounce|censure/.test(s) ? 'condemn' : null;
+    if (!kind) return null;
+    const found = detectCountries(text).filter(f => f.iso !== state.playerIso).map(f => f.iso);
+    let conf = null; if (kind === 'ceasefire' || kind === 'peacekeepers') conf = state.conflicts.filter(c => c.intensity > 25).find(c => found.some(i => c.sideA.includes(i) || c.sideB.includes(i) || (c.location || []).includes(i))) || state.conflicts.find(c => normName(c.name).split(' ').some(w => w.length > 4 && s.includes(' ' + w))) || null;
+    const target = found[0] || (conf ? (conf.sideB[0] || conf.sideA[0]) : null); if (!target) return null;
+    return { cat: 'diplomacy', kind: 'unsc', unsc: kind, conflictId: conf ? conf.id : null, targets: [{ iso: target, stance: kind === 'ceasefire' || kind === 'peacekeepers' ? 'neutral' : 'hostile' }], scale: 1, covert: false, blocs: [] };
+}
+function unscResolve(o) {
+    const me = state.playerIso, p = nationIso(me), target = o.targets[0].iso, c = o.conflictId && state.conflicts.find(k => k.id === o.conflictId);
+    const V = unscVote(o.unsc, target, me, c), effects = []; const fx = (txt, good) => effects.push({ txt, good });
+    const names = V.tally.map(([m, v]) => `${shortName(m)} ${v === 'yes' ? '✔' : v === 'no' ? '✖' : '○'}`).join(' · ');
+    o.outcome = V.passed ? 'Success' : V.veto.length ? 'Failure' : 'Partial';
+    fx(`UN Security Council vote: ${V.yes} for, ${V.no} against, ${V.abst} abstaining${V.veto.length ? ` — vetoed by ${V.veto.map(shortName).join(' & ')}` : ''}`, V.passed);
+    (state.unscLog = state.unscLog || []).unshift({ day: state.dayIndex, date: state.date.toDateString(), kind: o.unsc, target, by: me, passed: V.passed, veto: V.veto, yes: V.yes, no: V.no, abst: V.abst, tally: names }); state.unscLog = state.unscLog.slice(0, 12);
+    logEvent(`<b>UN Security Council</b> ${V.passed ? 'adopts' : 'rejects'} ${esc(state.player)}'s ${o.unsc} resolution on ${esc(shortName(target))} (${V.yes}-${V.no}-${V.abst}${V.veto.length ? ', veto: ' + V.veto.map(shortName).join('/') : ''}).`, V.passed ? 'good' : 'bad');
+    if (V.passed) {
+        p.stability = clamp(p.stability + 1, 0, 100); state.cred = clamp((state.cred || 60) + 1, 0, 100);
+        if (o.unsc === 'condemn') { addRel(me, target, -6); nationIso(target).stability = clamp(nationIso(target).stability - 2, 0, 100); fx(`${shortName(target)} is formally condemned`, true); }
+        if (o.unsc === 'sanction') { state.sanctionsOn[target] = (state.sanctionsOn[target] || 0) + 3; const tn = nationIso(target); tn.gdp *= 0.996; V.tally.forEach(([m, v]) => { if (v === 'yes' && m !== me) addRel(m, target, -3); }); fx(`UN sanctions on ${shortName(target)}: growth outlook −1.2 pts, GDP −0.4%`, true); }
+        if ((o.unsc === 'ceasefire' || o.unsc === 'peacekeepers') && c) {
+            const d = o.unsc === 'ceasefire' ? 12 : 8; const parties = [...c.sideA, ...c.sideB];
+            const comply = parties.filter(i => Math.random() < 0.55 + getRel(me, i) / 300);
+            if (comply.length >= Math.ceil(parties.length / 2)) { c.intensity = clamp(c.intensity - d, 0, 100); fx(`The parties comply: ${c.name} intensity −${d}`, true); if (c.intensity < 32 && c.type === 'war') { c.type = 'ceasefire'; fx(`${c.name}: ceasefire holds`, true); } }
+            else fx(`The parties largely ignore the resolution on ${c.name}`, false);
+        }
+    } else { V.veto.forEach(v => addRel(me, v, -7)); fx(`${V.veto.map(shortName).join(', ') || 'Members'} blocked the resolution (−7 relations)`, false); if (!V.veto.length) { state.cred = clamp((state.cred || 60) - 1, 0, 100); } }
+    o.effects = effects; o.doneDay = state.dayIndex; updateEconomyUI(); return o;
+}
+function unscAgainstPlayer(c, victim) {
+    const me = state.playerIso, V = unscVote('condemn', me, victim, c);
+    logEvent(`<b>UN Security Council</b> votes on a resolution condemning ${esc(state.player)}'s attack on ${esc(shortName(victim))}: ${V.yes}-${V.no}-${V.abst}${V.veto.length ? ` — vetoed by ${V.veto.map(shortName).join('/')}` : ''}.`, V.passed ? 'bad' : 'neutral');
+    (state.unscLog = state.unscLog || []).unshift({ day: state.dayIndex, date: state.date.toDateString(), kind: 'condemn', target: me, by: victim, passed: V.passed, veto: V.veto, yes: V.yes, no: V.no, abst: V.abst, tally: V.tally.map(([m, v]) => `${shortName(m)} ${v === 'yes' ? '✔' : v === 'no' ? '✖' : '○'}`).join(' · ') }); state.unscLog = state.unscLog.slice(0, 12);
+    if (V.passed) { state.sanctionsOnMe += 2; nationIso(me).stability = clamp(nationIso(me).stability - 2, 0, 100); state.cred = clamp((state.cred || 60) - 4, 0, 100); }
+}
+{
+    const _pl = planOrder;
+    planOrder = function (text) { const o = _pl(text); if (o && o.kind === 'unsc') { o.cost = Math.max(1e6, Math.round(nationIso(state.playerIso).gdp * 0.00005 * D().cost)); o.days = rint(3, 7); } return o; };
+    const _r2 = resolveOrder;
+    resolveOrder = function (o) { if (o && o.kind === 'unsc') return unscResolve(o); return _r2(o); };
+}
+
+const MONTHS3 = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function polInit() {
+    const me = state.playerIso, R = regimeOf(me), I = REGIME_INFO[R];
+    state.regimes = state.regimes || {}; state.unscLog = state.unscLog || [];
+    let next = null;
+    if (I.elections) { const k = ELECT_KNOWN[me]; const y = k ? k[0] : 2026 + 1 + Math.floor(socHash(me) * I.term), m = k ? k[1] : 1 + Math.floor(socHash(me + 'm') * 12); next = [y, m]; }
+    state.pol = { regime: R, next, mandate: 0, capital: 60, immune: false, over: null, term: I.term, won: 0, campaign: 0, start: { gdp: nationIso(me).gdp, approval: nationIso(me).stability } };
+}
+function polSpend(cost) {
+    const P = state.pol; if (!P || P.immune) return true; const R = P.regime; if (!(R === 'democracy' || R === 'hybrid')) return true;
+    const c = cost * (R === 'hybrid' ? 0.5 : 1); if (P.capital >= c) { P.capital -= c; return true; } return false;
+}
+function polShare(withNoise) {
+    const me = state.playerIso, P = state.pol, s = socOf(me), n = nationIso(me), I = REGIME_INFO[P.regime];
+    const g = getGrowth(me).g;
+    let share = 50 + 0.6 * (n.stability - 50) + 0.8 * (g - s.g0) - 0.9 * (s.unemp - s.i0.unemp) - 0.3 * Math.max(0, s.infl - s.i0.infl) + P.mandate + P.campaign + 3 + (withNoise ? (Math.random() - 0.5) * 7 : 0);     // +3: incumbency advantage
+    if (I.fair < 1) share += 9 * (1 - I.fair);
+    return clamp(share, 18, 82);
+}
+function polElection() {
+    const me = state.playerIso, P = state.pol, n = nationIso(me);
+    const share = polShare(true); P.campaign = 0;
+    const won = share >= 50;
+    logEvent(`<b>Election:</b> ${esc(state.player)} votes. ${won ? `You win with <b>${share.toFixed(1)}%</b>.` : `You lose with only <b>${share.toFixed(1)}%</b>.`}`, won ? 'good' : 'bad');
+    P.last = { y: P.next[0], m: P.next[1], share, won };
+    if (won) { P.won++; P.mandate = 3; n.stability = clamp(n.stability + 4, 0, 100); P.capital = Math.min(100, P.capital + 25); P.next = [P.next[0] + P.term, P.next[1]]; }
+    else if (!P.immune) polGameOver('election', share);
+    else { n.stability = clamp(n.stability - 8, 0, 100); P.next = [P.next[0] + P.term, P.next[1]]; logEvent('Sandbox mode: you stay in office despite the defeat, but the public is furious (approval −8%).', 'bad'); }
+}
+function polGameOver(reason, share) {
+    const P = state.pol, me = state.playerIso, n = nationIso(me); P.over = reason; setSpeed(0);
+    const yrs = ((state.dayIndex || 0) / 365.25), g0 = (P.start && P.start.gdp) || n.gdp, dG = (n.gdp / g0 - 1) * 100;
+    const msg = reason === 'election' ? `You were voted out of office with ${share.toFixed(1)}% of the vote.` : 'Your time in office has ended.';
+    let el = document.getElementById('go-modal');
+    if (!el) { el = document.createElement('div'); el.id = 'go-modal'; el.className = 'gs-modal'; document.getElementById('ui-layer').appendChild(el); }
+    el.classList.remove('hidden');
+    const row = (k, v) => `<div class="flex justify-between border-b border-slate-800 py-0.5"><span>${k}</span><b>${v}</b></div>`;
+    el.innerHTML = `<div class="ui-panel gs-modal-box w-[520px] max-w-[94vw]"><div class="gs-head"><span class="gs-title">End of your government</span></div><div class="p-4 text-[13px]">
+        <div style="font-size:15px;margin-bottom:10px">${esc(msg)}</div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 mb-3 text-[12px]">${row('Time in office', yrs >= 1 ? yrs.toFixed(1) + ' years' : Math.round(yrs * 12) + ' months')}${row('Elections won', P.won)}${row('Economy', (dG >= 0 ? '+' : '') + dG.toFixed(1) + '% GDP')}${row('Approval at the end', Math.round(n.stability) + '%')}</div>
+        <div class="text-slate-400 text-[11.5px] mb-3">In sandbox mode you stay in charge and keep playing; elections no longer remove you.</div>
+        <div class="flex gap-2"><button type="button" class="gs-btn gs-btn-primary" onclick="polContinue()">Continue in sandbox mode</button><button type="button" class="gs-btn" onclick="location.reload()">New game</button></div></div></div>`;
+}
+function polContinue() {
+    const P = state.pol; P.immune = true; P.over = null;
+    const y = state.date.getFullYear(), m = state.date.getMonth() + 1;
+    if (P.next) while (P.next[0] < y || (P.next[0] === y && P.next[1] <= m)) P.next = [P.next[0] + Math.max(1, P.term), P.next[1]];
+    if (!P.next && REGIME_INFO[P.regime].elections) P.next = [y + P.term, 1];
+    const el = document.getElementById('go-modal'); if (el) el.classList.add('hidden');
+    logEvent('Sandbox mode: elections no longer end your game.', 'neutral');
+    try { setSpeed(1); } catch (e) { }
+}
+function polMonthly() {
+    if (!state.pol) polInit(); const P = state.pol, me = state.playerIso, n = nationIso(me), y = state.date.getFullYear(), m = state.date.getMonth() + 1;
+    P.regime = regimeOf(me); P.mandate *= 0.97; P.capital = clamp(P.capital + 1.2 + (n.stability - 50) / 25, 0, 100);
+    if (!P.over && P.next && y === P.next[0] && m === P.next[1]) polElection();
+    else if (!P.over && P.next) { const mo = (P.next[0] - y) * 12 + P.next[1] - m; if (mo === 3 || mo === 1) logEvent(`<b>Election in ${mo} month${mo > 1 ? 's' : ''}.</b> Projected vote share: ${polShare(false).toFixed(1)}%. Campaign rallies and a strong economy help.`, polShare(false) >= 50 ? 'neutral' : 'bad'); }
+    polElectionsAbroad();
+}
+// elections abroad: new governments shift their foreign policy
+function polElectionsAbroad() {
+    const me = state.playerIso, y = state.date.getFullYear(), m = state.date.getMonth() + 1;
+    Object.keys(WORLD).forEach(iso => {
+        if (iso === me || NON_SOVEREIGN.has(iso) || !(WORLD[iso][3] > 0.3)) return;
+        const I = REGIME_INFO[regimeOf(iso)]; if (!I || !I.elections) return;
+        const k = ELECT_KNOWN[iso], em = k ? k[1] : 1 + Math.floor(socHash(iso + 'm') * 12), base = k ? k[0] : 2026 + Math.floor(socHash(iso) * I.term);
+        if (m !== em || y < base || (y - base) % I.term !== 0 || (y === 2026 && m <= 1)) return;
+        const n = nationIso(iso), inc = clamp(0.5 + (n.stability - 50) / 120 + (getGrowth(iso).g - baseGrowth(iso)) / 20 + (I.fair < 1 ? 0.25 : 0), 0.1, 0.92);
+        if (Math.random() < inc) aiNews(iso, `Voters in ${esc(shortName(iso))} return the governing party to power.`, 'neutral');
+        else {
+            const swing = Math.round((Math.random() - 0.5) * 30); addRel(me, iso, swing);
+            n.stability = clamp(n.stability + 2, 0, 100);
+            aiNews(iso, `<b>${esc(shortName(iso))} elects a new government.</b> Its foreign policy is expected to ${swing > 5 ? 'warm towards ' + esc(state.player) : swing < -5 ? 'turn cooler towards ' + esc(state.player) : 'shift in tone'}.`, swing >= 0 ? 'good' : 'bad');
+            if (Math.random() < 0.35 && state.treaties) treatiesOf(iso).forEach(t => { if (!t.multi && t.parties.includes(me) && Math.random() < 0.3) { t.status = 'lapsed'; logEvent(`${esc(shortName(iso))}'s new government withdraws from the ${esc(t.name)}.`, 'bad'); } });
+        }
+    });
+}
+// campaign rallies lift the next election result
+{
+    const _rn = resolveOrder;
+    resolveOrder = function (o) {
+        const r = _rn(o);
+        try { if (o.cat === 'domestic' && o.kind === 'politics' && state.pol && /campaign|rally|election/i.test(o.text)) { state.pol.campaign = Math.min(8, state.pol.campaign + 2.5 * Math.max(OUT_MULT[o.outcome] || 0, 0)); } } catch (e) { }
+        return r;
+    };
+}
+function politicsHTML() {
+    if (!state.pol) polInit();
+    const P = state.pol, me = state.playerIso, n = nationIso(me), I = REGIME_INFO[P.regime];
+    const est = polShare(false), cr = (() => { try { return coupRisk(me).risk; } catch (e) { return 0; } })();
+    const mo = P.next ? (P.next[0] - state.date.getFullYear()) * 12 + P.next[1] - (state.date.getMonth() + 1) : null;
+    let h = `<div class="grid gap-2 mb-3" style="grid-template-columns:repeat(auto-fill,minmax(190px,1fr))">
+        <div class="gs-stat"><div class="gs-stat-lbl">Political system</div><div class="gs-stat-val" style="font-size:16px">${I.label}</div><div class="gs-stat-sub">${I.elections ? `${P.term}-year terms` : 'no free elections'}</div></div>
+        ${I.elections && P.next ? `<div class="gs-stat"><div class="gs-stat-lbl">Next election</div><div class="gs-stat-val" style="font-size:16px">${MONTHS3[P.next[1] - 1]} ${P.next[0]}</div><div class="gs-stat-sub">${mo !== null ? (mo <= 0 ? 'this month' : `in ${mo} month${mo === 1 ? '' : 's'}`) : ''}</div></div>` : ''}
+        <div class="gs-stat"><div class="gs-stat-lbl">Approval</div><div class="gs-stat-val" style="color:${socColor(n.stability)}">${Math.round(n.stability)}%</div><div class="gs-stat-bar"><div style="width:${n.stability}%;background:${socColor(n.stability)}"></div></div></div>
+        ${I.elections ? `<div class="gs-stat"><div class="gs-stat-lbl">Projected vote share</div><div class="gs-stat-val" style="color:${est >= 50 ? '#93b25f' : '#c4553c'}">${est.toFixed(1)}%</div><div class="gs-stat-bar"><div style="width:${est}%;background:${est >= 50 ? '#93b25f' : '#c4553c'}"></div></div><div class="gs-stat-sub">${est >= 50 ? 'on course to win' : 'on course to lose'}${P.campaign ? ` · campaign +${P.campaign.toFixed(1)}` : ''}</div></div>
+        <div class="gs-stat"><div class="gs-stat-lbl">Political capital</div><div class="gs-stat-val">${Math.round(P.capital)}<span class="gs-stat-of">/100</span></div><div class="gs-stat-bar"><div style="width:${P.capital}%;background:#d1ad5b"></div></div><div class="gs-stat-sub">spent on tax rises, austerity and cuts</div></div>
+        <div class="gs-stat"><div class="gs-stat-lbl">Mandate</div><div class="gs-stat-val">${P.mandate >= 0 ? '+' : ''}${P.mandate.toFixed(1)}</div><div class="gs-stat-sub">elections won: ${P.won}${P.last ? ` · last: ${P.last.share.toFixed(1)}%` : ''}</div></div>` : ''}
+        <div class="gs-stat"><div class="gs-stat-lbl">Coup risk</div><div class="gs-stat-val" style="color:${cr > 30 ? '#c4553c' : cr > 12 ? '#d1ad5b' : '#93b25f'}">${cr}%</div><div class="gs-stat-sub"><a href="#" style="color:#d8b45a" onclick="event.preventDefault();closeSociety();openCoupPanel()">open the coup panel</a></div></div></div>`;
+    h += `<div class="text-[11.5px] text-slate-300 mb-2">${I.elections ? 'Voters judge the economy, jobs, prices and your overall approval. Hold campaign rallies before an election. <b>Losing an election ends your government</b>, with an option to keep playing in sandbox mode. Unpopular measures (tax rises, austerity, spending cuts) cost political capital, which recovers each month with approval.' : 'There are no free elections, but approval, jobs and prices still decide whether the army or the street removes you (see the coup panel).'}${P.immune ? ' <b style="color:#d1ad5b">Sandbox mode is on: elections cannot end your game.</b>' : ''}</div>`;
+    if (I.elections) h += `<div class="flex flex-wrap gap-1 mb-2"><button type="button" class="cc-chip" onclick="helpFill('Hold a nationwide campaign rally')">Hold a campaign rally</button><button type="button" class="cc-chip" onclick="helpFill('Launch a campaign on jobs and the cost of living')">Campaign on jobs and prices</button></div>`;
+    const abroad = Object.keys(ELECT_KNOWN).filter(i => i !== me && WORLD[i]).map(i => [i, ELECT_KNOWN[i]]).filter(([, k]) => k[0] * 12 + k[1] >= state.date.getFullYear() * 12 + state.date.getMonth() + 1).sort((a, b) => (a[1][0] * 12 + a[1][1]) - (b[1][0] * 12 + b[1][1])).slice(0, 8);
+    if (abroad.length) h += `<div class="gs-stat-lbl mt-3 mb-1">Coming elections abroad</div><div class="text-[11px] text-slate-400">${abroad.map(([i, k]) => `${flagHTML(nationIso(i), 10)} ${esc(shortName(i))} ${MONTHS3[k[1] - 1]} ${k[0]}`).join(' · ')}</div>`;
+    return h;
+}
+function unHTML() {
+    const mem = unscMembers(), log = state.unscLog || [];
+    return `<div class="gs-stat-lbl mt-4 mb-1">United Nations Security Council</div><div class="text-[11px] text-slate-300 mb-1">Permanent (veto): ${UNSC_P5.map(i => flagHTML(nationIso(i), 10) + ' ' + esc(shortName(i))).join(' · ')}<br>Elected (${state.date.getFullYear()}): ${mem.map(i => esc(shortName(i))).join(', ')}</div>
+        <div class="text-[11px] text-slate-500 mb-1">Put a resolution to a vote with an order, e.g. <a href="#" style="color:#d8b45a" onclick="event.preventDefault();helpFill('Call a UN Security Council resolution condemning Russia')">"Call a UN Security Council resolution condemning Russia"</a>, <a href="#" style="color:#d8b45a" onclick="event.preventDefault();helpFill('Seek UN sanctions on Iran')">"Seek UN sanctions on Iran"</a>, <a href="#" style="color:#d8b45a" onclick="event.preventDefault();helpFill('Demand a ceasefire in Sudan at the UN Security Council')">"Demand a ceasefire in Sudan at the UN Security Council"</a>. A resolution needs 9 of 15 votes and no veto from the five permanent members.</div>
+        ${log.length ? log.map(l => `<div class="text-[11px] border-t border-slate-800 py-0.5"><b style="color:${l.passed ? '#93b25f' : '#e0975a'}">${l.passed ? 'PASSED' : l.veto.length ? 'VETOED' : 'FAILED'}</b> ${l.kind} · ${esc(shortName(l.target))} · ${l.yes}-${l.no}-${l.abst}${l.veto.length ? ` · veto: ${l.veto.map(shortName).map(esc).join(', ')}` : ''} <span class="text-slate-600">${esc(l.date)}</span><div class="text-[10px] text-slate-500">${esc(l.tally || '')}</div></div>`).join('') : '<div class="text-slate-600 text-[11px]">No votes yet.</div>'}`;
+}
+
+// =====================================================================
+//  UI — Government tabs, non-state actors list, help with clickable orders, map search
+// =====================================================================
+(function () {
+    const st = document.createElement('style');
+    st.textContent = `.px-emblem { display: inline-flex; width: 24px; height: 22px; align-items: center; justify-content: center; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 10.5px; color: #0b0b08; border: 2px solid rgba(255,255,255,.7); border-radius: 3px; }
+        #proxy-extra { font-size: 11.5px; } #proxy-extra.hidden { display: none; } #proxy-extra .pe-row { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #2c2b20; padding: 3px 0; } #proxy-extra .pe-row span:first-child { color: #7c7259; text-transform: uppercase; letter-spacing: .1em; font-size: 9.5px; white-space: nowrap; }
+        #mz-find { position: absolute; display: none; width: 230px; height: 34px; padding: 0 10px; font-size: 12.5px; color: #f3e3b0; background: rgba(20,19,12,.94); border: 1px solid var(--gs-gold2, #9c8040); outline: none; }
+        #mz-find.open { display: block; } #mz-find::placeholder { color: #8a7f62; }`;
+    document.head.appendChild(st);
+})();
+function proxiesHTML() {
+    if (!state.proxies) proxyInit();
+    const me = state.playerIso;
+    let h = `<div class="text-[11.5px] text-slate-300 mb-2">Armed groups, breakaway states and autonomous regions that hold ground <b>separately from the governments</b> of the countries they sit in (situation on 1 January 2026). Their areas are the ones on the <i>Internal control</i> map view; click inside one on the map to see who rules it. Patrons feed them money and weapons; strikes, sanctions and talks weaken or soften them. Click a group's name to find it, or an order to put it in the order bar.</div>`;
+    h += `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">`;
+    state.proxies.filter(p => p.status !== 'dissolved').sort((a, b) => b.S - a.S).forEach(p => {
+        const T = proxyTerritory(p);
+        const pats = p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).map(x => `${flagHTML(nationIso(x), 10)} ${esc(shortName(x))}`).join(', ') || '<span class="text-slate-500">none known</span>';
+        const where = p.state ? `governs the ${esc(shortName(p.state))}` : `in ${esc(T.where)}${T.share ? ` · holds ≈${Math.round(T.share * 100)}% of its land` : ''}`;
+        h += `<div class="gs-stat" style="padding:8px 10px;border-left:3px solid ${p.color}"><div class="flex justify-between gap-2"><b style="color:${pxText(p.color)};cursor:pointer" onclick="proxyFocus('${p.id}')">${esc(p.name)}</b><span class="text-[10px]" style="color:#7c7259">${esc(p.kind)}</span></div>
+            <div class="text-[11px] text-slate-300">${where} · led by ${esc(p.leader || '—')}</div>
+            <div class="text-[11px] mt-1">Strength <b>${Math.round(p.S)}</b> <span style="color:${p.S >= p.S0 ? '#f87171' : '#86efac'}">${p.S >= p.S0 ? '▲' : '▼'}${Math.abs(p.S - p.S0).toFixed(0)}</span> · ~${Math.round(p.fighters * p.S / p.S0).toLocaleString()} fighters · legitimacy ${Math.round(p.legit)}</div>
+            <div class="gs-stat-bar"><div style="width:${p.S}%;background:${p.color}"></div></div>
+            <div class="text-[11px] mt-1">Patrons: ${pats}${p.aid[me] ? ` · <b style="color:#4ade80">you ${Math.round(p.aid[me] * 100)}%</b>` : ''}</div>
+            <div class="text-[10.5px] text-slate-500 mt-1">${esc(p.aims)}</div>
+            <div class="flex flex-wrap gap-1 mt-1">${[['Arm', 'Arm the '], ['Talk', 'Open talks with the '], ['Strike', 'Strike the '], ['Sanction', 'Sanction the ']].filter(([l]) => !(p.state && l === 'Strike') && !(p.host.includes(me) && l === 'Arm')).map(([l, t]) => `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" onclick="helpFill('${(t + p.short).replace(/'/g, "\\'")}')">${l}</button>`).join('')}</div></div>`;
+    });
+    return h + '</div>';
+}
+// ---------- help: how to play, with order examples you can click ----------
+const HELP_ORDERS = {
+    'Society & economy': ['Increase education spending by 25%', 'Improve healthcare', 'Fight corruption and hire more police', 'Raise taxes by 2%', 'Cut interest rates', 'Hold a nationwide campaign rally'],
+    'Military': ['Launch an airstrike on Tehran', 'Fire cruise missiles at Damascus', 'Launch a full-scale invasion of Libya', 'Blockade Venezuela', 'Launch cyber attack on Iran', 'Move armored division to Poland'],
+    'Non-state actors': ['Arm the SDF', 'Strike the Houthis', 'Open talks with Hamas', 'Sanction Hezbollah', 'Stop funding the RSF', 'Fund the Kurdistan Region'],
+    'Diplomacy & trade': ['Impose sanctions on Russia', 'Propose ceasefire between Russia and Ukraine', 'Negotiate a trade deal with China', 'Buy 30 oil from Saudi Arabia', 'Send arms to Ukraine', 'Send humanitarian aid to Sudan'],
+    'United Nations': ['Call a UN Security Council resolution condemning Russia', 'Seek UN sanctions on Iran', 'Demand a ceasefire in Sudan at the UN Security Council', 'Propose UN peacekeepers for Haiti']
+};
+function helpFill(t) {
+    try { document.getElementById('help-modal').classList.add('hidden'); } catch (e) { }
+    try { const sm = document.getElementById('soc-modal'); if (sm && !sm.classList.contains('hidden')) closeSociety(); } catch (e) { }
+    playClick(); openCommandCenter(false);
+    const i = document.getElementById('cc-input'); if (i) { i.value = t; i.dispatchEvent(new Event('input', { bubbles: true })); i.focus(); try { i.setSelectionRange(t.length, t.length); } catch (e) { } }
+}
+function openHelp() {
+    let el = document.getElementById('help-modal');
+    if (!el) { el = document.createElement('div'); el.id = 'help-modal'; el.className = 'gs-modal hidden'; el.onclick = e => { if (e.target === el) el.classList.add('hidden'); }; document.getElementById('ui-layer').appendChild(el); }
+    el.innerHTML = `<div class="ui-panel gs-modal-box w-[860px] max-w-[96vw]"><div class="gs-head"><span class="gs-title">How to play</span><button type="button" class="panel-min-btn" onclick="document.getElementById('help-modal').classList.add('hidden')">✕</button></div><div class="p-3 gs-modal-scroll text-[12px]">
+        <div class="mb-3 text-slate-300">You lead a country from 1 January 2026. Type any order in plain English in the order bar (⚑ Orders), then press <b>Execute</b>. <b>Click an example below</b> to drop it into the order bar, then edit it before you send it.</div>
+        ${Object.keys(HELP_ORDERS).map(k => `<div class="gs-stat-lbl mt-2 mb-1">${k}</div><div class="flex flex-wrap gap-1">${HELP_ORDERS[k].map(t => `<button type="button" class="cc-chip" onclick="helpFill('${t.replace(/'/g, "\\'")}')">${esc(t)}</button>`).join('')}</div>`).join('')}
+        <div class="gs-stat-lbl mt-4 mb-1">Where to look</div><ul class="text-slate-300" style="list-style:disc;padding-left:18px;line-height:1.6">
+        <li><b>🏛 Government</b> — budget, economy, war &amp; casualties, world rankings, <b>Politics</b> (elections, projected vote, political capital), <b>Treaties &amp; UN</b> (propose pacts, answer allies, Security Council votes) and <b>Non-state actors</b>.</li>
+        <li><b>🗺 Map view</b> — political map, front lines, or internal control (militias, autonomous regions, breakaway states). <b>Click inside a group's area</b> to see who rules it, like a country.</li>
+        <li><b>🔍</b> (under the zoom buttons, or press <b>F</b>) — find any country, city or armed group.</li>
+        <li><b>🪖 Coup</b> — coup risk at home and abroad. <b>📑 Report</b> — your advisor's situation report.</li>
+        <li><b>Space</b> pauses, <b>Esc</b> closes windows, <b>?</b> opens this screen.</li></ul>
+        <div class="gs-stat-lbl mt-4 mb-1">What drives the world</div><div class="text-slate-300" style="line-height:1.6">Every country has education, health, safety, corruption, inflation, unemployment and debt that respond to spending. Wars move front lines. Armed groups hold their own ground and answer to their patrons. Treaties bind allies to defend each other, and breaking your word costs credibility. Elections can remove you from office.</div></div></div>`;
+    el.classList.remove('hidden');
+}
+document.addEventListener('keydown', e => {
+    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (state.phase !== 'playing' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === '?') { e.preventDefault(); openHelp(); }
+    else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); mapFindToggle(true); }
+});
+
+// ---------- map search: country, city or armed group ----------
+function mapFindToggle(open) {
+    let inp = document.getElementById('mz-find');
+    if (!inp) {
+        const dl = document.createElement('datalist'); dl.id = 'mz-find-list'; document.body.appendChild(dl);
+        inp = document.createElement('input'); inp.id = 'mz-find'; inp.placeholder = 'Find country, city, group…'; inp.setAttribute('list', 'mz-find-list'); inp.autocomplete = 'off';
+        inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { if (mapFind(inp.value)) { inp.value = ''; inp.classList.remove('open'); } } else if (e.key === 'Escape') inp.classList.remove('open'); });
+        inp.addEventListener('change', () => { const v = inp.value; if (v && mapFindExact(v) && mapFind(v)) { inp.value = ''; inp.classList.remove('open'); } });
+        document.getElementById('map-zoom').appendChild(inp);
+    }
+    const dl = document.getElementById('mz-find-list');
+    if (dl && !dl.childElementCount) {
+        const names = new Set();
+        Object.keys(WORLD).forEach(i => { if (WORLD[i][3] > 0.02) names.add(isoToName(i)); });
+        CITIES.forEach(c => names.add(c[0])); PROXY_DEFS.forEach(p => { names.add(p.short); if (p.state_name) names.add(p.state_name); });
+        dl.innerHTML = [...names].sort().map(n => `<option value="${esc(n)}">`).join('');
+    }
+    const btn = document.getElementById('mz-find-btn');
+    if (btn) { inp.style.left = (btn.offsetLeft + btn.offsetWidth + 6) + 'px'; inp.style.top = btn.offsetTop + 'px'; }
+    const show = open === undefined ? !inp.classList.contains('open') : open;
+    inp.classList.toggle('open', show); if (show) { inp.focus(); inp.select(); }
+}
+function mapFindExact(q) { const n = normName(q); return proxyList().some(p => normName(p.short) === n || normName(p.state_name || '') === n) || CITIES.some(c => normName(c[0]) === n) || !!(resolveIso(q) || WORLD_BY_NAME[n]); }
+function mapFind(q) {
+    q = (q || '').trim(); if (!q) return false; const n = normName(q);
+    const px = proxyList().find(p => p.status !== 'dissolved' && (normName(p.short) === n || normName(p.name) === n || normName(p.state_name || '') === n || (PROXY_ALIASES[p.id] || []).includes(n)));
+    if (px && !px.state) { window.__userCamAt = Date.now(); map.flyTo(entCenter(px), 6, { duration: 1.2 }); setTimeout(() => entSelect(px.id, true), 1300); return true; }
+    const iso = px ? px.state : (resolveIso(q) || WORLD_BY_NAME[n]);
+    if (iso && WORLD[iso]) {
+        window.__userCamAt = Date.now(); const nm = isoToName(iso), l = nameLayer[nm];
+        try { if (l) map.flyToBounds(l.getBounds(), { padding: [70, 70], maxZoom: 7, duration: 1.2 }); else { const c = capitalOf(iso); map.flyTo([c.lat, c.lng], 6); } } catch (e) { const c = capitalOf(iso); map.flyTo([c.lat, c.lng], 6); }
+        setTimeout(() => { try { if (l) l.fire('click', { latlng: l.getBounds().getCenter(), _now: true, _exact: true, target: l }); else updateTargetUI(nm); } catch (e) { } }, 1250);
+        return true;
+    }
+    const city = CITIES.find(c => normName(c[0]) === n) || CITIES.find(c => normName(c[0]).startsWith(n));
+    if (city) { window.__userCamAt = Date.now(); map.flyTo([city[2], city[3]], 8, { duration: 1.2 }); return true; }
+    logEvent(`Search: nothing found for "${esc(q)}".`, 'neutral');
+    return false;
+}
+
+// =====================================================================
+//  WIRING — new game, saves, schedule
+// =====================================================================
+// saved with the game; a save from before these systems existed starts them fresh
+const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog'];
+NEW_FIELDS.forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+function systemsEnsure() {
+    if (!state.proxies) proxyInit(); else proxyMigrate();
+    if (!state.treaties) treatyInit();
+    state.obl = state.obl || []; state.offers = state.offers || []; state.treatyCd = state.treatyCd || {}; if (state.cred === undefined) state.cred = 60;
+    if (!state.pol) polInit();
+    state.regimes = state.regimes || {}; state.unscLog = state.unscLog || [];
+}
+{
+    const _iw = initWorld;
+    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.unscLog = []; state.regimes = {}; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
+    const _as = applySave;
+    applySave = function (d) { _as(d); try { ENT.sel = null; NEW_FIELDS.forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; }); systemsEnsure(); if (state.pol && state.pol.over) state.pol.over = null; grpRefresh(true); } catch (e) { console.warn('systems load', e); } };
+    const _dt = dailyTick;
+    dailyTick = function (catchUp) {
+        _dt(catchUp);
+        if (state.phase !== 'playing') return;
+        try {
+            systemsEnsure();
+            const d = state.dayIndex;
+            if (d % 7 === 3) treatyWeekly();
+            if (state.date.getDate() === 2) { proxiesMonthly(); treatyMonthly(); }
+            if (state.date.getDate() === 4) polMonthly();
+            if (ENT.sel && !catchUp) entSelect(ENT.sel, true);
+        } catch (e) { console.warn('systems tick', e); }
+    };
+    const _rmv = refreshMapView;
+    refreshMapView = function () { _rmv.apply(this, arguments); try { grpRefresh(); } catch (e) { } };
+}
 
     </script>
 </body>
