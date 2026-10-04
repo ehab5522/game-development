@@ -1641,6 +1641,7 @@
         //  · Palestine is split: the West Bank (Palestinian Authority, Mahmoud Abbas) and the Gaza Strip (Hamas) are separate nations
         //  · Akrotiri and Dhekelia are British Sovereign Base Areas, so they belong to the United Kingdom
         //  · the UN buffer zone on Cyprus is not a country and cannot be selected
+        //  · areas held by armed groups / breakaway authorities become their own states (see proxyStates)
         function geoFixups(data) {
             const F = data && data.features; if (!F) return data;
             const byName = n => F.find(f => f.properties && f.properties.name === n);
@@ -1661,6 +1662,7 @@
                 F.splice(F.indexOf(f), 1);
             });
             const nm = byName('Cyprus No Mans Area'); if (nm) F.splice(F.indexOf(nm), 1);
+            try { if (window.proxyStates) proxyStates(data); } catch (e) { console.warn('proxy states', e); }
             return data;
         }
         const countryRenderer = (typeof L !== 'undefined' && L.canvas) ? L.canvas({ padding: GFX().pad, tolerance: 2 }) : undefined;
@@ -11594,6 +11596,8 @@ const ENT_CONTROL = {
     }
     // multipolygon [[[lng,lat]…]…] or null when no accurate zone is available
     window.entGeom = function (p) {
+        const codes = PROXY_STATE[p.id];
+        if (codes) { const g = codes.flatMap(c => isoFeature[c] ? polysOf(isoFeature[c].geometry) : []); if (g.length) return g; }
         const C = ENT_CONTROL[p.id]; if (!C || !PC) return null;
         const key = Math.round(p.S) + '|' + (C.clip ? C.clip.map(n => nameLayer[n] ? 1 : 0).join('') : p.host.map(i => isoFeature[i] ? 1 : 0).join(''));
         if (p._geomKey === key) return p._geom;
@@ -11637,22 +11641,87 @@ const ENT_CONTROL = {
     };
     entAt = function (ll) { if (!state.proxies || !WAR.show.proxies) return null; for (const p of state.proxies) { if (p.status === 'dissolved') continue; if (entPIP(ll.lat, ll.lng, p)) return p; } return null; };
     proxyFocus = function (id) { const p = proxyById(id); if (!p) return; closeSociety(); map.flyTo(entCenter(p), 6, { duration: 1.4 }); setTimeout(() => entSelect(id), 1500); };
-    // drawn like the countries: solid border that follows the real frontier, tinted fill
-    proxyRender = function () {
-        if (!state.proxies) return; warInitLayers(); WAR.pLayer.clearLayers(); WAR.pMarkers.clearLayers(); ENT.polys = {};
-        state.proxies.forEach(p => {
-            if (p.status === 'dissolved') return;
-            const sh = entShape(p); if (!sh.length) return;
-            const sel = ENT.sel === p.id;
-            const poly = L.polygon(sh, { renderer: WAR.renderer, color: sel ? '#ffffff' : p.color, weight: sel ? 2.4 : 1.4, opacity: 0.95, fillColor: p.color, fillOpacity: sel ? 0.5 : 0.3, interactive: false, lineJoin: 'round', smoothFactor: 0.6 }).addTo(WAR.pLayer);
-            ENT.polys[p.id] = poly;
-            const cen = entCenter(p);
-            const pat = p.patrons.filter(x => (p.aid[x] || 0) > 0);
-            const html = `<div class="px-name" style="cursor:pointer">${esc(p.short)}<small>${esc(p.leader || p.kind)}</small>${pat.length ? `<small>${pat.map(x => flagHTML(nationIso(x), 9)).join(' ')}</small>` : ''}</div>`;
-            const mk = L.marker(cen, { icon: L.divIcon({ className: 'fx-ic', html, iconSize: [140, 36], iconAnchor: [70, 18] }), zIndexOffset: 350 }).addTo(WAR.pMarkers);
-            mk.on('click', e => { L.DomEvent.stopPropagation(e); playClick(); entSelect(p.id); });
-        });
+    // ---------- armed groups as states ----------
+    // Each group's area (host border ∩ mask − pockets) is cut out of its host country and added to the map as a
+    // state of its own, governed by the group's leader. Hamas, Northern Cyprus and Somaliland already are states.
+    const STATES = {
+        rsf: { code: 'RSF', name: 'Sudan (RSF)', rel: -95 },
+        houthi: { code: 'HTH', name: 'Yemen (Houthis)', rel: -85, also: { ISR: -100, USA: -80, SAU: -40, ARE: -40 } },
+        m23: { code: 'KVU', name: 'Kivu (M23)', rel: -90 },
+        hezbollah: { code: 'HZB', name: 'South Lebanon (Hezbollah)', rel: -10, also: { ISR: -100, USA: -70 } },
+        jnim: { code: 'JNM', name: 'Sahel (JNIM)', rel: -100, also: { NER: -90, FRA: -70, RUS: -80 } },
+        shabaab: { code: 'SHB', name: 'Somalia (al-Shabaab)', rel: -100, also: { KEN: -80, ETH: -80, USA: -90, TUR: -70 } },
+        sdf: { code: 'SDF', name: 'North-East Syria (SDF)', rel: -30, also: { TUR: -80 } },
+        aa: { code: 'ARK', name: 'Arakan (Arakan Army)', rel: -90, also: { BGD: -20 } },
+        lna: { code: 'LNA', name: 'Eastern Libya (LNA)', rel: -40 },
+        polisario: { code: 'SRD', name: 'Sahrawi Republic (Polisario)', rel: -85, relTo: 'MAR' },
+        tplf: { code: 'TGR', name: 'Tigray (TPLF)', rel: -40 },
+        transnistria: { code: 'PMR', name: 'Transnistria', rel: -40, also: { UKR: -50 } },
+        abkhazia: { parts: [{ code: 'ABK', name: 'Abkhazia', ring: 0, leader: ['Badra Gunba', 'Vladimir Delba'], capital: ['Sukhumi', 43.0, 41.02], pop: 0.245, gdp: 0.65 },
+                            { code: 'OST', name: 'South Ossetia', ring: 1, leader: ['Alan Gagloev', 'Konstantin Dzhussoev'], capital: ['Tskhinvali', 42.23, 43.97], pop: 0.053, gdp: 0.12 }], rel: -70 },
+        vivansanm: { code: 'VVA', name: 'Port-au-Prince (Viv Ansanm)', rel: -90, also: { USA: -60 } },
+        sinaloa: { code: 'SIN', name: 'Sinaloa (cartel)', rel: -60, also: { USA: -80 } },
+        eln: { code: 'ELN', name: 'ELN/FARC zones', rel: -70, also: { USA: -70 } },
+        krg: { code: 'KRG', name: 'Kurdistan Region', rel: -10, also: { IRN: -20 } },
+        uwsa: { code: 'WAS', name: 'Wa State', rel: -20 },
+        kia: { code: 'KIA', name: 'Kachin (KIA)', rel: -80 }
     };
+    const SPECIAL = { transnistria: [0.36, 1.4], krg: [6.5, 28], sdf: [4.5, 4], lna: [3.2, 18], polisario: [0.04, 0.05], tplf: [6.5, 3] }; // [pop M, GDP $B] where the host share is a poor guide
+    window.PROXY_STATE = { hamas: ['GAZ'], trnc: ['CYN'], somaliland: ['SOL'] };
+    const pairSet = (a, b, v) => { if (a && b && a !== b) PAIRS[[a, b].sort().join('|')] = v; };
+    function registerState(d, code, name, o) {
+        const e = (typeof ENT_EXTRA !== 'undefined' && ENT_EXTRA[d.id]) || {}, host = d.host[0], H = WORLD[host];
+        let pop = o.pop, gdp = o.gdp;
+        if (pop === undefined) { const sp = SPECIAL[d.id]; if (sp) { pop = sp[0]; gdp = sp[1]; } else if (H) { pop = H[3] * d.popShare; gdp = H[2] * d.popShare * 0.6; } else { pop = 0.5; gdp = 0.5; } }
+        pop = +pop.toFixed(3); gdp = +gdp.toFixed(2);
+        WORLD[code] = ['', name, gdp, pop];
+        if (H && d.host.length === 1 && d.id !== 'abkhazia') { H[3] = Math.max(0.01, +(H[3] - pop).toFixed(3)); H[2] = Math.max(0.01, +(H[2] - gdp).toFixed(2)); }
+        LEADERS[code] = o.leader || [e.leader || d.name, e.leader || d.name];
+        const cap = o.capital || [e.hq || (d.cities && d.cities[0]) || name, d.base[0], d.base[1]];
+        CITIES.push([cap[0], code, cap[1], cap[2]]);
+        try { NON_SOVEREIGN.add(code); } catch (err) { }
+        WORLD_BY_NAME[normName(name)] = code;
+        (PROXY_ALIASES[d.id] || []).forEach(a => { WORLD_BY_NAME[normName(a)] = code; CAPITALS[a] = code; });
+        if (e.hq) CAPITALS[e.hq.toLowerCase()] = code;
+        const T = STATES[d.id];
+        pairSet(code, T.relTo || host, T.rel); d.host.forEach(h => pairSet(code, h, T.rel));
+        d.patrons.forEach(x => pairSet(code, x, 60));
+        Object.entries(T.also || {}).forEach(([x, v]) => pairSet(code, x, v));
+    }
+    window.proxyStates = function (data) {
+        if (!PC) return; const F = data.features;
+        const byName = n => F.find(f => f.properties && f.properties.name === n);
+        const byIso = iso => F.find(f => f.properties && f.properties['ISO3166-1-Alpha-3'] === iso);
+        const mp = c => ({ type: 'MultiPolygon', coordinates: c });
+        const ring = m => ll2xy(Array.isArray(m) ? m : circleRing(m.c, m.r));
+        // Sool and eastern Sanaag (SSC-Khatumo) are Somali federal territory, not Somaliland
+        const sl = byName('Somaliland'), so = byIso('SOM'), SC = ENT_CONTROL.somaliland;
+        if (sl && so && SC && SC.minus) {
+            const cut = PC.intersection(polysOf(sl.geometry), SC.minus.map(m => [ring(m)]));
+            if (cut.length) { sl.geometry = mp(PC.difference(polysOf(sl.geometry), cut)); so.geometry = mp(PC.union(polysOf(so.geometry), cut)); }
+        }
+        Object.keys(STATES).forEach(id => {
+            const T = STATES[id], C = ENT_CONTROL[id], d = PROXY_DEFS.find(x => x.id === id); if (!C || !d) return;
+            const hosts = (C.clip ? C.clip.map(byName) : d.host.map(byIso)).filter(Boolean); if (!hosts.length) return;
+            const parts = T.parts || [{ code: T.code, name: T.name, ring: null }];
+            parts.forEach(pt => {
+                const masks = (pt.ring === null ? C.mask : [C.mask[pt.ring]]).map(r => [ll2xy(r)]);
+                let zone = PC.intersection(hosts.flatMap(f => polysOf(f.geometry)), masks);
+                if (C.minus && zone.length) zone = PC.difference(zone, C.minus.map(m => [ring(m)]));
+                if (!zone.length) return;
+                hosts.forEach(f => { f.geometry = mp(PC.difference(polysOf(f.geometry), zone)); });
+                F.push({ type: 'Feature', properties: { name: pt.name, 'ISO3166-1-Alpha-3': pt.code }, geometry: mp(zone) });
+                registerState(d, pt.code, pt.name, pt);
+                (PROXY_STATE[id] = PROXY_STATE[id] || []).push(pt.code);
+            });
+        });
+        DETECT_TERMS = null;
+    };
+    // the groups are drawn as ordinary states now, so no overlay of their own
+    proxyRender = function () { if (!state.proxies) return; warInitLayers(); WAR.pLayer.clearLayers(); WAR.pMarkers.clearLayers(); ENT.polys = {}; };
+    entAt = function () { return null; };
+    // a group is not a "non-state actor" inside the state it governs (e.g. Hamas in the Gaza Strip)
+    const _proxiesIn = proxiesIn; proxiesIn = iso => _proxiesIn(iso).filter(p => !(PROXY_STATE[p.id] || []).includes(iso));
     // older saves: pick up the corrected host (Hamas now sits in the Gaza Strip)
     const _mig = entsMigrate;
     entsMigrate = function () { _mig(); (state.proxies || []).forEach(p => { const d = PROXY_DEFS.find(x => x.id === p.id); if (d && p.id === 'hamas') { p.host = d.host.slice(); p.hostArea = d.hostArea; } }); };
