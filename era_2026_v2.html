@@ -2158,6 +2158,79 @@
 
         for (const k of Object.keys(PAIRS)) { const n = k.split('|').sort().join('|'); if (n !== k) { PAIRS[n] = PAIRS[k]; delete PAIRS[k]; } }
 
+        // ---------- how close countries are on 1 January 2026, beyond alliances ----------
+        // Alignment between the Western camp (+1) and the Russia/China/Iran camp (-1); 0 = non-aligned.
+        const ALIGN = (() => {
+            const m = {}, set = (v, list) => list.split(' ').forEach(i => m[i] = v);
+            set(1, 'USA CAN GBR FRA DEU ITA ESP PRT NLD BEL LUX DNK NOR ISL POL CZE SVK ROU BGR GRC EST LVA LTU SVN HRV ALB MNE MKD FIN SWE AUT IRL CYP MLT CHE LIE AND MCO SMR JPN KOR AUS NZL TWN ISR UKR MDA');
+            set(0.6, 'HUN TUR PHL SGP ARG PRY ECU SLV PAN CRI DOM GTM JOR MAR XKX BIH KEN GHA CIV SEN BWA');
+            set(0.4, 'SAU ARE QAT KWT BHR OMN EGY IRQ IND THA MYS PER CHL URY COL MEX GEO ARM AZE KAZ UZB NGA RWA BEN HND BOL LBN SYR SOM SOL');
+            set(0.1, 'BRA IDN VNM PAK BGD LKA NPL MNG TUN DZA ETH TZA ZMB AGO MOZ SDN TKM KGZ TJK SRB');
+            set(-0.3, 'ZAF COD ZWE UGA NAM LAO KHM AFG TCD');
+            set(-0.7, 'MLI BFA NER CAF ERI MMR GIN');
+            set(-0.9, 'CHN VEN CUB NIC');
+            set(-1, 'RUS IRN PRK BLR');
+            return m;
+        })();
+        // regional families: friendly by default unless a specific pair says otherwise
+        const REGION_GROUPS = {
+            AU: { bonus: 8, list: 'DZA AGO BEN BWA BFA BDI CPV CMR CAF TCD COM COG COD CIV DJI EGY GNQ ERI SWZ ETH GAB GMB GHA GIN GNB KEN LSO LBR LBY MDG MWI MLI MRT MUS MAR MOZ NAM NER NGA RWA STP SEN SYC SLE SOM ZAF SSD SDN TZA TGO TUN UGA ZMB ZWE' },
+            ARAB: { bonus: 12, list: 'DZA BHR COM DJI EGY IRQ JOR KWT LBN LBY MRT MAR OMN PSE QAT SAU SOM SDN SYR TUN ARE YEM' },
+            LATAM: { bonus: 10, list: 'ARG BOL BRA CHL COL CRI CUB DOM ECU SLV GTM HTI HND MEX NIC PAN PRY PER URY VEN' },
+            CARIB: { bonus: 15, list: 'ATG BHS BRB BLZ DMA GRD GUY HTI JAM KNA LCA VCT SUR TTO' },
+            SCO: { bonus: 6, list: 'CHN RUS IND PAK IRN KAZ KGZ TJK UZB BLR' },
+            NORDIC: { bonus: 20, list: 'DNK FIN ISL NOR SWE' },
+            ANGLO: { bonus: 12, list: 'USA GBR CAN AUS NZL' },
+            TURKIC: { bonus: 15, list: 'TUR AZE KAZ KGZ UZB TKM CYN' },
+            PACIFIC: { bonus: 12, list: 'FJI PNG SLB VUT WSM TON KIR TUV NRU FSM MHL PLW AUS NZL' },
+            CENTRALASIA: { bonus: 10, list: 'KAZ KGZ TJK UZB TKM' }
+        };
+        Object.values(REGION_GROUPS).forEach(g => g.set = new Set(g.list.split(' ')));
+        // more specific bilateral relationships on 1 January 2026
+        const PAIRS_2026 = {
+            // United States (second Trump term: tariffs, Ukraine talks, Gaza ceasefire, pressure on Venezuela)
+            "USA|CAN":0, "USA|GBR":60, "USA|FRA":30, "USA|DEU":35, "USA|ITA":45, "USA|POL":60, "USA|HUN":55, "USA|ESP":15, "USA|CHE":15, "USA|NOR":40, "USA|NLD":40,
+            "USA|AUS":45, "USA|NZL":40, "USA|TWN":50, "USA|PHL":55, "USA|VNM":15, "USA|IDN":15, "USA|SGP":45, "USA|THA":25, "USA|MYS":15, "USA|IND":5,
+            "USA|ARE":50, "USA|EGY":35, "USA|JOR":45, "USA|IRQ":15, "USA|AZE":35, "USA|ARM":30, "USA|KAZ":25, "USA|UZB":25, "USA|MAR":45, "USA|KEN":30,
+            "USA|ETH":10, "USA|RWA":20, "USA|SDN":-10, "USA|LBN":20, "USA|PSE":-40, "USA|AFG":-50, "USA|BLR":-30, "USA|PRK":-80, "USA|NIC":-60, "USA|SLV":60,
+            "USA|ECU":40, "USA|BOL":30, "USA|CHL":20, "USA|PER":20, "USA|PRY":40, "USA|HND":30, "USA|GTM":30, "USA|DOM":35, "USA|PAN":10, "USA|CRI":30,
+            "USA|HTH":-80, "USA|YEM":-10, "USA|SOM":10, "USA|KRG":45, "USA|SDF":45, "USA|SWD":0, "USA|LNA":10,
+            // Russia
+            "RUS|BLR":85, "RUS|KAZ":30, "RUS|KGZ":40, "RUS|TJK":35, "RUS|UZB":30, "RUS|TKM":20, "RUS|ARM":-10, "RUS|AZE":-30, "RUS|SRB":40, "RUS|HUN":15,
+            "RUS|SVK":10, "RUS|TUR":20, "RUS|IND":35, "RUS|ISR":0, "RUS|SAU":25, "RUS|ARE":35, "RUS|EGY":30, "RUS|DZA":35, "RUS|CAF":60, "RUS|SDN":20,
+            "RUS|ETH":25, "RUS|ZAF":25, "RUS|BRA":15, "RUS|CUB":50, "RUS|NIC":50, "RUS|JPN":-40, "RUS|KOR":-20, "RUS|AUS":-50, "RUS|CAN":-55, "RUS|ITA":-40,
+            "RUS|ESP":-45, "RUS|NLD":-55, "RUS|SWE":-60, "RUS|NOR":-50, "RUS|DNK":-55, "RUS|CZE":-55, "RUS|ROU":-50, "RUS|BGR":-30, "RUS|GRC":-20,
+            "RUS|TWN":-30, "RUS|MNG":30, "RUS|VNM":30, "RUS|LAO":30, "RUS|ABK":90, "RUS|OST":90, "RUS|PMR":85, "RUS|LNA":50, "RUS|CYN":10,
+            // Ukraine
+            "UKR|GBR":60, "UKR|SVK":-10, "UKR|TUR":30, "UKR|JPN":40, "UKR|CAN":55, "UKR|AUS":40, "UKR|ISR":10, "UKR|CHN":-20, "UKR|IND":5, "UKR|GEO":10,
+            "UKR|MDA":50, "UKR|AZE":30, "UKR|NOR":55, "UKR|PMR":-50,
+            // Europe
+            "HUN|POL":5, "SRB|CHN":55, "SRB|HRV":-20, "SRB|BIH":10, "SRB|ALB":-25, "GRC|CYP":80, "CYP|TUR":-50, "CYN|TUR":90, "CYN|CYP":-60, "ARM|FRA":40,
+            "AZE|ISR":50, "AZE|IRN":-20, "ARM|TUR":0, "ARM|IRN":20, "GBR|ARG":-10, "GBR|IRL":40, "FRA|DZA":-35, "FRA|MAR":45, "ESP|MAR":30, "FRA|LBN":50,
+            "DEU|ISR":35, "GBR|ISR":15, "FRA|ISR":-10, "CAN|ISR":-10, "AUS|ISR":-10, "HUN|ISR":50, "CZE|ISR":40, "CHN|LTU":-40, "CHN|CZE":-10,
+            // Middle East
+            "SAU|ISR":-10, "SAU|QAT":30, "SAU|TUR":40, "ARE|QAT":20, "EGY|SAU":50, "EGY|ARE":55, "EGY|TUR":30, "EGY|QAT":30, "JOR|SAU":50, "IRQ|TUR":20,
+            "IRQ|SAU":20, "SYR|SAU":50, "SYR|QAT":55, "LBN|SAU":35, "LBN|SYR":10, "TUR|QAT":70, "TUR|PAK":50, "IRN|PAK":10, "IRN|AFG":10, "ISR|MAR":20,
+            "ISR|BHR":20, "ISR|IND":50, "QAT|IRN":20, "OMN|IRN":25, "HTH|SAU":-40, "HTH|ISR":-100, "HTH|IRN":70, "HTH|YEM":-85, "HZB|ISR":-100, "HZB|IRN":75,
+            "SWD|SYR":-60, "SWD|ISR":60, "SDF|TUR":-80, "SDF|SYR":-30, "KRG|IRQ":-10, "KRG|TUR":40, "KRG|IRN":-20, "SAU|YEM":40,
+            // Asia
+            "CHN|KOR":5, "JPN|KOR":30, "CHN|JPN":-50, "JPN|IND":45, "JPN|AUS":60, "JPN|PHL":50, "JPN|TWN":50, "IND|NPL":15, "IND|LKA":30, "IND|MDV":20,
+            "IND|ARE":50, "IND|SAU":35, "IND|IRN":20, "IND|FRA":50, "IND|AUS":40, "CHN|IND":-5, "AFG|PAK":-65, "PAK|BGD":25, "PAK|AZE":50, "CHN|LAO":60,
+            "CHN|THA":30, "CHN|MYS":30, "CHN|IDN":25, "CHN|SGP":20, "CHN|VNM":5, "CHN|NZL":10, "CHN|KAZ":40, "CHN|BRA":35, "CHN|ARG":0, "CHN|ZAF":40,
+            "CHN|ETH":40, "CHN|NGA":20, "CHN|HUN":35, "CHN|SAU":30, "CHN|ARE":30, "CHN|EGY":30, "CHN|BGD":30, "CHN|NPL":25, "CHN|LKA":25, "CHN|MNG":30,
+            "CHN|GBR":-10, "CHN|DEU":5, "CHN|FRA":5, "CHN|CAN":-20, "MMR|THA":10, "CAN|IND":-5, "WAS|CHN":60, "ARK|BGD":-20,
+            // Africa
+            "SDN|SAU":30, "SDN|TUR":30, "SDN|ETH":-10, "SDN|SSD":0, "SDN|TCD":-30, "RSF|ARE":60, "RSF|SDN":-95, "RSF|EGY":-40, "ETH|SOL":40, "SOM|SOL":-50,
+            "COD|RWA":-45, "COD|UGA":10, "KVU|RWA":70, "KVU|COD":-90, "KEN|SOM":10, "NGA|NER":-20, "ZAF|ZWE":30, "ZAF|NGA":20, "GHA|NGA":30, "MAR|SRD":-90,
+            "DZA|SRD":70, "TGR|ETH":-40, "TGR|ERI":30, "LNA|EGY":60, "LNA|ARE":60, "LNA|LBY":-40, "JNM|MLI":-100, "JNM|BFA":-100, "SHB|SOM":-100,
+            // Americas
+            "VEN|COL":10, "VEN|BRA":-15, "VEN|ARG":-60, "VEN|NIC":50, "VEN|BOL":-20, "VEN|ECU":-40, "VEN|PER":-40, "VEN|CHL":-30, "VEN|PAN":-30, "ARG|BRA":-10,
+            "ARG|CHL":30, "BRA|COL":30, "MEX|ECU":-40, "MEX|ESP":-10, "MEX|CUB":30, "COL|ECU":-10, "CUB|NIC":50, "ISR|ZAF":-60, "ISR|COL":-60, "ISR|BOL":-50,
+            "ISR|BRA":-40, "ISR|ARG":60, "ISR|SWD":60, "ELN|COL":-80, "ELN|VEN":40, "SIN|MEX":-70, "VVA|HTI":-90
+        };
+        Object.keys(PAIRS_2026).forEach(k => { const n = k.split('|').sort().join('|'); PAIRS[n] = PAIRS_2026[k]; });
+        const BASE_REL_CACHE = {};
+
         // Military weight multipliers (combat power is roughly sqrt(GDP) × this)
         const MILF = { USA:3, CHN:2.5, RUS:3, IND:2, GBR:1.8, FRA:1.8, ISR:2.6, PRK:2.2, PAK:1.9, IRN:1.6, TUR:1.7, KOR:1.6, JPN:1.3,
                        DEU:1.2, UKR:2.4, SAU:1.3, EGY:1.4, TWN:1.5, POL:1.5, VNM:1.4, AZE:1.4, ERI:1.6, RWA:1.8, ETH:1.4, DZA:1.3, GRC:1.3 };
@@ -2396,6 +2469,7 @@
         function baseRelation(a, b) {
             if (a === b) return 100;
             const key = [a, b].sort().join('|');
+            if (BASE_REL_CACHE[key] !== undefined) return BASE_REL_CACHE[key];
             let r = 0;
             for (const bl in BLOCS) {
                 const ia = inBloc(bl, a), ib = inBloc(bl, b);
@@ -2405,7 +2479,19 @@
             if ((inBloc('USPAC', a) && (b === 'CHN' || b === 'PRK')) || (inBloc('USPAC', b) && (a === 'CHN' || a === 'PRK'))) r -= 20;
             if ((a === 'UKR' && inBloc('EU', b)) || (b === 'UKR' && inBloc('EU', a))) r += 35;
             if (PAIRS[key] !== undefined) r = PAIRS[key] + (r > 0 ? Math.min(r, 15) : 0);
-            return clamp(Math.round(r), -100, 100);
+            else {
+                // no specific relationship recorded: closeness comes from camp, region, neighbourhood and faith
+                const xa = ALIGN[a] || 0, xb = ALIGN[b] || 0;
+                r += 22 * xa * xb;                                                     // same camp +, rival camps -
+                for (const g in REGION_GROUPS) { const G = REGION_GROUPS[g]; if (G.set.has(a) && G.set.has(b)) r += G.bonus; }
+                let near = false; try { near = GEO_INDEX ? bordersWith(a, b) : distKm(a, b) < 900; } catch (e) { }
+                if (near) r += 6;                                                      // neighbours trade and talk more
+                try { if (FAITH_OF[a] && FAITH_OF[a] === FAITH_OF[b]) r += 4; } catch (e) { }
+                r = clamp(r, -40, 70);
+            }
+            r = clamp(Math.round(r), -100, 100);
+            try { if (GEO_INDEX) BASE_REL_CACHE[key] = r; } catch (e) { }          // stable once the map is loaded
+            return r;
         }
         function getRel(a, b) {
             const key = [a, b].sort().join('|');
@@ -10518,9 +10604,10 @@ function customTreatyHTML() {
         h += `<div class="mb-2" style="border:1px solid #857348;background:#f3ecd9;color:#1d1a12;padding:14px 18px;font-family:Georgia,'Times New Roman',serif;font-size:12.5px;line-height:1.5;max-height:420px;overflow-y:auto">
             <div style="text-align:center;font-weight:700;font-size:14px;margin-bottom:6px">${esc(R.title)}</div>
             ${R.preamble ? `<div style="font-style:italic;margin-bottom:8px">${esc(R.preamble)}</div>` : ''}
-            ${R.articles.map((a, i) => `<div style="margin-bottom:6px"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}
+            ${R.articles.map((a, i) => `<div style="margin-bottom:6px${a.added ? ';border-left:3px solid #b8954a;padding-left:6px' : ''}"><b>Article ${i + 1}${a.heading ? ' — ' + esc(a.heading) : ''}</b><div style="white-space:pre-line">${esc(a.text)}</div></div>`).join('')}
             <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:11.5px"><div>For the Government of<br><b>${esc(state.player)}</b></div><div style="text-align:right">For the Government of<br><b>${esc(shortName(d.iso))}</b></div></div>
             <div style="font-size:10px;color:#6b6250;margin-top:8px">${d.polishing ? `${esc(aiLabel())} is rewriting this in full treaty language… you can already send this version.` : esc(R.note || '')}</div></div>
+            ${ctOutlookHTML(d.iso, R)}
             <div class="flex gap-1 mb-2"><button type="button" class="gs-btn gs-btn-primary" ${d.busy ? 'disabled' : ''} onclick="ctSend()">${d.busy === 'send' ? 'Sending…' : `Send to ${esc(shortName(d.iso))}`}</button><button type="button" class="gs-btn" ${d.busy ? 'disabled' : ''} onclick="ctClear()">Clear</button></div>`;
     }
     return h;
@@ -10596,6 +10683,52 @@ function ctOfflineDraft(idea, parts, iso, D) {
         { heading: 'Entry into force', text: `This Agreement shall enter into force on the date of its signature.` });
     return { valid: true, category: cat, title: `Agreement between the Government of ${A} and the Government of ${B} on ${topic}`, preamble: `The Government of ${A} and the Government of ${B}, hereinafter "the Parties", have agreed as follows:`, articles, summary: `${CT_NAME[cat]} agreement for ${ctDurText(D)}.`, note: 'Drafted by your legal staff.' };
 }
+// ---------- fill the gaps: what the other government still needs before it will sign ----------
+// The staff estimate how far the draft is from acceptable for the partner and add balancing clauses,
+// most relevant first, until it should pass. Each costs you something real when the agreement is signed.
+function ctOutlook(iso, R) {
+    const C = CT_CATS[R.category] || { need: 20 }, base = treatyScore('entente', iso), me = state.playerIso;
+    // treatyScore charges 25 for every ally of theirs that dislikes you (right for defence pacts); for a civil agreement
+    // being bound to such allies counts once, and less unless it touches security
+    const cnt = treatyPartners(iso).filter(x => getRel(me, x) < -40).length, sec = R.category === 'security' || R.category === 'intelligence';
+    const sc = base.sc + 25 * cnt - (cnt ? (sec ? 20 : 8) : 0);
+    return { base, need: C.need, score: sc + 5 + (R.bonus || 0) };                 // +5: a tailored agreement is easier to sign than a template pact
+}
+function ctBalance(iso, R) {
+    const me = state.playerIso, A = state.player, B = shortName(iso), n = nationIso(me), them = nationIso(iso);
+    R.bonus = 0; R.added = []; R.costs = {};
+    const O = ctOutlook(iso, R); let gap = O.need + 4 - O.score;                    // aim a little above the bar
+    if (gap <= 0) return R;
+    const rel = getRel(me, iso), bound = O.base.why.some(w => /bound to/.test(w)), poor = them.pop > 0 && them.gdp / them.pop < 15000;
+    const finB = clamp(Math.round(them.gdp * 0.003 / 1e8) / 10, 0.2, 8);              // concessional finance, $bn, scaled to the partner
+    const canPay = n.treasury > finB * 1e9 * 1.5;
+    const menu = [
+        bound && { key: 'third', bonus: 14, heading: 'Relations with third States', text: `This Agreement is not directed against any third State and shall not affect the rights and obligations of either Party under its other international agreements or alliances.` },
+        rel < 20 && { key: 'sovereignty', bonus: 7, heading: 'Respect for sovereignty', text: `Each Party shall respect the sovereignty, territorial integrity and laws of the other. Nothing in this Agreement permits interference in the internal affairs of either Party.` },
+        canPay && { key: 'finance', bonus: poor ? 12 : 7, heading: 'Development financing', text: `${A} shall make available to ${B} concessional financing of up to USD ${finB} billion over the term of this Agreement, for projects agreed by the Joint Commission.`, cost: { treasury: finB * 1e9 } },
+        R.category !== 'trade' && { key: 'market', bonus: 7, heading: 'Market access', text: `${A} shall reduce its customs duties on goods originating in ${B} by 10 percent and simplify customs procedures for them.`, cost: { growth: -0.0001 } },
+        { key: 'assist', bonus: 5, heading: 'Technical assistance', text: `${A} shall provide training and technical assistance to ${B} in fields agreed by the Joint Commission.`, cost: { treasury: 1e8 } },
+        { key: 'review', bonus: 4, heading: 'Review', text: `Either Party may request a review of this Agreement after one year. The Parties shall negotiate in good faith any amendment needed to keep its benefits balanced.` }
+    ].filter(Boolean);
+    if (gap > menu.slice(0, 5).reduce((t, x) => t + x.bonus, 0) + 8) return R;     // hopeless: don't give concessions away for nothing
+    for (const x of menu) {
+        if (gap <= 0 || R.added.length >= 5) break;
+        R.added.push(x); R.bonus += x.bonus; gap -= x.bonus;
+        if (x.cost) Object.keys(x.cost).forEach(k => R.costs[k] = (R.costs[k] || 0) + x.cost[k]);
+    }
+    // put the new clauses before the implementation/duration articles
+    let at = R.articles.findIndex(a => /Implementation|Duration/i.test(a.heading)); if (at < 0) at = R.articles.length;
+    R.articles.splice(at, 0, ...R.added.map(x => ({ heading: x.heading, text: x.text, added: true })));
+    return R;
+}
+function ctOutlookHTML(iso, R) {
+    const O = ctOutlook(iso, R), m = O.score - O.need, B = esc(shortName(iso));
+    const [lbl, col] = m >= 4 ? ['likely to sign', '#93b25f'] : m >= -8 ? ['undecided', '#d8b45a'] : ['unlikely to sign', '#c4553c'];
+    let h = `<div class="text-[11px] mb-1">Outlook: <b style="color:${col}">${B} is ${lbl}</b>`;
+    if (R.added && R.added.length) h += ` · your staff added ${R.added.length} clause${R.added.length > 1 ? 's' : ''} to make it acceptable: ${R.added.map(x => esc(x.heading.toLowerCase())).join(', ')}${R.costs.treasury ? ` (costs ${formatVal(R.costs.treasury)} over the term)` : ''}`;
+    if (m < -8) h += `. Relations (${getRel(state.playerIso, iso)}) are too poor for any balancing clause to close the gap${O.base.why.length ? ': ' + esc(O.base.why.slice(0, 2).join('; ')) : ''}`;
+    return h + '</div>';
+}
 function ctFinish(R) { R.terms = R.articles.map(a => (a.heading ? a.heading + ': ' : '') + a.text.replace(/\n/g, ' ')); return R; }
 async function ctWrite() {
     const d = ctGrab(), idea = (d.idea || '').trim(); if (!d.iso) return;
@@ -10607,21 +10740,22 @@ async function ctWrite() {
     playClick();
     if (problem) { d.review = { valid: false, problem }; d.polishing = false; renderSociety(); return; }
     // instant draft from the legal staff…
-    d.review = ctFinish(ctOfflineDraft(idea, parts, d.iso, Y)); d.review.dur = Y; const req = d.req = (d.req || 0) + 1;
+    d.review = ctFinish(ctBalance(d.iso, ctOfflineDraft(idea, parts, d.iso, Y))); d.review.dur = Y; const req = d.req = (d.req || 0) + 1;
     d.polishing = aiReady(); renderSociety();
     if (!d.polishing) return;
     // …then the AI expands it into full treaty language in the background
     const B = shortName(d.iso);
     const sys = `You are the chief legal adviser of ${state.player}'s foreign ministry (${fmtDate(state.date)}). The minister gives a short idea for an agreement with ${B}. Work out what ${state.player} is trying to obtain and what it offers, and expand the idea into a concise formal bilateral treaty. If the idea cannot make sense between these two governments in January 2026 (terms they cannot deliver, binding third countries, absurd), say why instead.`;
     const user = `Idea: "${idea}"\nDuration: ${ctDurText(Y)}.\nJSON: {"valid":true|false,"problem":"if invalid, one sentence","title":"Agreement between the Government of ${state.player} and the Government of ${B} on ...","category":${JSON.stringify(Object.keys(CT_CATS).concat('other'))} (pick one),"preamble":"one sentence","articles":[{"heading":"...","text":"..."}] (4 to 6 short articles: each side's undertakings with concrete figures where sensible, implementation, duration, entry into force)}`;
-    const j = await callAI(sys, user, true, { maxTokens: 900 });
+    const need = (d.review.added || []).map(x => `${x.heading}: ${x.text}`);
+    const j = await callAI(sys + (need.length ? ` ${B} will only sign if the treaty also contains these balancing provisions; include each of them as its own article, in your wording but with the same substance and figures:\n${need.map(x => '- ' + x).join('\n')}` : ''), user, true, { maxTokens: 900 + 120 * need.length });
     if (d.req !== req || state.ctDraft !== d) return;          // the player moved on
     d.polishing = false;
     if (j && typeof j.valid === 'boolean') {
         if (!j.valid) d.review = { valid: false, problem: String(j.problem || 'This idea does not make sense as an agreement between the two governments.').slice(0, 400) };
         else {
             const arts = (Array.isArray(j.articles) ? j.articles : []).map(a => ({ heading: String((a && a.heading) || '').slice(0, 80), text: String((a && a.text) || a || '').slice(0, 900) })).filter(a => a.text).slice(0, 8);
-            if (arts.length >= 3) d.review = ctFinish({ dur: Y, valid: true, category: CT_CATS[j.category] ? j.category : d.review.category, title: String(j.title || '').slice(0, 160) || d.review.title, preamble: String(j.preamble || '').slice(0, 400), articles: arts, summary: d.review.summary, note: `Drafted by ${aiLabel()}.` });
+            const kept = d.review; if (arts.length >= 3) d.review = ctFinish({ dur: Y, bonus: kept.bonus, added: kept.added, costs: kept.costs, valid: true, category: CT_CATS[j.category] ? j.category : d.review.category, title: String(j.title || '').slice(0, 160) || d.review.title, preamble: String(j.preamble || '').slice(0, 400), articles: arts, summary: d.review.summary, note: `Drafted by ${aiLabel()}.` });
         }
     }
     if (!document.getElementById('soc-modal').classList.contains('hidden')) renderSociety();
@@ -10641,7 +10775,7 @@ async function ctSend() {
     if ((state.treatyCd[iso + 'custom'] || -99) > state.dayIndex) { state.treatyMsg = `${shortName(iso)} wants more time before it looks at another draft from you.`; renderSociety(); return; }
     playClick(); d.busy = 'send'; renderSociety();
     const C = CT_CATS[R.category] || { need: 20, growth: 0.0002, them: 0.05 };
-    const base = treatyScore('entente', iso), sc = base.sc; let accept = sc >= C.need, reply = null;
+    const O = ctOutlook(iso, R), base = O.base, sc = O.score; let accept = sc >= C.need, reply = null;
     if (aiReady()) {
         const sys = `You are the government of ${shortName(iso)} on ${fmtDate(state.date)}, deciding whether to sign an agreement proposed by ${state.player}. Relations are ${getRel(me, iso)} on a -100..100 scale. Decide as that government realistically would in January 2026, weighing its interests, alliances, rivals and domestic politics.`;
         const user = `Agreement: ${R.title}\n${R.terms.map(t => '- ' + t).join('\n').slice(0, 3500)}\nReturn JSON: {"accept": true or false, "reply": "two sentences from ${shortName(iso)}'s leader to ${state.player}"}`;
@@ -10652,6 +10786,7 @@ async function ctSend() {
     if (accept) {
         state.treaties.push({ id: 't' + Date.now() % 1e7 + Math.floor(Math.random() * 99), type: 'custom', category: CT_NAME[R.category] || 'General', parties: [me, iso], name: R.title, terms: R.terms, articles: R.articles, preamble: R.preamble, summary: R.summary, dur: R.dur, expires: R.dur ? state.dayIndex + ctDurDays(R.dur) : null, day: state.dayIndex, status: 'active' });
         addRel(me, iso, 10); state.cred = clamp((state.cred || 60) + 2, 0, 100);
+        if (R.costs) { if (R.costs.treasury) nationIso(me).treasury -= R.costs.treasury; if (R.costs.growth) state.mods.growth += R.costs.growth; }
         if (C.growth) state.mods.growth += C.growth; if (C.them) state.gmods[iso] = (state.gmods[iso] || 0) + C.them; if (C.stab) nationIso(me).stability = clamp(nationIso(me).stability + C.stab, 0, 100);
         if (R.category === 'security' || R.category === 'intelligence') rivalsOf(iso).forEach(x => addRel(me, x, -4));
         logEvent(`📜 <b>${esc(R.title)}</b> signed between ${esc(state.player)} and ${esc(shortName(iso))}.`, 'good');
