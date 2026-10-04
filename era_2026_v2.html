@@ -11817,12 +11817,7 @@ function renderSociety() {
         <table class="w-full text-[11.5px]"><thead><tr class="text-slate-500 text-left"><th class="py-1">Conflict</th><th>Type</th><th>Intensity</th><th>Dead (est.)</th><th>Civilian</th></tr></thead><tbody>${cs.map(c => `<tr class="border-t border-slate-800"><td class="py-1">${esc(c.name)}</td><td>${c.type}</td><td>${Math.round(c.intensity)}</td><td>${c.cas ? Math.round(c.cas.total).toLocaleString() : '—'}</td><td>${c.cas ? Math.round(c.cas.civ).toLocaleString() : '—'}</td></tr>`).join('') || '<tr><td colspan="5" class="py-2 text-slate-500">No active conflicts.</td></tr>'}</tbody></table>
         <div class="mt-2 text-[11px] text-slate-500">Casualties scale with intensity and the size of the countries involved. Fighting damages infrastructure, schools, hospitals and sanitation where it happens, drains soldiers from the armed forces, and drives refugees into neighbouring countries.</div>`;
     } else if (socTab === 'world') {
-        const opts = SOC_IND.map(i => `<option value="${i.k}" ${socBench === i.k ? 'selected' : ''}>${i.label}</option>`).join('');
-        const R = socRank(socBench, iso), val = i => { const ind = SOC_IND.find(x => x.k === socBench); return ind.fmt(state.soc[i], i); };
-        const top = R.sorted.slice(0, 10), bot = R.sorted.slice(-5), me = R.sorted.indexOf(iso);
-        const row = (i, r) => `<tr class="${i === iso ? 'text-[#d1ad5b]' : ''} border-t border-slate-800"><td class="py-0.5 w-8">${r}</td><td>${esc(shortName(i))}</td><td class="text-right font-mono">${val(i)}</td></tr>`;
-        h += `<div class="mb-2 flex items-center gap-2 text-[12px]">Benchmark <select class="gs-btn" onchange="socBench=this.value;renderSociety()">${opts}</select> <span class="text-slate-400">You rank <b>#${R.rank}</b> of ${R.total}</span></div>
-        <table class="w-full text-[11.5px]"><tbody>${top.map((i, k) => row(i, k + 1)).join('')}${me >= 10 && me < R.sorted.length - 5 ? '<tr><td colspan="3" class="text-center text-slate-600">⋯</td></tr>' + row(iso, me + 1) : ''}<tr><td colspan="3" class="text-center text-slate-600">⋯</td></tr>${bot.map((i, k) => row(i, R.sorted.length - bot.length + k + 1)).join('')}</tbody></table>`;
+        h += worldRankingsHTML(iso);
     }
     body.innerHTML = h;
     socRenderFiscalBox();
@@ -13590,6 +13585,76 @@ function regimeReformTick() {
 }
 
 // =====================================================================
+//  WORLD RANKINGS — every country ranked on the economy, military power, society, stability and diplomacy
+// =====================================================================
+const RANK_GROUPS = ['Economy', 'Military & power', 'People & society', 'Stability & diplomacy'];
+const RANK_BENCH = [
+    { k: 'gdp', g: 0, label: 'GDP', v: i => nationIso(i).gdp, f: v => formatVal(v) },
+    { k: 'gdppc', g: 0, label: 'GDP per capita', v: i => { const n = nationIso(i); return n.pop ? n.gdp / n.pop : 0; }, f: v => '$' + Math.round(v).toLocaleString() },
+    { k: 'growth', g: 0, label: 'GDP growth', v: i => getGrowth(i).g, f: v => fmtGrowth(v) },
+    { k: 'treasury', g: 0, label: 'Treasury', v: i => nationIso(i).treasury, f: v => formatVal(v) },
+    { k: 'infl', g: 0, label: 'Inflation (lowest first)', v: i => socOf(i).infl, f: v => v.toFixed(1) + '%', low: true },
+    { k: 'unemp', g: 0, label: 'Unemployment (lowest first)', v: i => socOf(i).unemp, f: v => v.toFixed(1) + '%', low: true },
+    { k: 'debt', g: 0, label: 'Public debt (lowest first)', v: i => socDebtPct(i), f: v => v.toFixed(0) + '% of GDP', low: true },
+    { k: 'mil', g: 1, label: 'Military strength', v: i => milScore(i), f: v => v.toFixed(1) + ' / 100' },
+    { k: 'defspend', g: 1, label: 'Defence spending', v: i => nationIso(i).gdp * socOf(i).b.def / 100, f: v => formatVal(v) + ' / yr' },
+    { k: 'defpct', g: 1, label: 'Defence spending (% of GDP)', v: i => socOf(i).b.def, f: v => v.toFixed(1) + '%' },
+    { k: 'nuclear', g: 1, label: 'Nuclear powers', v: i => NUCLEAR.includes(i) ? milScore(i) : -1, f: v => v >= 0 ? 'Nuclear-armed' : '—', only: i => NUCLEAR.includes(i) },
+    { k: 'allies', g: 1, label: 'Allies (defence pacts)', v: i => typeof treatyPartners === 'function' && state.treaties ? treatyPartners(i, ['defense', 'alliance']).length : 0, f: v => v + (v === 1 ? ' ally' : ' allies') },
+    { k: 'pop', g: 2, label: 'Population', v: i => nationIso(i).pop, f: v => formatPop(v) },
+    { k: 'hdi', g: 2, label: 'Human development (HDI)', v: i => { const h = hdiOf(i); return h ? h.v : 0; }, f: v => v ? v.toFixed(3) : '—', only: i => !!hdiOf(i) },
+    { k: 'edu', g: 2, label: 'Education', v: i => socOf(i).edu, f: v => v.toFixed(0) + ' / 100' },
+    { k: 'health', g: 2, label: 'Health (life expectancy)', v: i => socLife(socOf(i)), f: v => v.toFixed(1) + ' years' },
+    { k: 'clean', g: 2, label: 'Clean streets', v: i => socOf(i).clean, f: v => v.toFixed(0) + ' / 100' },
+    { k: 'infra', g: 2, label: 'Infrastructure', v: i => socOf(i).infra, f: v => v.toFixed(0) + ' / 100' },
+    { k: 'safety', g: 2, label: 'Public safety', v: i => socOf(i).safety, f: v => v.toFixed(0) + ' / 100' },
+    { k: 'rnd', g: 2, label: 'Public research spending (% of GDP)', v: i => socOf(i).b.rnd, f: v => v.toFixed(2) + '%' },
+    { k: 'approval', g: 3, label: 'Government approval', v: i => nationIso(i).stability, f: v => Math.round(v) + '%' },
+    { k: 'corrupt', g: 3, label: 'Clean government', v: i => socOf(i).corrupt, f: v => v.toFixed(0) + ' / 100' },
+    { k: 'coup', g: 3, label: 'Coup risk (lowest first)', v: i => coupRisk(i).risk, f: v => v + '%', low: true },
+    { k: 'rel', g: 3, label: 'Relations with you', v: i => i === state.playerIso ? -999 : getRel(state.playerIso, i), f: (v, i) => i === state.playerIso ? 'you' : (v > 0 ? '+' : '') + v + ' · ' + relLabel(v)[0], skipMe: true }
+];
+let socWorldAll = false;
+socBench = 'gdp';      // the rankings open on GDP
+function rankList(key) {
+    const B = RANK_BENCH.find(b => b.k === key) || RANK_BENCH[0];
+    let isos = Object.keys(state.soc).filter(i => socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i]);
+    if (B.only) isos = isos.filter(B.only);
+    if (B.skipMe) isos = isos.filter(i => i !== state.playerIso);
+    const V = {}; isos.forEach(i => { try { V[i] = B.v(i); } catch (e) { V[i] = 0; } if (!isFinite(V[i])) V[i] = 0; });
+    const sorted = isos.sort((a, b) => B.low ? V[a] - V[b] : V[b] - V[a]);
+    return { B, V, sorted, rank: sorted.indexOf(state.playerIso) + 1, total: sorted.length };
+}
+function worldRankingsHTML(iso) {
+    if (!RANK_BENCH.some(b => b.k === socBench)) socBench = 'gdp';
+    const R = rankList(socBench), B = R.B;
+    const opts = RANK_GROUPS.map((g, gi) => `<optgroup label="${g}">${RANK_BENCH.filter(b => b.g === gi).map(b => `<option value="${b.k}" ${socBench === b.k ? 'selected' : ''}>${b.label}</option>`).join('')}</optgroup>`).join('');
+    // your standing at a glance — click a tile to open that ranking
+    const glance = ['gdp', 'gdppc', 'mil', 'pop', 'hdi', 'approval'].map(k => {
+        const L = rankList(k), r = L.sorted.indexOf(iso) + 1, b = L.B;
+        return `<div class="gs-stat" style="cursor:pointer;${socBench === k ? 'border-color:#d1ad5b' : ''}" onclick="socBench='${k}';socWorldAll=false;renderSociety()"><div class="gs-stat-lbl">${b.label}</div><div class="gs-stat-val" style="color:${r ? rankColor(r) : '#7c7259'}">${r ? '#' + r : '—'}</div><div class="gs-stat-sub">${r ? esc(b.f(L.V[iso], iso)) : 'not ranked'}</div></div>`;
+    }).join('');
+    const top = R.V[R.sorted[0]], vmin = R.V[R.sorted[R.sorted.length - 1]];
+    const bar = v => { const span = B.low ? (vmin - top) : (top - Math.min(0, vmin)); if (!span) return 0; return clamp(B.low ? (vmin - v) / span * 100 : (v - Math.min(0, vmin)) / span * 100, 2, 100); };
+    const row = (i, r) => `<tr class="border-t border-slate-800 ${i === iso ? 'text-[#d1ad5b]' : ''}" style="cursor:pointer" onclick="closeSociety();mapFind('${esc(shortName(i)).replace(/'/g, "\\'")}')"><td class="py-0.5 w-9 font-mono text-slate-500">${r}</td><td>${flagHTML(nationIso(i), 11)} ${esc(shortName(i))}${i === iso ? ' <b>(you)</b>' : ''}</td><td style="width:34%"><div class="gs-stat-bar" style="margin:0"><div style="width:${bar(R.V[i])}%;background:${i === iso ? '#d1ad5b' : '#7c7259'}"></div></div></td><td class="text-right font-mono pl-2" style="white-space:nowrap">${esc(B.f(R.V[i], i))}</td></tr>`;
+    const me = R.sorted.indexOf(iso), N = R.sorted.length;
+    let rows;
+    if (socWorldAll || N <= 25) rows = R.sorted.map((i, k) => row(i, k + 1)).join('');
+    else {
+        const gap = '<tr><td colspan="4" class="text-center text-slate-600">⋯</td></tr>';
+        rows = R.sorted.slice(0, 15).map((i, k) => row(i, k + 1)).join('');
+        if (me >= 15 && me < N - 5) rows += gap + R.sorted.slice(Math.max(15, me - 1), Math.min(N - 5, me + 2)).map((i, k) => row(i, Math.max(15, me - 1) + k + 1)).join('');
+        rows += gap + R.sorted.slice(-5).map((i, k) => row(i, N - 5 + k + 1)).join('');
+    }
+    return `<div class="grid gap-2 mb-3" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">${glance}</div>
+        <div class="mb-2 flex flex-wrap items-center gap-2 text-[12px]">Benchmark <select class="gs-btn" onchange="socBench=this.value;socWorldAll=false;renderSociety()">${opts}</select>
+        <span class="text-slate-400">${me >= 0 ? `You rank <b style="color:${rankColor(me + 1)}">#${me + 1}</b> of ${N}` : B.only ? 'You are not on this list' : ''}</span>
+        ${N > 25 ? `<button type="button" class="gs-btn" onclick="socWorldAll=!socWorldAll;renderSociety()">${socWorldAll ? 'Show top &amp; bottom' : `Show all ${N}`}</button>` : ''}</div>
+        <table class="w-full text-[11.5px]"><tbody>${rows}</tbody></table>
+        <div class="text-[10.5px] text-slate-500 mt-2">Rankings update every day as economies, armies and governments change. Click a country to find it on the map.</div>`;
+}
+
+// =====================================================================
 //  UI — Government tabs, non-state actors list, help with clickable orders, map search
 // =====================================================================
 (function () {
@@ -13597,6 +13662,7 @@ function regimeReformTick() {
     st.textContent = `.px-emblem { display: inline-flex; width: 24px; height: 22px; align-items: center; justify-content: center; font-family: 'Oswald', sans-serif; font-weight: 700; font-size: 10.5px; color: #0b0b08; border: 2px solid rgba(255,255,255,.7); border-radius: 3px; }
         #proxy-extra { font-size: 11.5px; } #proxy-extra.hidden { display: none; } #proxy-extra .pe-row { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid #2c2b20; padding: 3px 0; } #proxy-extra .pe-row span:first-child { color: #7c7259; text-transform: uppercase; letter-spacing: .1em; font-size: 9.5px; white-space: nowrap; }
         #mz-find { position: absolute; display: none; width: 230px; height: 34px; padding: 0 10px; font-size: 12.5px; color: #f3e3b0; background: rgba(20,19,12,.94); border: 1px solid var(--gs-gold2, #9c8040); outline: none; }
+        #soc-body > div:first-child { flex-wrap: nowrap; overflow-x: auto; } #soc-body > div:first-child > .gs-btn { padding-left: 9px; padding-right: 9px; white-space: nowrap; flex-shrink: 0; }
         #mz-find.open { display: block; } #mz-find::placeholder { color: #8a7f62; }`;
     document.head.appendChild(st);
 })();
