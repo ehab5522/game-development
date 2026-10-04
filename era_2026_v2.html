@@ -11197,6 +11197,93 @@ function politicsHTML() {
     h += `<div class="text-[11.5px] text-slate-300">${I.elections ? 'Voters judge the economy, jobs, prices and your overall approval. Hold campaign rallies before an election (<i>"Hold a campaign rally"</i>). Losing an election ends your government.' : 'There are no free elections, but approval, jobs and prices still decide whether the army or the street removes you. Repression buys time but not loyalty.'}${P.immune ? ' <b style="color:#d1ad5b">Sandbox mode is on: elections and coups cannot end your game.</b>' : ''}</div>`;
     return h;
 }
+// ---------- change your political system ----------
+const REGIME_PLAN = {
+    democracy: { icon: '🗳', what: 'Free elections every 4 years. Unpopular moves cost political capital. Coups almost impossible.', mods: ['Elections every 4 years — losing one ends your government', 'Coup risk: very low', 'Democracies +12 relations, autocracies −5', 'Investor confidence: growth +0.3 pts'] },
+    hybrid: { icon: '⚖', what: 'Elections are held but tilted in your favour; the courts and media are leaned on.', mods: ['Managed elections every 5 years (+9% home advantage)', 'Political capital costs halved', 'Coup risk: moderate', 'Democracies −5 relations'] },
+    autocracy: { icon: '🏛', what: 'Rule by one leader and a security apparatus. No elections; legitimacy rests on order and results.', mods: ['No elections — no political capital needed', 'Coup risk: high', 'Democracies −15 relations, autocracies +8', 'Approval −8 on taking power'] },
+    'one-party': { icon: '☭', what: 'A single ruling party controls the state, army and economy.', mods: ['No elections', 'Coup risk: low (the party controls the army)', 'One-party states +10, democracies −15', 'Approval −10 on taking power'] },
+    monarchy: { icon: '👑', what: 'A royal family rules; the crown is the source of law.', mods: ['No elections', 'Coup risk: low', 'Gulf and other monarchies +10, democracies −10', 'Approval −6 on taking power'] },
+    theocracy: { icon: '☪', what: 'Clerics hold final authority and religious law governs the state.', mods: ['No elections that can remove you', 'Coup risk: low', 'Iran and Afghanistan +12, democracies −20', 'Approval −12 on taking power'] },
+    junta: { icon: '🎖', what: 'The armed forces rule directly after suspending the constitution.', mods: ['No elections', 'Coup risk: very high (officers copy you)', 'Juntas +10, democracies −25, aid and investment frozen', 'Approval −15 on taking power'] }
+};
+function regimeChangeCost(to, how) {
+    const from = state.pol.regime;
+    const dem = r => r === 'democracy' || r === 'hybrid';
+    const days = how === 'decree' ? 0 : to === 'democracy' ? 180 : dem(from) ? 120 : 90;
+    let approval = how === 'decree' ? -15 : -5; if (how === 'decree' && from === 'democracy') approval -= 10; if (to === 'democracy') approval += how === 'decree' ? 10 : 8;
+    const capital = how === 'reform' && dem(from) ? 40 : 0;
+    return { days, approval, capital };
+}
+function regimeChangeHTML() {
+    const P = state.pol, cur = P.regime, n = nationIso(state.playerIso);
+    let h = `<div class="gs-stat-lbl mt-4 mb-1">🏛 Change your political system</div>
+        <div class="text-[11px] text-slate-400 mb-2">You can rewrite the constitution through a <b>reform</b> (slow, needs approval of at least 35% when it completes${cur === 'democracy' || cur === 'hybrid' ? ' and 40 political capital up front' : ''}) or impose a new system <b>by decree</b> (immediate, but a heavy blow to approval and to your standing with democracies).</div>`;
+    if (P.reform) {
+        const d0 = P.reform.start, d1 = P.reform.end, pct = clamp((state.date.getTime() - d0) / Math.max(1, d1 - d0) * 100, 0, 100), left = Math.max(0, Math.ceil((d1 - state.date.getTime()) / 864e5));
+        h += `<div class="gs-stat mb-2" style="padding:8px 10px"><div class="text-[12px]">Constitutional reform to <b style="color:#d1ad5b">${REGIME_INFO[P.reform.to].label}</b> under way — ${left} days left</div>
+            <div class="gs-stat-bar"><div style="width:${pct}%;background:#d1ad5b"></div></div>
+            <div class="text-[10.5px] text-slate-400 mt-1">It passes if approval is at least 35% on the day (now ${Math.round(n.stability)}%).</div>
+            <button type="button" class="gs-btn mt-2" onclick="regimeCancel()">Abandon the reform</button></div>`;
+    }
+    h += `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(230px,1fr))">` + Object.keys(REGIME_PLAN).map(k => {
+        const R = REGIME_PLAN[k], I = REGIME_INFO[k], on = k === cur, rf = regimeChangeCost(k, 'reform'), dc = regimeChangeCost(k, 'decree');
+        return `<div class="gs-stat" style="padding:8px 10px;${on ? 'border-color:#d1ad5b' : ''}"><div class="text-[13px]" style="color:${on ? '#fcd34d' : '#e7dcc0'}">${R.icon} <b>${I.label}</b>${on ? ' · current' : ''}</div>
+            <div class="text-[10.5px] text-slate-400 my-1">${R.what}</div>
+            <ul class="text-[10.5px] text-slate-300" style="margin:0 0 6px 14px;list-style:disc">${R.mods.map(m => `<li>${m}</li>`).join('')}</ul>
+            ${on ? '' : `<div class="flex gap-1 flex-wrap">
+                <button type="button" class="gs-btn" ${P.reform ? 'disabled' : ''} onclick="regimeStart('${k}','reform')" title="Approval ${rf.approval} now${rf.capital ? ', ' + rf.capital + ' political capital' : ''}">📜 Reform · ${rf.days} days</button>
+                <button type="button" class="gs-btn" ${P.reform ? 'disabled' : ''} onclick="regimeStart('${k}','decree')" title="Approval ${dc.approval}">⚡ By decree</button></div>
+                <div class="text-[10px] text-slate-500 mt-1">Reform: approval ${rf.approval}${rf.capital ? ` · ${rf.capital} capital` : ''} · Decree: approval ${dc.approval}</div>`}</div>`;
+    }).join('') + `</div>`;
+    return h;
+}
+function regimeStart(to, how) {
+    const P = state.pol, me = state.playerIso, n = nationIso(me); if (!P || P.reform || to === P.regime || !REGIME_INFO[to]) return;
+    const c = regimeChangeCost(to, how);
+    if (c.capital && !P.immune && P.capital < c.capital) { flashReply && flashReply(`You need ${c.capital} political capital to start a constitutional reform (you have ${Math.round(P.capital)}).`); return; }
+    playClick();
+    if (c.capital && !P.immune) P.capital -= c.capital;
+    if (how === 'decree') { n.stability = clamp(n.stability + c.approval, 0, 100); regimeApply(to, true); }
+    else {
+        n.stability = clamp(n.stability + c.approval, 0, 100);
+        P.reform = { to, start: state.date.getTime(), end: state.date.getTime() + c.days * 864e5 };
+        logEvent(`📜 <b>Constitutional reform:</b> ${esc(state.player)} begins rewriting its constitution to become a <b>${REGIME_INFO[to].label.toLowerCase()}</b> (${c.days} days).`, 'info');
+    }
+    renderSociety();
+}
+function regimeCancel() { const P = state.pol; if (!P || !P.reform) return; playClick(); logEvent(`📜 The constitutional reform to a ${REGIME_INFO[P.reform.to].label.toLowerCase()} is abandoned.`, 'info'); P.reform = null; renderSociety(); }
+function regimeApply(to, decree) {
+    const P = state.pol, me = state.playerIso, n = nationIso(me), from = P.regime, I = REGIME_INFO[to];
+    state.regimes = state.regimes || {}; state.regimes[me] = to; P.regime = to; P.term = I.term; P.reform = null;
+    if (I.elections) { const d = state.date; P.next = [d.getFullYear() + 1, d.getMonth() + 1]; P.capital = Math.max(P.capital, 50); } else P.next = null;
+    const dem = x => regimeOf(x) === 'democracy';
+    Object.keys(WORLD).forEach(x => {
+        if (x === me || !(WORLD[x][3] > 0)) return; let d = 0; const rx = regimeOf(x);
+        if (to === 'democracy') d += dem(x) ? 12 : rx === 'autocracy' ? -5 : 0;
+        else if (to === 'hybrid') d += dem(x) ? -5 : 0;
+        else if (to === 'autocracy') d += dem(x) ? -15 : rx === 'autocracy' ? 8 : 0;
+        else if (to === 'one-party') d += dem(x) ? -15 : rx === 'one-party' ? 10 : 0;
+        else if (to === 'monarchy') d += dem(x) ? -10 : rx === 'monarchy' ? 10 : 0;
+        else if (to === 'theocracy') d += dem(x) ? -20 : rx === 'theocracy' ? 12 : 0;
+        else if (to === 'junta') d += dem(x) ? -25 : rx === 'junta' ? 10 : 0;
+        if (decree && from === 'democracy' && dem(x)) d -= 5;
+        if (d) addRel(me, x, d);
+    });
+    const ap = { autocracy: -8, 'one-party': -10, monarchy: -6, theocracy: -12, junta: -15 }[to] || 0;
+    if (ap) n.stability = clamp(n.stability + ap, 0, 100);
+    logEvent(`🏛 <b>${esc(state.player)} is now a ${I.label.toLowerCase()}</b> (was ${REGIME_INFO[from].label.toLowerCase()}${decree ? ', imposed by decree' : ', by constitutional reform'}). ${I.elections ? `First election in ${P.next[0]}.` : 'There will be no free elections.'}`, to === 'democracy' ? 'good' : 'bad');
+    try { if (typeof flashReply === 'function') flashReply(`🏛 Your country is now a <b>${I.label}</b>.`); } catch (e) { }
+}
+function regimeReformTick() {
+    const P = state.pol; if (!P || !P.reform || state.date.getTime() < P.reform.end) return;
+    const n = nationIso(state.playerIso), to = P.reform.to;
+    if (n.stability >= 35) regimeApply(to, false);
+    else { P.reform = null; n.stability = clamp(n.stability - 5, 0, 100); logEvent(`📜 <b>Reform defeated:</b> with approval at only ${Math.round(n.stability + 5)}%, the new constitution is rejected. Approval −5.`, 'bad'); }
+    if (!document.getElementById('soc-modal').classList.contains('hidden')) renderSociety();
+}
+{ const _p = politicsHTML; politicsHTML = function () { return _p() + regimeChangeHTML(); }; }
+{ const _d = dailyTick; dailyTick = function (catchUp) { _d(catchUp); try { regimeReformTick(); } catch (e) { } }; }
 function legacyHTML() {
     const L = legacyScore();
     return `<div class="flex items-center gap-4 mb-3"><div class="gs-stat" style="padding:8px 14px"><div class="gs-stat-lbl">Your legacy</div><div class="gs-stat-val" style="font-size:30px;color:#d1ad5b">${L.total}<span class="gs-stat-of">/1000</span></div><div class="gs-stat-sub">grade ${L.grade}</div></div>
@@ -11494,6 +11581,13 @@ const ENT_EXTRA = {
 { id: 'uwsa', name: 'United Wa State Army territory', short: 'Wa State', kind: 'autonomous armed region', host: ['MMR'], patrons: ['CHN'], color: '#a3e635', conf: 'mmr', S: 55, fighters: 30000, popShare: 0.012, hostArea: 676578, aims: 'Self-governing Wa region on the Chinese border, effectively a one-party state.', cities: ['Pangkham'], base: [22.7, 99.1], poly: [[23.8, 98.7], [22.5, 98.8], [22.0, 99.3], [22.6, 100.0], [23.5, 99.6]] },
 { id: 'kia', name: 'Kachin Independence Army territory', short: 'KIA', kind: 'ethnic armed organisation', host: ['MMR'], patrons: [], color: '#fb923c', conf: 'mmr', S: 50, fighters: 30000, popShare: 0.012, hostArea: 676578, aims: 'Kachin self-rule in northern Myanmar; fighting the junta.', cities: ['Laiza', 'Bhamo area'], base: [24.8, 97.7], poly: [[26.3, 97.2], [25.0, 96.9], [24.2, 97.5], [24.7, 98.4], [25.9, 98.3]] }
 ].forEach(d => { if (!PROXY_DEFS.some(x => x.id === d.id)) PROXY_DEFS.push(d); });
+// Suwayda: after the July 2025 massacres the Druze of Jabal al-Arab run their own affairs under Sheikh Hikmat al-Hijri,
+// with a "National Guard" and Israeli backing (air strikes on government forces, aid, calls for a "Jabal Bashan" state)
+if (!PROXY_DEFS.some(x => x.id === 'sweida')) PROXY_DEFS.push({ id: 'sweida', name: 'Suwayda Druze (National Guard)', short: 'Suwayda', kind: 'breakaway Druze authority', host: ['SYR'], patrons: ['ISR'], color: '#a78bfa', conf: null, S: 35, fighters: 12000, popShare: 0.02, hostArea: 185180,
+    aims: 'Druze self-rule in Jabal al-Arab after the July 2025 massacres; Sheikh al-Hijri calls for an independent "Jabal Bashan" under Israeli protection.', cities: ['Suwayda', 'Shahba', 'Salkhad'], base: [32.71, 36.57],
+    poly: [[32.95, 36.5], [32.95, 36.9], [32.45, 36.95], [32.35, 36.65], [32.6, 36.45]] });
+ENT_EXTRA.sweida = { leader: 'Hikmat al-Hijri', title: 'Druze spiritual leader · head of the Supreme Legal Committee', gov: 'Druze self-administration (Supreme Legal Committee, National Guard)', hq: 'Suwayda', ideology: 'Druze self-determination, backed by Israel', founded: 2025, em: 'DZ', wiki: 'Hikmat al-Hijri' };
+PROXY_ALIASES.sweida = ['suwayda', 'sweida', 'as suwayda', 'druze', 'syrian druze', 'jabal bashan', 'national guard', 'hijri'];
 Object.assign(PROXY_ALIASES, { somaliland: ['somaliland'], trnc: ['northern cyprus', 'trnc', 'n cyprus'], uwsa: ['wa state', 'united wa state army', 'uwsa'], kia: ['kia', 'kachin independence army', 'kachin'] });
 
 // ----- migration for older saves -----
@@ -11600,6 +11694,9 @@ const ENT_CONTROL = {
     // Somaliland minus Las Anod / Sool and eastern Sanaag (SSC-Khatumo, now Somalia's North Eastern State)
     somaliland: { clip: ['Somaliland'], mask: [[[12.0, 42.5], [12.0, 49.5], [7.5, 49.5], [7.5, 42.5]]],
                   minus: [[[9.75, 46.95], [9.75, 49.5], [7.5, 49.5], [7.5, 46.75], [8.6, 46.75]], [[11.3, 48.1], [11.3, 49.5], [9.7, 49.5], [9.7, 48.1]]] },
+    // As-Suwayda governorate held by the Druze National Guard; government forces and tribes keep villages on the western edge,
+    // and the empty eastern desert is no one's
+    sweida: { mask: [[[32.69, 37.495], [32.317, 36.819], [32.328, 36.707], [32.32, 36.69], [32.343, 36.654], [32.357, 36.517], [32.479, 36.527], [32.52, 36.495], [32.551, 36.507], [32.566, 36.495], [32.576, 36.458], [32.577, 36.402], [32.627, 36.4], [32.65, 36.444], [32.667, 36.451], [32.707, 36.356], [32.74, 36.368], [32.829, 36.364], [32.893, 36.337], [32.944, 36.341], [33.0, 36.427], [33.002, 36.544], [33.054, 36.533], [33.057, 36.491], [33.116, 36.473], [33.161, 36.474], [33.186, 36.505], [33.225, 36.824], [33.174, 36.9], [33.149, 36.908], [33.112, 36.949], [33.078, 36.961], [33.047, 37.078], [33.031, 37.104], [32.975, 37.133], [32.95, 37.183], [32.946, 37.257], [32.928, 37.272], [32.863, 37.284], [32.69, 37.495]]], minus: [[[33.3, 36.25], [33.3, 36.53], [32.92, 36.51], [32.79, 36.48], [32.6, 36.38], [32.6, 36.25]], [[33.4, 37.05], [33.4, 37.7], [32.1, 37.7], [32.1, 37.05]]] },
     trnc: { clip: ['Northern Cyprus'], mask: [[[36.0, 32.4], [36.0, 34.8], [34.9, 34.8], [34.9, 32.4]]] },
     // northern Wa (Pangkham) on the Chinese border and southern Wa on the Thai border
     uwsa: { mask: [[[23.3, 98.9], [22.6, 98.82], [22.0, 99.02], [21.95, 99.45], [22.2, 99.7], [22.9, 99.65], [23.3, 99.55]], [[20.6, 98.3], [20.35, 98.25], [20.0, 99.2], [20.05, 100.1], [20.55, 100.1]]] },
@@ -11718,9 +11815,10 @@ const ENT_CONTROL = {
         eln: { code: 'ELN', name: 'ELN/FARC zones', rel: -70, also: { USA: -70 } },
         krg: { code: 'KRG', name: 'Kurdistan Region', rel: -10, also: { IRN: -20 } },
         uwsa: { code: 'WAS', name: 'Wa State', rel: -20 },
-        kia: { code: 'KIA', name: 'Kachin (KIA)', rel: -80 }
+        kia: { code: 'KIA', name: 'Kachin (KIA)', rel: -80 },
+        sweida: { code: 'SWD', name: 'Suwayda (Druze)', rel: -60, also: { TUR: -30, JOR: -10 } }
     };
-    const SPECIAL = { transnistria: [0.36, 1.4], krg: [6.5, 28], sdf: [4.5, 4], lna: [3.2, 18], polisario: [0.04, 0.05], tplf: [6.5, 3] }; // [pop M, GDP $B] where the host share is a poor guide
+    const SPECIAL = { sweida: [0.45, 0.5], transnistria: [0.36, 1.4], krg: [6.5, 28], sdf: [4.5, 4], lna: [3.2, 18], polisario: [0.04, 0.05], tplf: [6.5, 3] }; // [pop M, GDP $B] where the host share is a poor guide
     window.PROXY_STATE = { hamas: ['GAZ'], trnc: ['CYN'], somaliland: ['SOL'] };
     const pairSet = (a, b, v) => { if (a && b && a !== b) PAIRS[[a, b].sort().join('|')] = v; };
     function registerState(d, code, name, o) {
