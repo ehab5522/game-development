@@ -4667,11 +4667,15 @@
             const tradeReply = handleEnvoyReply(who, text) || handleTradeMessage(who, text);
             if (tradeReply) {
                 setTyping(who, true);
+                const iso0 = resolveIso(who);
                 setTimeout(() => {
-                    const t = isRepeat(who, tradeReply) ? followUpLine(who, tradeReply, resolveIso(who)) : tradeReply;
-                    appendForeign(who, `${chatSpeaker(who)}: ${t}`);
-                    setTyping(who, false); renderDiplomacyMenu();
-                    if (convo(who).pending.length) { const more = convo(who).pending.splice(0).join('\n'); diploTurn(who, resolveIso(who), more); } else flushInbox(who);
+                    const t = isRepeat(who, tradeReply) ? followUpLine(who, tradeReply, iso0) : tradeReply;
+                    const finish = line => {
+                        appendForeign(who, `${chatSpeaker(who)}: ${line}`);
+                        setTyping(who, false); renderDiplomacyMenu();
+                        if (convo(who).pending.length) { const more = convo(who).pending.splice(0).join('\n'); diploTurn(who, iso0, more); } else flushInbox(who);
+                    };
+                    if (iso0 && typeof aiVoiceAllowed === 'function' && aiVoiceAllowed()) voiceMessage(iso0, t, finish); else finish(t);
                 }, 450);
                 return;
             }
@@ -4754,6 +4758,9 @@
             if (sm.length) L.push(`SCHEDULED: talks in ${venueName(sm[0].venue)} on ${fmtDate(dateIn(sm[0].day - state.dayIndex))}.`);
             const acts = state.orders.history.filter(x => x.targets && x.targets.some(q => q.iso === iso)).slice(-5);
             if (acts.length) L.push(`WHAT ${state.player.toUpperCase()} HAS DONE TOWARD YOU: ${acts.map(x => `"${x.text}" (${x.outcome || 'in progress'})`).join('; ')}.`);
+            try { L.push(`YOUR FOREIGN POLICY: ${fpBrief(iso)}`); } catch (e) { }
+            try { const mem = diploMemory(iso); if (mem.length) L.push(`WHAT YOU REMEMBER ${state.player.toUpperCase()} DID TOWARD YOU: ${mem.join('; ')}.`); } catch (e) { }
+            L.push(`RULE: intelligence or covert operations alone are NOT grounds for war — answer them in your own way (expel, counter-intelligence, protest, sanctions), not with declarations of war.`);
             L.push(`WHAT THE GAME CAN ACTUALLY DO (only propose things of these kinds): trade agreements (tariff cuts in %, monthly purchases or sales of oil, gas, food, chips, rare earths, steel and other resources), investment, aid or loans, summits at a named venue and date, ceasefire/peace terms, joint infrastructure (rail, pipeline, port, power), security cooperation, sanctions and sanctions relief, support at the UN.`);
             return L.join('\n');
         }
@@ -4764,31 +4771,34 @@
             try {
                 const mech = (iso && state.phase === 'playing') ? offlineNegotiate(who, iso, text) : null;
                 let reply = null, quick = mech && mech.quick, mood = 0;
+                const decided = mech && mech.binding !== false;
                 if (aiReady() && iso) {
                     const prev = recentForeign(who, 3).map(stripSpeaker);
                     const spk = chatSpeaker(who);
                     const arr0 = state.chatData[who] || []; let kcut = arr0.length; while (kcut && arr0[kcut - 1].sender === 'user') kcut--;   // don't feed the just-typed message twice (B8)
                     const history = arr0.slice(Math.max(0, kcut - 14), kcut).map(m => (m.sender === 'user' ? state.player : spk) + ': ' + stripSpeaker(m.text)).join('\n');
-                    const sys = `${leaderPersona(iso)}\n\nLIVE GAME BRIEFING:\n${diploBrief(iso)}\n\nRULES: You are negotiating by message with ${state.player}. Stay consistent with the briefing (relations, borders, power, agreements, conflicts) and with what you said before. Be concrete: numbers, dates, venues, conditions, what you want in return. Never repeat a previous message — move the conversation forward. ` +
-                        (mech ? `Your government has ALREADY DECIDED this answer; keep every decision, number, date, venue and listed term exactly, but say it in your own voice:\n"${mech.reply.replace(/"/g, "'")}"\n` : `No formal decision is needed; respond naturally and steer toward your national interest.\n`) +
+                    const sys = `${leaderPersona(iso)}\n\nLIVE GAME BRIEFING:\n${diploBrief(iso)}\n\nRULES: You are negotiating by message with ${state.player}. Stay consistent with the briefing (relations, borders, power, agreements, conflicts), with your foreign-policy style, and with what you said before. Be concrete: numbers, dates, venues, conditions, what you want in return. React to what ${state.player} has actually DONE, not only to these words. Never repeat a previous message — move the conversation forward. ` +
+                        (decided ? `Your government has ALREADY DECIDED this answer; keep every decision, number, date, venue and listed term exactly, but say it in your own voice:\n"${mech.reply.replace(/"/g, "'")}"\n` : `No formal decision is needed; respond naturally, in character, and steer toward your national interest.${mech ? ` (You may draw on this note if useful: "${mech.reply.replace(/"/g, "'").slice(0, 200)}")` : ''}\n`) +
                         (prev.length ? `Your last messages (do NOT repeat them): ${prev.map(x => '"' + x.slice(0, 160).replace(/"/g, "'") + '"').join(' | ')}\n` : '') +
                         `Write under 110 words. Return JSON: {"reply": "...", "quick": ["2-3 short things ${state.player} might answer, under 60 characters each"], "mood": -2..2 (how this message changed your attitude)}`;
-                    const small = AI.provider === 'builtin';
-                    const r = await callAI(sys, history + `\n${state.player}: ${text}`, !small, { maxTokens: 500 });
-                    if (r && typeof r === 'object' && r.reply) { reply = String(r.reply).trim(); if (!quick && Array.isArray(r.quick)) quick = r.quick.filter(q => typeof q === 'string' && q.length < 80).slice(0, 3); mood = clamp(+r.mood || 0, -2, 2); }
-                    else if (typeof r === 'string' && r.length > 4) reply = r.replace(/^["“]|["”]$/g, '');
+                    const r = await callAI(sys, history + `\n${state.player}: ${text}`, true, { maxTokens: AI_BUDGET.chat });
+                    const parse = x => (x && typeof x === 'object') ? x : (typeof x === 'string' ? extractJSON(x) : null);
+                    let j = parse(r);
+                    if (j && j.reply) { reply = String(j.reply).trim(); if (!quick && Array.isArray(j.quick)) quick = j.quick.filter(q => typeof q === 'string' && q.length < 80).slice(0, 3); mood = clamp(+j.mood || 0, -2, 2); }
+                    else if (typeof r === 'string' && r.length > 4 && !/^[\s\[{]/.test(r)) reply = r.replace(/^["“]|["”]$/g, '');
                     if (reply && isRepeat(who, reply)) {        // one more try, then fall back to a clear follow-up
-                        const r2 = await callAI(sys + `\nYour draft repeated an earlier message. Say something NEW that moves the negotiation forward.`, history + `\n${state.player}: ${text}`, false, { maxTokens: 300 });
-                        reply = (r2 && !isRepeat(who, r2)) ? String(r2).replace(/^["“]|["”]$/g, '') : followUpLine(who, reply, iso);
+                        const r2 = await callAI(sys + `\nYour draft repeated an earlier message. Say something NEW that moves the negotiation forward.`, history + `\n${state.player}: ${text}`, true, { maxTokens: AI_BUDGET.chat });
+                        const j2 = parse(r2); const t2 = j2 && j2.reply ? String(j2.reply).trim() : (typeof r2 === 'string' && !/^[\s\[{]/.test(r2) ? r2 : null);
+                        reply = (t2 && !isRepeat(who, t2)) ? t2.replace(/^["“]|["”]$/g, '') : (decided ? followUpLine(who, reply, iso) : null);
                     }
                 }
                 if (!reply) {
-                    await new Promise(res => setTimeout(res, 500 + Math.random() * 500));
+                    await new Promise(res => setTimeout(res, 400 + Math.random() * 500));
                     reply = mech ? mech.reply : (iso ? 'Your message has been received. Our ministry will respond in due course.' : 'Message received.');
-                    if (isRepeat(who, reply)) reply = followUpLine(who, reply, iso);
+                    if (isRepeat(who, reply)) reply = decided ? followUpLine(who, reply, iso) : (iso && typeof fpLine === 'function' ? fpLine(iso, 'concern') : reply);
                 }
                 if (iso && state.phase === 'playing') {
-                    const d = (mech && mech.dRel) || (mech ? 0 : Math.round(mood));
+                    const d = decided ? (mech.dRel || 0) : Math.round(mood);
                     if (d) addRel(state.playerIso, iso, d);
                 }
                 appendForeign(who, `${chatSpeaker(who)}: ${reply}`, quick && quick.length ? { quick } : {});
@@ -5610,8 +5620,8 @@
                     `You are the chief strategic advisor to the head of government of ${state.player} in a realistic geopolitical simulation that began on 1 January 2026 (today ${fmtDate(state.date)}). ` +
                     `Build on the leader's recent orders first (follow-ups, consequences, next steps), then the country's situation. Give advice a real advisor of THIS country would give: use its actual politics, alliances, economy, neighbours, ongoing conflicts and the numbers in the situation data. Avoid generic advice that could apply to any country. ` +
                     `Respect geography and the type of each dispute: only suggest border deployments against countries in "neighbours"; trade disputes need economic or diplomatic answers, not military ones; a small economy cannot hurt a much larger one with sanctions. ` +
-                    `Each order must be one concrete sentence the leader can issue (name countries, places, amounts). Reply with a JSON array of exactly 6 objects: {"order": "...", "why": "one sentence citing the situation"}.`,
-                    `Situation:\n${small ? situationBrief() : JSON.stringify(situationSnapshot())}\n\nExamples of realistic current options for ${shortName(me)}: ${(NATION_IDEAS[me] || []).slice(0, 5).join(' | ') || 'none listed'}\nRecent orders: ${state.orders.history.slice(-5).map(o => o.text + ' (' + (o.outcome || 'in progress') + ')').join('; ') || 'none'}`, true, { maxTokens: small ? 700 : 1200 });
+                    `Each order must be one concrete sentence the leader can issue (name countries, places, amounts). ` + aiGameRules() + ` Reply with a JSON object: {"ideas": [exactly 6 objects {"order": "...", "why": "one sentence citing the situation"}]}.`,
+                    `Situation:\n${small ? situationBrief() : JSON.stringify(situationSnapshot())}\n\n${aiWorldContext()}\n\nExamples of realistic current options for ${shortName(me)}: ${(NATION_IDEAS[me] || []).slice(0, 5).join(' | ') || 'none listed'}`, true, { maxTokens: small ? 700 : AI_BUDGET.ideas });
                 const arr = Array.isArray(ai) ? ai : ai && Array.isArray(ai.orders) ? ai.orders : ai && Array.isArray(ai.ideas) ? ai.ideas : null;
                 if (arr && arr.length) ideas = arr.slice(0, 6).map(x => { if (typeof x === 'string') return x; const t = String(x.order || x.text || x.title || ''); if (t && x.why) IDEA_WHY[t] = String(x.why); return t; }).filter(Boolean);
             }
@@ -6542,7 +6552,7 @@
 
         // The advisor is a person you talk to: small talk gets a short human answer, a question gets a direct answer,
         // and a full briefing (numbers, threats, an order) only comes when you ask for analysis or advice.
-        const ADV_SMALLTALK = /^\s*(hi|hello|hey|yo|sup|good (morning|evening|afternoon|night)|how are you|how's it going|thanks?|thank you|ok(ay)?|cool|nice|great|bye|see you)\b[\s\w,.!?']{0,40}$/i;
+        const ADV_SMALLTALK = /^\s*(hi|hello|hey|yo|sup|good (morning|evening|afternoon|night)|how are you|how's it going|thanks?|thank you|ok(ay)?|cool|nice|great|bye|see you)\b[\s,.!']{0,12}$/i;
         const ADV_ANALYSIS = /(analy|brief|situation|report|overview|status|what should (i|we)|advice|advise|recommend|suggest|plan|strategy|priorit|threat|how (are|is) (we|our|the (economy|war|country))|what do you think|next move|what now)/i;
         async function askAdvisor(q) {
             const box = document.getElementById('adv-reply');
@@ -6550,7 +6560,7 @@
             box.classList.remove('hidden');
             const hist = state.advChat = (state.advChat || []).slice(-8);
             const head = `<div class="text-[10px] uppercase tracking-wider font-bold text-[#c7d2fe] mb-1">🎓 Advisor · “${esc(q.slice(0, 60))}${q.length > 60 ? '…' : ''}”</div>`;
-            const small = ADV_SMALLTALK.test(q), wantsBrief = !small && ADV_ANALYSIS.test(q);
+            const small = ADV_SMALLTALK.test(q) && !/\?/.test(q), wantsBrief = !small && ADV_ANALYSIS.test(q);
             box.innerHTML = head + `<span class="text-slate-400">${small ? '…' : 'Thinking…'}</span>`;
             const n = nationIso(state.playerIso) || {};
             const sys = `You are ${state.player}'s senior advisor, a real person on the leader's staff in a geopolitical strategy game set in ${fmtDate(state.date)} (it began 1 January 2026). ` +
@@ -6560,15 +6570,20 @@
                 `- Only when the leader asks for analysis, a briefing, advice or what to do: give a short assessment (under 150 words) and, if useful, one suggested order on its own line starting with "Order:".\n` +
                 `- When you list actions or recommendations, put each on its own numbered line ("1. ...") and write it as ONE concrete order the leader could issue as-is (name the country, place, amount), not a vague goal.\n` +
                 `- No headings, no bullet lists unless asked, never repeat the whole situation. Respect geography and the kind of each dispute (trade / diplomatic / military). Don't invent facts.\n` +
-                `- Address the leader naturally (e.g. "Mr/Madam President", "boss" or by title), stay in character, plain English.`;
+                `- Address the leader naturally (e.g. "Mr/Madam President", "boss" or by title), stay in character, plain English.\n\n` + aiGameRules();
             const ctx = wantsBrief ? (AI.provider === 'builtin' ? situationBrief() : JSON.stringify(situationSnapshot()))
                 : `${state.player}: approval ${n.stability}%, GDP ${formatVal(n.gdp)}, treasury ${formatVal(n.treasury)}. Conflicts: ${conflictsOf(state.playerIso).map(c => c.name).slice(0, 4).join('; ') || 'none'}.` +
                   (small ? '' : `\nMore data if needed: ${AI.provider === 'builtin' ? situationBrief() : JSON.stringify(situationSnapshot()).slice(0, 6000)}`);
             const convo = hist.map(m => `${m.who === 'me' ? 'Leader' : 'Advisor'}: ${m.t}`).join('\n');
-            const ai = await callAI(sys, `Background (for you only, do not recite it):\n${ctx}\n\n${convo ? 'Conversation so far:\n' + convo + '\n\n' : ''}Leader: ${q}\nAdvisor:`, false, { maxTokens: wantsBrief ? 500 : small ? 120 : 320 });
+            const errBox = {};
+            const ai = await callAI(sys, `Background (for you only, do not recite it):\n${ctx}\n\n${convo ? 'Conversation so far:\n' + convo + '\n\n' : ''}Leader: ${q}\nAdvisor:`, false, { maxTokens: wantsBrief ? AI_BUDGET.advisor : small ? AI_BUDGET.advisorSmall : AI_BUDGET.advisor, err: errBox, quiet: true });
             if (ai) { hist.push({ who: 'me', t: q.slice(0, 400) }, { who: 'adv', t: String(ai).slice(0, 600) }); state.advChat = hist.slice(-8); }
             if (ai) { advRender(box, head, String(ai).replace(/^Advisor:\s*/i, '')); return; }
-            box.innerHTML = head + (small ? offlineSmallTalk(q) : offlineAdvisorAnswer2(q));
+            // AI configured but failed: say so, and remember the offline answer so later AI turns have the context
+            const offline = small ? offlineSmallTalk(q) : offlineAdvisorAnswer2(q);
+            const note = (AI.provider !== 'off') ? `<div class="text-[10.5px] mb-1" style="color:#e0b35a">⚠ The AI is unavailable (${esc(errBox.msg || AI.lastErr || 'no reply')}) — your staff answer instead.</div>` : '';
+            try { const plain = offline.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); hist.push({ who: 'me', t: q.slice(0, 400) }, { who: 'adv', t: plain.slice(0, 600) }); state.advChat = hist.slice(-8); } catch (e) { }
+            box.innerHTML = head + note + offline;
         }
         function offlineSmallTalk(q) {
             const n = nationIso(state.playerIso) || {}, s = q.toLowerCase(), me = state.playerIso, cs = conflictsOf(me).filter(c => c.sideA.includes(me) || c.sideB.includes(me) || (c.location || []).includes(me));
@@ -7454,7 +7469,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             o.siteId = site.id;
             // AI HOOK: a short briefing on the project (only with an API key)
             callAI("You write two-sentence intelligence briefings about facilities in a realistic geopolitical simulation set in 2026. Be specific and plausible; no preamble.",
-                   `Facility: ${site.name} (${T.name}) owned by ${shortName(me)} at ${site.place}, ${shortName(site.host)}. Specs: ${JSON.stringify(site.specs)}. Order text: ${o.text}`)
+                   `Facility: ${site.name} (${T.name}) owned by ${shortName(me)} at ${site.place}, ${shortName(site.host)}. Specs: ${JSON.stringify(site.specs)}. Order text: ${o.text}`, false, { maxTokens: AI_BUDGET.site, low: true, quiet: true })
                 .then(t => { if (t) { site.desc = t.trim(); updateSiteMarker(site); } });
             return site;
         }
@@ -10162,6 +10177,53 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         }
 
         // =====================================================================
+        //  SHARED AI CONTEXT — one description of the game's rules and one of the live world, used by every prompt
+        //  (advisor, report, order judge, diplomacy) so the AI always knows what the game can actually do and where
+        //  the player stands. Kept compact for the small in-browser model.
+        // =====================================================================
+        function aiGameRules() {
+            if (aiGameRules._c) return aiGameRules._c;
+            const builds = [];
+            try { Object.keys(SITE_TYPES).slice(0, 26).forEach(k => { const T = SITE_TYPES[k]; builds.push(`${T.name} ${formatVal(T.cost)}`); }); } catch (e) { }
+            const L = [
+                `GAME RULES (geopolitics simulation, started 1 Jan 2026):`,
+                `- Orders are issued in plain English in the command bar; the game parses a category (military, diplomacy, economy, domestic, intelligence, humanitarian, construction), a kind, targets, a cost and a duration in realistic days.`,
+                `- The player issues up to ${typeof ORDERS_PER_WEEK !== 'undefined' ? ORDERS_PER_WEEK : 5} orders per week. Difficulty: ${typeof D === 'function' ? D().label : 'Normal'}.`,
+                `- Talks, agreements, treaties, messages and diplomacy are FREE; only real projects and purchases cost money (construction, procurement, aid actually paid).`,
+                `- Intelligence/covert operations (espionage, cyber, sabotage, disinformation, subversion, assassination, counter-intelligence) do NOT start wars by themselves — they are answered with expulsions, counter-intelligence, cyber retaliation, sanctions or protests, and can be exposed.`,
+                `- Buildable projects you can order (cost): ${builds.slice(0, 20).join('; ')}. A buildable not in this list is priced by the AI from its real-world cost.`,
+                `- Example orders the parser understands: "Build an air base in <city>", "Sign a trade deal with <country>", "Impose sanctions on <country>", "Launch airstrikes on <country>", "Spy on <country>", "Send humanitarian aid to <country>", "Raise the education budget".`
+            ];
+            return aiGameRules._c = L.join('\n');
+        }
+        // what you (or an AI leader) should know about the live world right now
+        function aiWorldContext(forIso) {
+            const me = state.playerIso, p = nationIso(me) || {}, L = [];
+            try {
+                L.push(`NOW: ${state.date.toDateString()}. ${state.player} — approval ${p.stability}%, treasury ${formatVal(p.treasury)}, GDP ${formatVal(p.gdp)}.`);
+                const wars = (typeof playerAtWar === 'function' ? playerAtWar() : []) || [];
+                if (wars.length) L.push(`At war: ${wars.map(c => c.name).join('; ')}.`);
+                const rec = (state.orders && state.orders.history || []).slice(-6).map(o => `"${o.text}" (${o.outcome || 'in progress'})`);
+                if (rec.length) L.push(`${state.player}'s recent orders: ${rec.join('; ')}.`);
+                const R = typeof reactState === 'function' ? reactState() : null;
+                if (R) { const hot = reactStanding().sort((a, b) => Math.max(b.g, b.f, b.i) - Math.max(a.g, a.f, a.i)).slice(0, 4).map(s => `${shortName(s.iso)} (${s.g >= 25 ? 'angry' : s.i >= 25 ? 'answering covert ops' : s.f >= 25 ? 'fearful' : s.w >= 25 ? 'grateful' : 'wary'})`); if (hot.length) L.push(`How the world feels about ${state.player}: ${hot.join(', ')}.`); }
+            } catch (e) { }
+            return L.join('\n');
+        }
+        // what a country remembers the player recently DID toward it (actions, not just words) — for diplomacy prompts & offline replies
+        function diploMemory(iso) {
+            const me = state.playerIso, R = (typeof reactState === 'function') ? reactState() : null, out = [];
+            try {
+                const acts = (state.orders.history || []).filter(o => o.targets && o.targets.some(t => t.iso === iso)).slice(-4);
+                acts.forEach(o => out.push(`${o.cat === 'intelligence' ? 'a covert operation' : o.text} (${o.outcome || 'under way'})`));
+            } catch (e) { }
+            if (R) { const g = Math.round(R.g[iso] || 0), f = Math.round(R.f[iso] || 0), w = Math.round(R.w[iso] || 0), iv = Math.round(R.i[iso] || 0);
+                const tags = []; if (g >= 20) tags.push('resentful of recent hostile acts'); if (iv >= 20) tags.push('aware of your intelligence operations'); if (f >= 20) tags.push('alarmed by your military moves'); if (w >= 20) tags.push('grateful for your support');
+                if (tags.length) out.push('mood: ' + tags.join(', ')); }
+            return out;
+        }
+
+        // =====================================================================
         //  ADVISOR SITUATION REPORT (monthly + on demand)
         // =====================================================================
         let currentReport = null;
@@ -10186,7 +10248,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         async function aiEnhanceReport(rep) {
             const A = rep.A, small = AI.provider === 'builtin';
             const sys = `You are the National Security Advisor to ${A.leader}, head of government of ${A.country}, in a realistic geopolitical strategy simulation that began on 1 January 2026 (today ${A.date}). ` +
-                `Your staff has computed the facts below. Analyze THIS country's situation specifically, using the numbers given — do not invent facts or statistics. Respect geography ("neighbours") and dispute types ("disputes".kind: trade disputes are economic, diplomatic rows are diplomatic, only military disputes call for force; never propose border deployments against a non-neighbour). Be direct, specific and practical, like a real cabinet briefing.`;
+                `Your staff has computed the facts below. Analyze THIS country's situation specifically, using the numbers given — do not invent facts or statistics. Respect geography ("neighbours") and dispute types ("disputes".kind: trade disputes are economic, diplomatic rows are diplomatic, only military disputes call for force; never propose border deployments against a non-neighbour). Be direct, specific and practical, like a real cabinet briefing.\n\n` + aiGameRules();
             const ask = small
                 ? `Situation:\n${situationBrief(A)}\n\nReturn JSON: {"summary":["3 short priority sentences"],"assessment":{"economy":"2 sentences","military":"2 sentences","diplomacy":"2 sentences","domestic":"2 sentences"},"recommendations":[{"title":"","objective":"","order":"one-line order the leader can issue","steps":["",""],"risks":[""],"effects":[""],"alternatives":[""]}]} with 2 or 3 recommendations.`
                 : `Situation (JSON):\n${JSON.stringify(situationSnapshot(A))}\n\nWrite the monthly situation report. Return JSON with exactly these keys:\n` +
@@ -10195,7 +10257,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                   `"threat_notes":{"<exact threat title from the list>":"one sentence of judgment"},` +
                   `"recommendations":[3 to 5 objects {"title":"","category":"military|diplomacy|economy|domestic|intelligence|humanitarian|construction","target":"country name or empty","objective":"measurable end state","order":"a single concrete order sentence the leader can issue in the game, naming the country","steps":["3-4 concrete steps"],"risks":["2-3"],"effects":["2-3 expected effects"],"alternatives":["1-2"],"rules_of_engagement":"constraints","justification":"public/legal justification","contingency":"what if it fails"}]}` +
                   `\nRecommendations must fit the numbers (e.g. don't recommend expensive programs if runway is short; don't recommend offensives when the power ratio is below 1).`;
-            const r = await callAI(sys, ask, true, { maxTokens: small ? 900 : 2600 });
+            const r = await callAI(sys, ask, true, { maxTokens: small ? 900 : AI_BUDGET.report });
             if (rep !== currentReport) return;
             if (!r || typeof r !== 'object') { rep.aiState = 'failed'; renderReport(); return; }
             rep.ai = r; rep.aiState = 'done';
@@ -10564,14 +10626,14 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             DIR.aiBusy = true; renderDirectiveReview();
             const D = DIR, R = D.review, A = analyzeSituation(), small = AI.provider === 'builtin';
             const sys = `You are the cabinet of ${state.player} (Defense, Foreign Affairs, Finance, Interior, Intelligence and Legal ministers) in a realistic geopolitical simulation that began 1 January 2026 (today ${fmtDate(state.date)}). ` +
-                `Review the leader's draft directive against the country's real situation. Be specific: cite numbers from the situation, name countries, point out gaps, risks and second-order effects. Ask the leader pointed questions where the plan is vague or dangerous. Do not rubber-stamp a weak plan.`;
+                `Review the leader's draft directive against the country's real situation. Be specific: cite numbers from the situation, name countries, point out gaps, risks and second-order effects. Ask the leader pointed questions where the plan is vague or dangerous. Do not rubber-stamp a weak plan.\n\n` + aiGameRules();
             const directive = { order: directiveText(D), objective: D.objective, target: D.target ? shortName(D.target) : '', scale: D.scale, budgetBillions: D.budget || 'not set', timeline: D.timeline, posture: D.covert ? 'covert' : 'overt',
                                 rulesOfEngagement: D.roe, justification: D.justification, contingency: D.contingency, answersToMinisters: D.notes,
                                 staffEstimate: R.est ? { category: R.est.cat, kind: R.est.kind, cost: formatVal(R.est.cost), days: R.est.days, successOdds: R.probDir !== null ? Math.round(R.probDir * 100) + '%' : 'n/a' } : null,
                                 staffFindings: Object.entries(R.M).flatMap(([m, v]) => v.notes.filter(n => !/-ai$/.test(n.sev)).map(n => `${m}: ${n.txt}`)) };
             const user = `Situation:\n${small ? situationBrief(A) : JSON.stringify(situationSnapshot(A))}\n\nDraft directive:\n${JSON.stringify(directive)}\n\n` +
                 `Return JSON: {"overall":"one or two sentence cabinet verdict","quality_adjustment": integer from -10 (dangerous/vague) to 10 (excellent), "ministers":[{"ministry":"Defense|Foreign Affairs|Finance|Interior|Intelligence|Legal","verdict":"concur|concerns|object","comment":"one specific sentence"}], "questions":[{"ministry":"...","question":"pointed question for the leader"}]} — 3 to 6 ministers, 0 to 4 questions.`;
-            const r = await callAI(sys, user, true, { maxTokens: small ? 700 : 1400 });
+            const r = await callAI(sys, user, true, { maxTokens: small ? 700 : AI_BUDGET.review });
             if (DIR !== D) return;
             D.aiBusy = false;
             if (r && typeof r === 'object') D.aiReview = r;
@@ -11236,7 +11298,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (aiReady()) {
                 const A = AGR; A.busy = true; renderAgrPreview();
                 const t = await callAI(`${leaderPersona(P)} You are ${diploSpeaker(P)}, speaking for ${shortName(P)}, replying to ${state.player} about a proposed agreement in a realistic 2026 geopolitical simulation. Relations: ${getRel(state.playerIso, P)} (−100..100). Stay in character, be diplomatic but firm, 2–3 sentences. Do NOT change the decision — explain it.`,
-                    `Their proposal: ${A.clauses.map(c => clauseText(c, P)).join('; ')} for ${A.months} months, ${A.schedule} deliveries, payment ${A.payment}, penalty ${A.penalty}%.\nYour government's decision: ${R.verdict.toUpperCase()}. Reasons: ${R.summary}`, false, { maxTokens: 220 });
+                    `Their proposal: ${A.clauses.map(c => clauseText(c, P)).join('; ')} for ${A.months} months, ${A.schedule} deliveries, payment ${A.payment}, penalty ${A.penalty}%.\nYour government's decision: ${R.verdict.toUpperCase()}. Reasons: ${R.summary}`, false, { maxTokens: AI_BUDGET.envoy, low: true });
                 if (AGR !== A) return;
                 A.busy = false;
                 if (t) { R.aiText = t; said = t + (R.verdict === 'counter' ? ' ' + R.counter.clauses.map(c => clauseText(c, P)).join('; ') + '.' : ''); }
@@ -11462,7 +11524,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const post = text => deliverMessage(iso, text, { quick, act, open: true, important: true, noVoice: true });
             if (aiReady()) {
                 callAI(`${leaderPersona(iso)} You are ${diploSpeaker(iso)}, speaking for ${P}, in a realistic geopolitical simulation set in ${fmtDate(state.date)}. Relations with ${state.player}: ${rel} (−100..100). Write ONE or TWO sentences, in character and in your country's real diplomatic voice, as the opening of your reply. Do NOT list terms — they follow your sentences automatically. Do not change the decision.`,
-                    `${state.player} ordered: "${o.text}". Outcome of their initiative: ${outcome}. Your government's response (keep this decision): ${opening.split('\n')[0]}`, false, { maxTokens: 160 })
+                    `${state.player} ordered: "${o.text}". Outcome of their initiative: ${outcome}. Your government's response (keep this decision): ${opening.split('\n')[0]}`, false, { maxTokens: AI_BUDGET.envoy, low: true })
                     .then(t => post(t ? t.trim() + (opening.includes('\n') ? '\n' + opening.split('\n').slice(1).join('\n') : '') : opening));
             } else post(opening);
         }
@@ -11872,8 +11934,19 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         function offlineNegotiate(name, iso, text) {
             const me = state.playerIso, s = ' ' + text.toLowerCase() + ' ', rel = getRel(me, iso), them = nationIso(iso), I = sharedIssue(iso);
             const st = strengthTalk(iso), named = detectCountries(text).map(f => f.iso).filter(i => i !== me && i !== iso);
-            const out = (reply, dRel = 0, quick) => ({ reply, dRel, quick });
+            const out = (reply, dRel = 0, quick, binding = true) => ({ reply, dRel, quick, binding });
             const c = I.c;
+            // 0) Small talk / greetings — no decision needed; let the AI answer naturally, offline give a style-flavoured line
+            if (/^\s*(hi|hello|hey|yo|greetings|good (morning|afternoon|evening|day)|how are you|how'?s it going|sal;?am|bonjour|nice to (meet|see)|pleasure)\b/.test(s) && text.trim().length < 60 && !/\b(trade|deal|sanction|war|peace|weapon|alliance|threat|nuclear)\b/.test(s)) {
+                const greet = (typeof fpLine === 'function') ? fpLine(iso, 'greet') : 'We receive your message.';
+                return out(c ? `${greet} ${I.enemy ? `Though the ${c.name} still stands between us.` : `What is on your mind${rel > 30 ? ', friend' : ''}?`}` : greet, rel > 20 ? 1 : 0, ['Let us talk about trade.', c ? 'What are your terms?' : 'What matters most to you right now?'], false);
+            }
+            // 0b) Spy / sabotage accusation or confession → a foreign-policy response (and remember it), never war
+            if (/\b(spy|spies|spying|espionage|hack(ed|ing)?|cyber|sabotage|sabotaged|agents?|infiltrat|meddl|interfere|assassinat|disinformation)\b/.test(s)) {
+                const confess = /\b(we|our|i)\b.{0,30}(did|hacked|spied|sabotaged|were behind|admit|sorry)/.test(s);
+                if (confess) { try { if (typeof reactState === 'function') reactState().i[iso] = Math.max(reactState().i[iso] || 0, 25); } catch (e) { } return out(`So you admit it. ${(typeof fpLine === 'function') ? fpLine(iso, 'exposed') : 'This will not be forgotten.'}`, -5, ['It will not happen again.', 'We will discuss compensation.']); }
+                return out(`${(typeof fpLine === 'function') ? fpLine(iso, 'concern') : 'We take these matters seriously.'} If you have evidence of such activity, present it; if you are threatening it, know that we will respond in kind — not with war, but you will feel it.`, -3, ['We have no such intentions.', 'Then let us agree to stop.'], false);
+            }
             // 1) Venue / hosting talks
             if (/\b(host|venue|hold|handle|meet|meeting|summit|talks|negotiat|conference)\b/.test(s) && (/\b(in|via|at|through|by|under)\b/.test(s) || /\bwe (can |will )?host\b/.test(s))) {
                 const venue = venueFromText(s) || named[0] || (/\b(we|our|here)\b.{0,12}\bhost|\bin (our|my) (capital|country)/.test(s) ? me : null);
@@ -11964,23 +12037,25 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 return out(lev < 0.2 ? `Your sanctions would cost us almost nothing — your economy is ${Math.round(lev * 100)}% the size of ours. They would only close doors.` : `Sanctions would be a serious mistake that we would answer in kind.`, -4);
             }
             // 9) Recognition / apology / condolences / greetings
-            if (/\b(sorry|apolog|regret)\b/.test(s)) return out(`Your words are noted. We will judge you by what you do next.`, 3);
-            if (/\b(condolence|sympath|thoughts are with)\b/.test(s)) return out(`Thank you. Our people appreciate it.`, 2);
+            if (/\b(sorry|apolog|regret)\b/.test(s)) return out(`Your words are noted. We will judge you by what you do next.`, 3, null, false);
+            if (/\b(condolence|sympath|thoughts are with)\b/.test(s)) return out(`Thank you. Our people appreciate it.`, 2, null, false);
             if (/\b(recogni[sz]e|recognition)\b/.test(s)) return out(rel > 0 ? `Recognition is a serious step. We welcome it and will reciprocate where we can.` : `We will not be bought with symbolic gestures.`, rel > 0 ? 5 : 0);
             // 10) Agreement words without an open deal
             const sm = state.scheduled.find(x => x.type === 'summit' && x.parties.includes(iso));
             if (sm && /^(ok|okay|agreed|yes|good|fine|deal|sounds good|we agree|we will prepare)/.test(text.trim().toLowerCase())) return out(`Good. We will see you in ${venueName(sm.venue)} on ${fmtDate(dateIn(sm.day - state.dayIndex))}. Come ready to make decisions, not speeches.`, 1);
             if (/^(ok|okay|agreed|yes|good|fine|deal|sounds good|we agree)\b/.test(text.trim().toLowerCase())) return out(`Good. ${c ? 'Then let us fix a date and venue for talks on the ' + c.name + '.' : 'Our ministries will follow up.'}`, 2, c ? ['Let us hold talks in Geneva.', 'We can host the talks.'] : null);
             // 11) Fallback: steer to the real issue between us
-            if (c) return out(I.enemy ? `Let us be direct. On the ${c.name}, ${termsFor(c, iso)[0].charAt(0).toLowerCase() + termsFor(c, iso)[0].slice(1)} Everything else follows from that.`
+            const mem = (typeof diploMemory === 'function') ? diploMemory(iso) : [];
+            const memLine = mem.length ? ` We have not forgotten ${mem.slice(0, 1).join('')}.` : '';
+            if (c) return out(I.enemy ? `Let us be direct. On the ${c.name}, ${termsFor(c, iso)[0].charAt(0).toLowerCase() + termsFor(c, iso)[0].slice(1)} Everything else follows from that.${memLine}`
                             : I.onMyLand ? `Our concern is the ${c.name}. ${termsFor(c, iso)[0]}`
                             : I.mediating ? `We value your mediation on the ${c.name}. Propose a date and venue and we will send a delegation.`
                             : `Our priority is the ${c.name}. Where does ${state.player} stand on it?`, 0,
-                            I.mediating ? ['Let us hold talks in Geneva.', 'We can host the talks.'] : ['What are your terms?', 'We support a ceasefire.']);
+                            I.mediating ? ['Let us hold talks in Geneva.', 'We can host the talks.'] : ['What are your terms?', 'We support a ceasefire.'], false);
             const ex = exportsOf(iso)[0];
-            return out(rel > 40 ? `Always good to hear from ${state.player}. ${ex ? `If you want to deepen ties, our ${RES[ex].name.toLowerCase()} exports and investment are where we can do most.` : 'Tell us what you have in mind.'}`
-                        : rel < -40 ? `Say what you want plainly. Relations are at ${rel}; we need concrete steps, not messages.`
-                        : `What exactly are you proposing? We are open to trade, investment or security talks.`, rel > 0 ? 1 : 0, ['Let us talk about trade.', 'What are your terms?']);
+            return out(rel > 40 ? `Always good to hear from ${state.player}.${memLine} ${ex ? `If you want to deepen ties, our ${RES[ex].name.toLowerCase()} exports and investment are where we can do most.` : 'Tell us what you have in mind.'}`
+                        : rel < -40 ? `Say what you want plainly. Relations are at ${rel}; we need concrete steps, not messages.${memLine}`
+                        : `What exactly are you proposing?${memLine} We are open to trade, investment or security talks.`, rel > 0 ? 1 : 0, ['Let us talk about trade.', 'What are your terms?'], false);
         }
 
         // ---------- Advisor assessment without an AI model ----------
@@ -12001,6 +12076,40 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                     if (r > 30) opts.push(`They are a partner — this is the moment for a trade or security agreement.`);
                     L.push(opts.join(' '));
                 });
+            } else if (/(build|construct|factory|plant|base|reactor|refinery|afford|how much|cost of|can (i|we) (build|afford))/.test(s)) {
+                // buildings / construction / affordability
+                let key = null; try { key = (typeof siteTypeOf === 'function') ? siteTypeOf(' ' + s + ' ') : null; } catch (e) { }
+                const treas = nationIso(me).treasury;
+                if (key && SITE_TYPES[key]) {
+                    const T = SITE_TYPES[key]; let o = null; try { o = estimateOrder('Build a ' + T.name); } catch (e) { }
+                    const cost = o ? o.cost : T.cost, dd = T.days ? `${T.days[0]}–${T.days[1]} days` : 'a few months';
+                    L.push(`<b>${esc(T.name)}</b> costs about ${formatVal(cost)} and takes ${dd} to build. ${T.growth ? 'It lifts the economy' : T.defense ? 'It strengthens defence' : T.approval ? 'It raises approval' : 'It is an infrastructure project'}.`);
+                    L.push(treas >= cost ? `You can afford it now (treasury ${formatVal(treas)}). Say where and I'll have it drawn up.` : `We cannot pay for it outright (treasury ${formatVal(treas)}). Raise revenue or phase it.`);
+                    L.push(`<div class="flex flex-col gap-1 mt-1">${quick('Build a ' + T.name.toLowerCase() + ' in ' + ((capitalOf(me) || {}).label || 'the capital'))}</div>`);
+                } else {
+                    L.push(`<b>Construction</b>: you can order things like an air base, a power plant, a research university, a port, a semiconductor fab or a desalination plant. Name what you want and where, and I'll price it and schedule it. Treasury on hand: ${formatVal(treas)}.`);
+                    L.push(`<div class="flex flex-col gap-1 mt-1">${quick('Build an air base in ' + ((capitalOf(me) || {}).label || 'the capital'))}${quick('Build a research university in ' + ((capitalOf(me) || {}).label || 'the capital'))}</div>`);
+                }
+            } else if (/(all(y|ies)|partner|friend|alliance|who (is|are) (on )?our side|bloc|treat(y|ies)|who supports us|who can we)/.test(s)) {
+                const al = A.diplomacy.allies.slice(0, 6).map(x => `${esc(shortName(x.iso))} (${x.rel})`);
+                const blocs = A.diplomacy.blocs || [];
+                let tp = []; try { tp = treatyPartners(me, ['defense', 'alliance']).map(shortName); } catch (e) { }
+                L.push(`<b>Our allies & partners</b>: ${al.length ? al.join(', ') : 'few close friends right now'}.`);
+                if (blocs.length) L.push(`Blocs we belong to: ${blocs.join(', ')}.`);
+                L.push(tp.length ? `Formal defence partners: ${tp.map(esc).join(', ')}.` : `We have no formal mutual-defence pact — worth building one with a strong friend.`);
+            } else if (/(population|people|demograph|citizens|refugee|birth|migrant|how many (people|citizens))/.test(s)) {
+                const p = nationIso(me), so = (state.soc || {})[me];
+                L.push(`<b>Population</b>: about ${(p.pop / 1e6).toFixed(1)} million. GDP per capita ${formatVal(p.gdp / Math.max(1, p.pop))}.`);
+                if (so) L.push(`Society: stability ${A.domestic.stability}/100, approval ${A.domestic.approval}%.`);
+                L.push(`To grow the taxpayer base, build desalination, hospitals, universities and special economic zones, and keep stability high.`);
+            } else if (/(intel|spy|spies|espionage|cyber|sabotage|covert|assassinat|subvert|counter.?intel|hack)/.test(s)) {
+                L.push(`<b>Intelligence options</b>: you can order espionage ("Spy on X"), cyber operations ("Hack X's power grid"), sabotage, disinformation, subversion, assassination, or counter-intelligence to protect yourself.`);
+                L.push(`These never start a war by themselves — but they can be <b>exposed</b>, which costs relations and draws expulsions, counter-intelligence and sanctions. Target autocracies and rivals; against close allies, expect them to find out and react hard.`);
+                L.push(`<div class="flex flex-col gap-1 mt-1">${quick('Strengthen our counter-intelligence against foreign spies')}</div>`);
+            } else if (/(how do i|how to|how can (i|we)|what can i do|what orders|what can i build|help|commands?)/.test(s)) {
+                L.push(`<b>How to command</b>: type a plain-English order in the command bar. Examples that work:`);
+                ['Build an air base in ' + ((capitalOf(me) || {}).label || 'the capital'), 'Sign a trade deal with Germany', 'Impose sanctions on Russia', 'Send humanitarian aid to Sudan', 'Spy on Iran', 'Raise the education budget'].forEach(ex => L.push(`• ${esc(ex)}`));
+                L.push(`<div class="flex flex-col gap-1 mt-1">${quick('Build an air base in ' + ((capitalOf(me) || {}).label || 'the capital'))}</div>`);
             } else if (/(econom|money|treasury|budget|gdp|tax|debt|growth|inflation|trade)/.test(s)) {
                 L.push(`<b>Economy</b>: GDP ${formatVal(E.gdp)} (#${E.gdpRank}), growth ${fmtGrowth(E.growth)} (${E.parts.map(x => esc(x[0]) + ' ' + pctTxt(x[1])).join(', ') || 'baseline'}). Treasury ${formatVal(E.treasury)}, ${E.balance >= 0 ? 'surplus' : 'deficit'} ${formatVal(Math.abs(E.balance))}/month${E.runway < 99 ? ` — about ${tm(E.runway)} months of runway` : ''}.`);
                 const sh = A.resources.filter(x => x.short || x.cover < 2).map(x => `${x.name} (${tm(x.cover)} mo)`);
@@ -12279,7 +12388,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         // Rewrites a message in the leader's own voice; lists of terms are kept exactly as the game set them
         function voiceMessage(iso, text, cb) {
             const nl = text.indexOf('\n'), head = nl > 0 ? text.slice(0, nl) : text, tail = nl > 0 ? text.slice(nl) : '';
-            callAI(leaderPersona(iso), `Rewrite this message you are sending to ${state.player} in your own voice. Keep every fact, number, date, place and decision exactly. One to three sentences, no lists, no quotation marks:\n${head}`, false, { maxTokens: 220 })
+            callAI(leaderPersona(iso), `Rewrite this message you are sending to ${state.player} in your own voice. Keep every fact, number, date, place and decision exactly. One to three sentences, no lists, no quotation marks:\n${head}`, false, { maxTokens: AI_BUDGET.voice, low: true })
                 .then(t => cb(t && t.length > 8 ? t.trim().replace(/^["“]|["”]$/g, '') + tail : text));
         }
 
@@ -14939,7 +15048,43 @@ function reactRecord(o) {
 }
 {
     const _ro = resolveOrder;
-    resolveOrder = function (o) { const r = _ro(o); try { reactRecord(r || o); } catch (e) { console.warn('react', e); } return r; };
+// When there is no AI judge, the rules engine still makes the world react to EVERY executed order:
+// the directly involved countries, and — for provocative builds, big moves or repression — the ones that care.
+// Soft, flavoured statements (grievance/fear/goodwill are already booked by reactRecord); escalation is left to reactWeekly.
+function worldNotice(o) {
+    if (!o || !o.outcome || state.phase !== 'playing') return;
+    const me = state.playerIso, cast = [];
+    const add = (iso, stance) => { if (iso && iso !== me && WORLD[iso] && !NON_SOVEREIGN.has(iso) && !cast.some(c => c.iso === iso)) cast.push({ iso, stance }); };
+    (o.targets || []).forEach(t => t.iso && add(t.iso, t.stance === 'hostile' ? 'oppose' : t.stance === 'friendly' ? 'support' : 'concern'));
+    try {
+        if (o.cat === 'construction' && ['nuke_weapon', 'enrichment', 'missile', 'base', 'airbase', 'naval', 'spaceport'].includes(o.siteType)) neighboursOf(me).slice(0, 2).forEach(x => add(x, 'concern'));
+        else if (o.cat === 'military' && ['strike', 'invasion', 'blockade', 'move', 'posture'].includes(o.kind)) rivalsOf(me).slice(0, 2).forEach(x => add(x, 'concern'));
+        else if (o.cat === 'domestic' && o.kind === 'repress') BLOCS.EU.filter(x => x !== me).slice(0, 1).forEach(x => add(x, 'concern'));
+        else if (o.cat === 'humanitarian') (o.targets || []).forEach(t => add(t.iso, 'support'));
+    } catch (e) { }
+    if (!cast.length) return;
+    o.worldReaction = o.worldReaction || [];
+    let spoke = 0;
+    for (const c of cast) {
+        if (spoke >= 2) break;
+        const i = c.iso, f = fpOf(i);
+        let action, kind;
+        if (c.stance === 'support') { action = f.econ > 0.6 || getRel(me, i) > 40 ? 'praise' : 'statement'; kind = 'praise'; }
+        else if (c.stance === 'oppose') { action = f.style === 'dove' ? 'concern' : 'protest'; kind = 'hitback'; }
+        else { action = 'concern'; kind = 'concern'; }
+        o.worldReaction.push({ iso: i, stance: c.stance, action, text: '' });
+        // one light, spam-controlled line (don't flood every order)
+        try {
+            if (typeof routineAllowed === 'function' && routineAllowed(i, o.text.slice(0, 40))) {
+                reactDo(i, action, { order: o.text.slice(0, 60) });
+                if (Math.random() < 0.5) queueMessage(i, fpLine(i, kind === 'praise' ? 'praise' : kind === 'hitback' ? 'hitback' : 'concern'), { noVoice: false });
+                spoke++;
+            }
+        } catch (e) { }
+    }
+}
+
+    resolveOrder = function (o) { const r = _ro(o); try { reactRecord(r || o); } catch (e) { console.warn('react', e); } try { if (!(typeof aiReady === 'function' && aiReady())) worldNotice(r || o); } catch (e) { console.warn('worldNotice', e); } return r; };
 }
 const REACT_STANCE = s => state.conflicts.some(c => c.type === 'war' && ((c.sideA.includes(s.iso) && c.sideB.includes(state.playerIso)) || (c.sideB.includes(s.iso) && c.sideA.includes(state.playerIso)))) ? ['At war with you', '#c4553c'] : s.h >= 70 ? ['Preparing for war', '#c4553c'] : s.h >= 45 ? ['Retaliating', '#e0975a'] : s.h >= 25 ? ['Hostile', '#d8b45a'] : s.f >= 30 ? ['Arming in fear', '#d8b45a'] : s.w >= 25 ? ['Grateful', '#93b25f'] : ['Wary', '#ab9f80'];
 function reactStanding() {
@@ -15881,13 +16026,13 @@ async function aiOrderJudge(o) {
         `Only include countries that would really react (0-5). Use ISO3 codes. Messages are what that country's real decision-maker or foreign ministry says to ${state.player}, in their own voice, 1-2 sentences.`;
     const user = `ORDER: "${o.text}"\nGame parse: category ${o.cat}, kind ${o.kind || '-'}, targets ${(o.targets || []).map(t => t.iso + '(' + t.stance + ')').join(', ') || 'none'}, cost ${formatVal(o.cost || 0)}, duration ${o.days} days${o.specs ? ', specs ' + JSON.stringify(o.specs) : ''}${o.move && o.move.strength ? ', force ' + o.move.strength.label : ''}${o.covert ? ', covert' : ''}.\n` +
         `Countries:\n${cast.map(aioBrief).join('\n')}\n` +
-        `${state.player} now: approval ${nationIso(me).stability}%, treasury ${formatVal(nationIso(me).treasury)}.\n\n` +
+        `${aiGameRules()}\n${aiWorldContext()}\n\n` +
         `Return JSON: {"understood":"one sentence restating exactly what was ordered, with the player's numbers","success_odds":0-100,` +
         `"effects":{"gdp_pct":-2..2,"approval":-8..8},"target_effects":[{"country":"ISO3","gdp_pct":-3..1,"stability":-10..5}],` +
         `"reactions":[{"country":"ISO3","stance":"support|neutral|concern|oppose|hostile","action":"${AIO_ACTIONS.join('|')}","relations":-30..20,"message":"..."}],` +
         `"headline":"one-line world news headline about this order"}`;
     let r = null;
-    try { r = await callAI(sys, user, true, { maxTokens: small ? 500 : 900 }); } catch (e) { console.warn('ai order', e); }
+    try { r = await callAI(sys, user, true, { maxTokens: small ? 500 : AI_BUDGET.judge }); } catch (e) { console.warn('ai order', e); }
     if (!r || typeof r !== 'object') { o.aiAsked = 'failed'; return; }
     o.ai = r;
     if (r.understood) { o.aiNote = String(r.understood).slice(0, 300); logEvent(`🤖 ${esc(o.aiNote)}`, 'neutral'); }
@@ -15919,7 +16064,9 @@ function aiOrderApply(o) {
         const iso = aioIso(x.country); if (!iso || iso === me || (typeof NON_SOVEREIGN !== 'undefined' && NON_SOVEREIGN.has(iso))) return;
         let rel = num(x.relations, -30, 20); if (Math.abs(rel) > relBudget) rel = Math.sign(rel) * relBudget; relBudget = Math.max(0, relBudget - Math.abs(rel));
         state.aiReact = state.aiReact || [];
-        state.aiReact.push({ iso, day: state.dayIndex + rint(1, 3) + k, action: AIO_ACTIONS.includes(x.action) ? x.action : 'statement', stance: String(x.stance || 'neutral'),
+        const action = AIO_ACTIONS.includes(x.action) ? x.action : 'statement';
+        (o.worldReaction = o.worldReaction || []).push({ iso, stance: String(x.stance || 'neutral'), action, text: String(x.message || '').slice(0, 300) });
+        state.aiReact.push({ iso, day: state.dayIndex + rint(1, 3) + k, action, stance: String(x.stance || 'neutral'),
             rel, msg: String(x.message || '').slice(0, 400), order: o.text.slice(0, 80), cat: o.cat, intel: o.cat === 'intelligence' });
     });
     try { updateEconomyUI(); renderOrderLog(); } catch (e) { }
