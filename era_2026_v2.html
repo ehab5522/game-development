@@ -13562,7 +13562,7 @@ function entSelect(id, keepView) {
     try { if (targetFeature && targetFeature !== playerFeature) geojsonLayer.resetStyle(targetFeature); targetFeature = null; if (playerFeature) playerFeature.setStyle(getHighlightStyle('player')); } catch (e) { }
     ENT.sel = id; state.targetProxy = id; state.target = null;     // the daily panel refresh and society tiles then leave the group's profile alone
     document.getElementById('target-placeholder').classList.add('hidden'); document.getElementById('target-data').classList.remove('hidden');
-    document.getElementById('target-flag').innerHTML = `<span class="px-emblem" style="background:${p.color}">${esc((p.em || p.short).slice(0, 3))}</span>`;
+    document.getElementById('target-flag').innerHTML = groupFlagHTML(p, 18);
     document.getElementById('target-country-name').textContent = p.state_name || p.name;
     const roleEl = document.getElementById('target-leader-role'), nameEl = document.getElementById('target-leader-name'), noteEl = document.getElementById('target-leader-note'), img = document.getElementById('target-portrait'), fb = document.getElementById('target-portrait-fallback'), credit = document.getElementById('portrait-credit');
     if (p.shared) { roleEl.textContent = 'Shared influence'; nameEl.textContent = p.shared.sides.map(x => x.who.split(' · ')[0].replace(/^(President|Secretary-General) /, '')).join(' & '); noteEl.textContent = p.shared.title; }
@@ -15127,24 +15127,67 @@ function warsAlliesHTML() {
         #mz-find.open { display: block; } #mz-find::placeholder { color: #8a7f62; }`;
     document.head.appendChild(st);
 })();
+// ---------- flags of the armed groups ----------
+// Real flags from Wikimedia Commons (loaded by the player's browser); simple well-known designs are drawn here so they
+// always show; a group without a known flag, or one whose image cannot load, gets a plain grey badge with its initials.
+const GRP_SVG = (body, bg) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200"><rect width="300" height="200" fill="${bg}"/>${body}</svg>`);
+const GRP_AR = 'font-family="Amiri, Scheherazade, Noto Naskh Arabic, Arial, sans-serif" font-weight="700" text-anchor="middle" direction="rtl"';
+const BLACK_STANDARD = GRP_SVG(`<g fill="#fff" ${GRP_AR}><text x="150" y="80" font-size="34">لا إله إلا الله</text><circle cx="150" cy="130" r="38"/><text x="150" y="142" font-size="26" fill="#000">محمد رسول الله</text></g>`, '#000');
+const GROUP_FLAG = {
+    hamas: { c: 'Flag_of_Hamas.svg' },
+    hezbollah: { c: 'Flag_of_Hezbollah.svg' },
+    houthi: { svg: GRP_SVG(`<g ${GRP_AR} font-size="25"><text x="150" y="38" fill="#2e7d32">الله أكبر</text><text x="150" y="76" fill="#c62828">الموت لأمريكا</text><text x="150" y="114" fill="#c62828">الموت لإسرائيل</text><text x="150" y="152" fill="#c62828">اللعنة على اليهود</text><text x="150" y="190" fill="#2e7d32">النصر للإسلام</text></g>`, '#fff') },
+    jnim: { svg: BLACK_STANDARD }, shabaab: { svg: BLACK_STANDARD },
+    sdf: { c: 'Flag_of_the_Syrian_Democratic_Forces.svg' },
+    krg: { c: 'Flag_of_Kurdistan.svg' },
+    polisario: { c: 'Flag_of_the_Sahrawi_Arab_Democratic_Republic.svg' },
+    transnistria: { c: 'Flag_of_Transnistria_(state).svg' },
+    abkhazia: { c: 'Flag_of_the_Republic_of_Abkhazia.svg' },
+    sossetia: { c: 'Flag_of_South_Ossetia.svg' },
+    trnc: { c: 'Flag_of_the_Turkish_Republic_of_Northern_Cyprus.svg' },
+    somaliland: { c: 'Flag_of_Somaliland.svg' },
+    stc: { c: 'Flag_of_South_Yemen.svg' },                      // the STC flies the flag of the former South Yemen
+    tplf: { c: 'Flag_of_the_Tigray_Region.svg' },
+    sweida: { c: 'Druze_flag.svg' },                            // Suwayda's National Guard flies the Druze five-colour flag
+    uwsa: { c: 'Flag_of_Wa_State.svg' },
+    aa: { c: 'Flag_of_the_Arakan_Army.svg' },
+    kia: { c: 'Flag_of_the_Kachin_Independence_Organisation.svg' },
+    pmf: { c: "Flag_of_Kata'ib_Hezbollah.svg" },
+    lna: { iso2: 'ly' },                                        // the LNA uses Libya's national flag
+    eln: { c: 'Flag_of_ELN.svg' },
+    rsf: { c: 'Flag_of_the_Rapid_Support_Forces.svg' },
+    m23: { c: 'Flag_of_M23.svg' },
+    splmn: { c: 'Flag_of_SPLM-N.svg' }
+};
+function grpBadge(p, h) { const w = Math.round(h * 1.5); return `<span class="grp-badge" style="width:${w}px;height:${h}px;font-size:${Math.max(7, Math.round(h * 0.42))}px">${esc((p.em || p.short).slice(0, 3))}</span>`; }
+function groupFlagHTML(p, h = 14) {
+    const F = GROUP_FLAG[p.id], w = Math.round(h * 1.5), st = `height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)`;
+    const fb = grpBadge(p, h).replace(/"/g, '&quot;');
+    if (!F) return grpBadge(p, h);
+    const src = F.svg ? F.svg : F.iso2 ? `https://flagcdn.com/w80/${F.iso2}.png` : `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(F.c)}?width=120`;
+    return `<img src="${src}" alt="" referrerpolicy="no-referrer" loading="lazy" style="${st}" onerror="this.outerHTML='${fb.replace(/'/g, "\\'")}'">`;
+}
+(function () { const st = document.createElement('style'); st.textContent = `.grp-badge { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; background: #3a3a30; color: #e7dcc0; border: 1px solid #6b6450; border-radius: 2px; font-family: 'Oswald','Arial Narrow',Arial,sans-serif; font-weight: 700; letter-spacing: .04em; }
+    .nsa-list td { padding: 5px 6px; vertical-align: top; border-top: 1px solid #2c2b20; } .nsa-list tr:hover td { background: rgba(255,255,255,.03); } .nsa-list th { text-align: left; font-weight: 600; color: #7c7259; font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; padding: 0 6px 4px; }`; document.head.appendChild(st); })();
 function proxiesHTML() {
     if (!state.proxies) proxyInit();
     const me = state.playerIso;
-    let h = `<div class="text-[11.5px] text-slate-300 mb-2">Armed groups, breakaway states and autonomous regions that hold ground <b>separately from the governments</b> of the countries they sit in (situation on 1 January 2026). Their areas are the ones on the <i>Internal control</i> map view; click inside one on the map to see who rules it. Patrons feed them money and weapons; strikes, sanctions and talks weaken or soften them. Click a group's name to find it, or an order to put it in the order bar.</div>`;
-    h += `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">`;
+    let h = `<div class="text-[11.5px] text-slate-300 mb-2">Armed groups, breakaway states and autonomous regions that hold ground <b>separately from the governments</b> of the countries they sit in (situation on 1 January 2026). Their areas are the ones on the <i>Internal control</i> map view; click inside one on the map to see who rules it. Click a group's name to find it, or an action to put the order in the order bar.</div>`;
+    h += `<table class="nsa-list w-full text-[11.5px]"><thead><tr><th></th><th>Group</th><th>Where</th><th>Strength</th><th>Backed by</th><th></th></tr></thead><tbody>`;
     state.proxies.filter(p => p.status !== 'dissolved').sort((a, b) => b.S - a.S).forEach(p => {
         const T = proxyTerritory(p);
         const pats = p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).map(x => `${flagHTML(nationIso(x), 10)} ${esc(shortName(x))}`).join(', ') || '<span class="text-slate-500">none known</span>';
-        const where = p.state ? `governs the ${esc(shortName(p.state))}` : p.claim ? `holds the Free Zone (${esc(T.where)}), claimed by ${esc(shortName(p.claim))}` : `in ${esc(T.where)}${T.share ? ` · holds ≈${Math.round(T.share * 100)}% of its land` : ''}`;
-        h += `<div class="gs-stat" style="padding:8px 10px;border-left:3px solid ${p.color}"><div class="flex justify-between gap-2"><b style="color:${pxText(p.color)};cursor:pointer" onclick="proxyFocus('${p.id}')">${esc(p.name)}</b><span class="text-[10px]" style="color:#7c7259">${esc(p.kind)}</span></div>
-            <div class="text-[11px] text-slate-300">${where} · led by ${esc(p.leader || '—')}</div>
-            <div class="text-[11px] mt-1">Strength <b>${Math.round(p.S)}</b> <span style="color:${p.S >= p.S0 ? '#f87171' : '#86efac'}">${p.S >= p.S0 ? '▲' : '▼'}${Math.abs(p.S - p.S0).toFixed(0)}</span> · ~${Math.round(p.fighters * p.S / p.S0).toLocaleString()} fighters · legitimacy ${Math.round(p.legit)}</div>
-            <div class="gs-stat-bar"><div style="width:${p.S}%;background:${p.color}"></div></div>
-            <div class="text-[11px] mt-1">Patrons: ${pats}${p.aid[me] ? ` · <b style="color:#4ade80">you ${Math.round(p.aid[me] * 100)}%</b>` : ''}</div>
-            <div class="text-[10.5px] text-slate-500 mt-1">${esc(p.aims)}</div>
-            <div class="flex flex-wrap gap-1 mt-1">${[['Arm', 'Arm the '], ['Talk', 'Open talks with the '], ['Strike', 'Strike the '], ['Sanction', 'Sanction the ']].filter(([l]) => !(p.state && l === 'Strike') && !(p.host.includes(me) && l === 'Arm')).map(([l, t]) => `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" onclick="helpFill('${(t + p.short).replace(/'/g, "\\'")}')">${l}</button>`).join('')}</div></div>`;
+        const where = p.state ? `governs the ${esc(shortName(p.state))}` : p.claim ? `Free Zone (${esc(T.where)}), claimed by ${esc(shortName(p.claim))}` : `${esc(T.where)}${T.share ? ` · ≈${Math.round(T.share * 100)}% of its land` : ''}`;
+        const acts = [['Arm', 'Arm the '], ['Talk', 'Open talks with the '], ['Strike', 'Strike the '], ['Sanction', 'Sanction the ']].filter(([l]) => !(p.state && l === 'Strike') && !(p.host.includes(me) && l === 'Arm'))
+            .map(([l, t]) => `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" onclick="helpFill('${(t + p.short).replace(/'/g, "\\'")}')">${l}</button>`).join('');
+        h += `<tr><td style="width:34px">${groupFlagHTML(p, 18)}</td>
+            <td><b style="cursor:pointer" onclick="proxyFocus('${p.id}')" title="${esc(p.aims)}">${esc(p.name)}</b><div class="text-[10px] text-slate-500">${esc(p.kind)} · ${esc(p.leader || '—')}</div></td>
+            <td class="text-slate-300">${where}</td>
+            <td style="white-space:nowrap"><b>${Math.round(p.S)}</b> <span style="color:${p.S >= p.S0 ? '#f87171' : '#86efac'}">${p.S >= p.S0 ? '▲' : '▼'}${Math.abs(p.S - p.S0).toFixed(0)}</span><div class="text-[10px] text-slate-500">~${Math.round(p.fighters * p.S / p.S0).toLocaleString()} fighters</div></td>
+            <td>${pats}${p.aid[me] ? ` · <b style="color:#4ade80">you ${Math.round(p.aid[me] * 100)}%</b>` : ''}</td>
+            <td style="width:1%"><div class="flex gap-1 justify-end" style="white-space:nowrap">${acts}</div></td></tr>`;
     });
-    return h + '</div>';
+    return h + '</tbody></table>';
 }
 // ---------- help: how to play, with order examples you can click ----------
 const HELP_ORDERS = {
