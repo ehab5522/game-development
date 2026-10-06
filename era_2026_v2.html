@@ -3232,7 +3232,11 @@
                   { k: 'GOV', poly: [[42.6, 16.45], [42.83, 16.46], [42.96, 16.4], [42.93, 16.24], [42.8, 16.18], [42.6, 16.24], [42.6, 16.45]] },                                     // Midi / Haradh coast
                   { adm: ["YEM|Ma'rib"], pts: [['GOV', 15.46, 45.32], ['GOV', 15.95, 45.6], ['GOV', 15.7, 46.4], ['GOV', 15.2, 46.0], ['HOUTHI', 15.40, 44.95], ['HOUTHI', 14.95, 45.45], ['HOUTHI', 15.05, 45.10]] },
                   { adm: ['YEM|Ta`izz'], pts: [['HOUTHI', 13.72, 44.12], ['HOUTHI', 13.88, 43.95], ['HOUTHI', 13.52, 44.32], ['HOUTHI', 13.95, 44.25], ['GOV', 13.57, 44.01], ['GOV', 13.32, 43.25], ['GOV', 13.15, 43.65], ['GOV', 13.40, 43.80], ['GOV', 13.05, 44.0]] },
-                  { k: 'STC', adm: ['YEM|`Adan', 'YEM|Lahij', 'YEM|Abyan', 'YEM|Shabwah', 'YEM|Hadramawt', 'YEM|Al Mahrah'] },
+                  { k: 'STC', adm: ['YEM|`Adan', 'YEM|Lahij', 'YEM|Abyan'] },
+                  // Shabwa, Hadramawt and Mahra: the STC took the coast, the towns and Wadi Hadramawt in December 2025; the northern desert and the Saudi/Omani border crossings stayed with government (Nation Shield) and tribal forces
+                  { adm: ['YEM|Shabwah'], pts: [['STC', 14.54, 46.83], ['STC', 14.20, 47.10], ['STC', 14.00, 48.18], ['STC', 14.52, 46.08], ['STC', 14.80, 45.72], ['GOV', 15.55, 47.10], ['GOV', 15.85, 46.50]] },
+                  { adm: ['YEM|Hadramawt'], pts: [['STC', 14.54, 49.12], ['STC', 14.76, 49.60], ['STC', 14.78, 49.37], ['STC', 15.94, 48.79], ['STC', 16.05, 49.00], ['STC', 15.85, 48.45], ['STC', 15.30, 49.00], ['STC', 15.00, 50.30], ['GOV', 16.75, 47.35], ['GOV', 17.40, 48.60], ['GOV', 17.40, 50.00], ['GOV', 18.30, 50.90], ['GOV', 16.90, 51.10]] },
+                  { adm: ['YEM|Al Mahrah'], pts: [['STC', 16.21, 52.17], ['STC', 15.82, 52.20], ['STC', 15.21, 51.24], ['STC', 16.65, 53.08], ['GOV', 17.50, 51.60], ['GOV', 18.30, 51.90], ['GOV', 17.30, 52.70]] },
                   { adm: ["YEM|Al Dali'"], pts: [['STC', 13.70, 44.73], ['STC', 13.55, 44.85], ['HOUTHI', 13.98, 44.55], ['HOUTHI', 14.10, 44.75]] }],
             SDN: [{ k: 'RSF', adm: ['SDN|North Darfur', 'SDN|Western Darfur', 'SDN|Central Darfur', 'SDN|Southern Darfur', 'SDN|Eastern Darfur'] },
                   { k: 'SLAAW', poly: [[24.05, 12.75], [24.65, 12.75], [24.75, 13.25], [24.95, 13.55], [24.55, 13.55], [24.05, 13.35], [24.05, 12.75]] },   // Jebel Marra + Tawila
@@ -3301,7 +3305,7 @@
             SDF: ['SDF (Kurdish-led)', '#5fb04a', 'Syrian Democratic Forces on 1 Jan 2026: Hasakah, Raqqa, Tabqa, Deir ez-Zor east of the Euphrates, Kobani and the Deir Hafer–Maskanah pocket'],
             DRUZE: ['Druze forces (Suwayda)', '#3fb7c9', 'Suwayda province run by local Druze factions since the July 2025 clashes'],
             HOUTHI: ['Houthis', '#9b6bd6', 'Ansar Allah (Houthis): Sanaa and the north-west'],
-            STC: ['Southern Transitional Council', '#4aa3df', 'On 1 Jan 2026 the STC held Aden, Lahij, Dhale, Abyan, Shabwa, Hadramawt and Mahra (it lost them to Saudi-backed government forces on 2–9 Jan 2026)'],
+            STC: ['Southern Transitional Council', '#4aa3df', 'On 1 Jan 2026 the STC held Aden, Lahij, southern Dhale, Abyan and the coast, towns and Wadi of Shabwa, Hadramawt and Mahra — not the northern desert (it lost them to Saudi-backed government forces on 2–9 Jan 2026)'],
             RSF: ['Rapid Support Forces', '#e0a030', 'RSF: all five Darfur states (El Fasher fell 26 Oct 2025), West Kordofan (Babanusa 1 Dec, Heglig 8 Dec 2025) and parts of North Kordofan'],
             SPLMN: ['SPLM-North (al-Hilu)', '#c45ab3', 'Nuba Mountains, allied with the RSF'],
             SLAAW: ['SLA-Abdel Wahid', '#8bc34a', 'Neutral Darfur rebels in Jebel Marra and Tawila'],
@@ -3860,7 +3864,7 @@
             'PSE|ISR': 'Area C of the West Bank incl. the Jordan Valley and the Dead Sea shore',
             
             'YEM|HOUTHI': 'Sanaa, Saada, Amran, Hajjah, Hodeidah, Mahwit, Raymah, Dhamar, Ibb, Bayda, Jawf and parts of Taiz, Marib and Dhale',
-            'YEM|STC': 'Aden, Lahij, Abyan, Shabwa, Hadramawt (incl. Mukalla and Seiyun), Mahra, Socotra and southern Dhale',
+            'YEM|STC': 'Aden, Lahij, Abyan, southern Dhale, Socotra, and the coast, towns and Wadi of Shabwa, Hadramawt (Mukalla, Seiyun) and Mahra',
             'SDN|RSF': 'all five Darfur states (El Fasher, Nyala, Geneina, Zalingei, Ed Daein), West Kordofan (Babanusa, El Fula, Heglig) and much of North Kordofan (Bara)',
             'SDN|SPLMN': 'the Nuba Mountains around Kauda (South Kordofan)', 'SDN|SLAAW': 'Jebel Marra and Tawila (Darfur)',
             'LBY|LNA': 'Cyrenaica (Benghazi, Tobruk, Derna, Ajdabiya, Kufra), Sirte, Jufra and the Fezzan (Sabha, Murzuq, Ubari, Ghat)',
@@ -13240,7 +13244,7 @@ const PROXY_DEFS = [
         leader: 'Abdelaziz al-Hilu', title: 'Chairman, SPLM-North', gov: 'Rebel administration in the Nuba Mountains', hq: 'Kauda', ideology: 'Secular regional autonomy', founded: 2011, em: 'SPL', wiki: 'Abdelaziz al-Hilu' },
     { id: 'houthi', name: 'Houthis (Ansar Allah)', short: 'Houthis', state_name: 'Yemen (Houthis)', kind: 'insurgent government', host: ['YEM'], key: 'HOUTHI', patrons: ['IRN'], conf: 'yem', S: 66, fighters: 200000, popShare: 0.65, aims: 'Rule Yemen; confront Israel and shipping in the Red Sea.', cities: ["Sana'a", 'Saada', 'Hodeidah'], base: [15.35, 44.2],
         leader: 'Abdul-Malik al-Houthi', title: 'Leader of Ansar Allah', gov: "Revolutionary government ruling Sana'a", hq: "Sana'a", ideology: 'Zaidi Shia Islamism', founded: 2004, em: 'AA', wiki: 'Abdul-Malik al-Houthi' },
-    { id: 'stc', name: 'Southern Transitional Council', short: 'STC', state_name: 'South Yemen (STC)', kind: 'separatist authority', host: ['YEM'], key: 'STC', patrons: ['ARE'], conf: 'yem', S: 50, fighters: 90000, popShare: 0.2, aims: 'Restore an independent South Yemen; on 1 January 2026 it held Aden and the whole south and east.', cities: ['Aden', 'Mukalla'], base: [12.8, 45.03],
+    { id: 'stc', name: 'Southern Transitional Council', short: 'STC', state_name: 'South Yemen (STC)', kind: 'separatist authority', host: ['YEM'], key: 'STC', patrons: ['ARE'], conf: 'yem', S: 50, fighters: 90000, popShare: 0.2, aims: 'Restore an independent South Yemen; on 1 January 2026 it held Aden, the south coast and the towns of Hadramawt and Mahra, but not the northern desert.', cities: ['Aden', 'Mukalla'], base: [12.8, 45.03],
         leader: 'Aidarus al-Zubaidi', title: 'President of the Southern Transitional Council', gov: 'Southern separatist council', hq: 'Aden', ideology: 'Southern secessionism', founded: 2017, em: 'STC', wiki: 'Aidarus al-Zoubaidi' },
     { id: 'm23', name: 'M23 / Congo River Alliance', short: 'M23', state_name: 'Kivu (M23)', kind: 'rebel movement', host: ['COD'], key: 'M23', patrons: ['RWA'], conf: 'drc', S: 58, fighters: 8000, popShare: 0.06, aims: 'Control the Kivus; parallel administration in Goma and Bukavu.', cities: ['Goma', 'Bukavu'], base: [-1.68, 29.22],
         leader: 'Corneille Nangaa', title: 'Coordinator, Congo River Alliance (M23/AFC)', gov: 'Rebel parallel administration', hq: 'Goma', ideology: 'Armed rebel movement', founded: 2012, em: 'M23', wiki: 'Corneille Nangaa' },
