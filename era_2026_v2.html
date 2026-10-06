@@ -2433,14 +2433,77 @@
             const out = []; for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i]);
             return out.length >= 4 ? out : pts;
         }
+        // Topology-aware simplification: a border two countries share is cut at the points where the neighbour changes ("nodes") and each
+        // piece is simplified the same way for both, so neighbours keep exactly the same line (no slivers, gaps or double borders when zoomed in)
+        const TOPO_NODES = new WeakMap();          // ring -> Int32Array of node indices (independent of the tolerance)
+        let TOPO_SIG = null;
+        function topoPrepare(data) {
+            const F = (data && data.features) || [], sig = F.map(f => f.geometry);
+            if (TOPO_SIG && TOPO_SIG.length === sig.length && sig.every((g, i) => g === TOPO_SIG[i])) return;
+            TOPO_SIG = sig;
+            const polysOf = g => !g ? [] : g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+            // owner of each vertex: the feature index, or -(id+1) of a set of features ("3|17") when several countries share it
+            // (an open-addressing hash on whole 1e-5° coordinates: about 5x faster than a Map for half a million vertices)
+            let nv = 0; F.forEach(f => polysOf(f.geometry).forEach(pl => pl.forEach(r => nv += r.length)));
+            let N = 1 << 16; while (N < nv * 2) N <<= 1;
+            const EMPTY = -2147483648, KX = new Int32Array(N), KY = new Int32Array(N), V = new Int32Array(N).fill(EMPTY), M = N - 1, setId = new Map(), sets = [];
+            const slot = p => { const x = Math.round((p[0] + 180) * 1e5), y = Math.round((p[1] + 90) * 1e5); let h = (Math.imul(x, 73856093) ^ Math.imul(y, 19349663)) & M;
+                while (V[h] !== EMPTY && (KX[h] !== x || KY[h] !== y)) h = (h + 1) & M; KX[h] = x; KY[h] = y; return h; };
+            const setOf = (o, fi) => { const m = (o >= 0 ? [o] : sets[-o - 1].split('|').map(Number)); if (m.includes(fi)) return o; m.push(fi); m.sort((x, y) => x - y);
+                const s = m.join('|'); let id = setId.get(s); if (id === undefined) { id = sets.length; sets.push(s); setId.set(s, id); } return -id - 1; };
+            F.forEach((f, fi) => polysOf(f.geometry).forEach(pl => pl.forEach(r => { for (let i = 0; i < r.length; i++) {
+                const h = slot(r[i]), o = V[h];
+                if (o === EMPTY) V[h] = fi; else if (o !== fi) V[h] = setOf(o, fi);
+            } })));
+            const key = p => p, sigOf = p => V[slot(p)];
+            F.forEach(f => polysOf(f.geometry).forEach(pl => pl.forEach(r => {
+                if (!Array.isArray(r) || r.length <= 8) return;
+                const closed = r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1], n = closed ? r.length - 1 : r.length, sg = new Array(n);
+                for (let i = 0; i < n; i++) sg[i] = sigOf(key(r[i]));
+                const nodes = []; for (let i = 0; i < n; i++) if (sg[i] !== sg[(i - 1 + n) % n] || sg[i] !== sg[(i + 1) % n]) nodes.push(i);
+                if (nodes.length < 2) {          // one neighbour all the way round (an island, an enclave): anchor at points every copy of the ring has
+                    let lo = 0, hi = 0; for (let i = 1; i < n; i++) { const p = r[i]; if (p[0] < r[lo][0] || (p[0] === r[lo][0] && p[1] < r[lo][1])) lo = i; if (p[0] > r[hi][0] || (p[0] === r[hi][0] && p[1] > r[hi][1])) hi = i; }
+                    const set = new Set(nodes.concat(lo === hi ? [0, n >> 1] : [lo, hi])); nodes.length = 0; [...set].sort((x, y) => x - y).forEach(i => nodes.push(i));
+                }
+                TOPO_NODES.set(r, Int32Array.from(nodes));
+            })));
+        }
+        function dpLine(pts, tol) {
+            const n = pts.length; if (n <= 2) return pts;
+            const keep = new Uint8Array(n), t2 = tol * tol, stack = [[0, n - 1]]; keep[0] = keep[n - 1] = 1;
+            while (stack.length) {
+                const [a, b] = stack.pop(), ax = pts[a][0], ay = pts[a][1], dx = pts[b][0] - ax, dy = pts[b][1] - ay, L2 = dx * dx + dy * dy;
+                let md = -1, mi = -1;
+                for (let i = a + 1; i < b; i++) { let t = L2 ? ((pts[i][0] - ax) * dx + (pts[i][1] - ay) * dy) / L2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t; const ex = ax + t * dx - pts[i][0], ey = ay + t * dy - pts[i][1], d = ex * ex + ey * ey; if (d > md) { md = d; mi = i; } }
+                if (md > t2 && mi > 0) { keep[mi] = 1; stack.push([a, mi], [mi, b]); }
+            }
+            const out = []; for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i]);
+            return out;
+        }
+        function simplifyRingTopo(r, tol) {
+            const nodes = TOPO_NODES.get(r); if (!nodes || nodes.length < 2) return simplifyRing(r, tol);
+            const closed = r[0][0] === r[r.length - 1][0] && r[0][1] === r[r.length - 1][1], n = closed ? r.length - 1 : r.length, out = [];
+            const before = (p, q) => p[0] < q[0] || (p[0] === q[0] && p[1] < q[1]);
+            for (let j = 0; j < nodes.length; j++) {
+                const s = nodes[j], e = nodes[(j + 1) % nodes.length], arc = [];
+                for (let i = s; ; i = (i + 1) % n) { arc.push(r[i]); if (i === e) break; }
+                const rev = before(arc[arc.length - 1], arc[0]);          // same direction for both neighbours, so both get the same points
+                let sa = dpLine(rev ? arc.slice().reverse() : arc, tol); if (rev) sa = sa.slice().reverse();
+                for (let i = 0; i < sa.length - 1; i++) out.push(sa[i]);
+            }
+            if (out.length < 3) return r;
+            out.push(out[0]); return out;
+        }
         function simplifyGeo(data, tol) {
             const t = tol === undefined ? GFX().tol : tol;
             if (!t) return data;
+            let topo = false; try { topoPrepare(data); topo = true; } catch (e) { console.warn('topology', e); }
+            const sr = topo ? simplifyRingTopo : simplifyRing;
             return { ...data, features: (data.features || []).map(f => {
                 const g = f.geometry; if (!g) return f;
                 let c = g.coordinates;
-                if (g.type === 'Polygon') c = c.map(r => simplifyRing(r, t));
-                else if (g.type === 'MultiPolygon') c = c.map(p => p.map(r => simplifyRing(r, t)));
+                if (g.type === 'Polygon') c = c.map(r => sr(r, t));
+                else if (g.type === 'MultiPolygon') c = c.map(p => p.map(r => sr(r, t)));
                 return { ...f, geometry: { ...g, coordinates: c } };
             }) };
         }
