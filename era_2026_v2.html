@@ -9361,9 +9361,10 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             builtin: { label: 'Built-in AI (runs in your browser, free)', short: 'Built-in', def: 'Qwen2.5-3B-Instruct-q4f16_1-MLC',
                        models: [['Qwen2.5-3B-Instruct-q4f16_1-MLC', 'Qwen 2.5 3B — recommended (~2 GB download)'], ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama 3.2 3B (~2 GB)'],
                                 ['Qwen2.5-1.5B-Instruct-q4f16_1-MLC', 'Qwen 2.5 1.5B — light (~1 GB, weaker analysis)'], ['Llama-3.1-8B-Instruct-q4f16_1-MLC', 'Llama 3.1 8B — best (~4.5 GB, strong GPU)']] },
-            claude:  { label: 'Claude (your Anthropic API key)', short: 'Claude', def: 'claude-sonnet-4-5', key: true, hint: 'sk-ant-…', url: 'https://console.anthropic.com/settings/keys' },
-            openai:  { label: 'ChatGPT (your OpenAI API key)', short: 'ChatGPT', def: 'gpt-4o-mini', key: true, hint: 'sk-…', url: 'https://platform.openai.com/api-keys' },
-            gemini:  { label: 'Gemini (your Google AI Studio key)', short: 'Gemini', def: 'gemini-flash-latest', key: true, hint: 'AIza…', url: 'https://aistudio.google.com/apikey' },
+            claude:  { label: 'Claude (your Anthropic API key)', short: 'Claude', def: 'claude-opus-5-5', key: true, hint: 'sk-ant-…', url: 'https://console.anthropic.com/settings/keys',
+                       suggest: [['claude-opus-5-5', 'Opus 5.5 — default, best judgment'], ['claude-sonnet-5-5', 'Sonnet 5.5 — faster, half the price'], ['claude-haiku-4-5-20251001', 'Haiku 4.5 — fastest, cheapest'], ['claude-fable-5-1', 'Fable 5.1 — most capable, priciest']] },
+            openai:  { label: 'ChatGPT (your OpenAI API key)', short: 'ChatGPT', def: 'gpt-4o-mini', key: true, hint: 'sk-…', url: 'https://platform.openai.com/api-keys', suggest: [['gpt-4o-mini', 'fast, cheap'], ['gpt-4.1-mini', ''], ['gpt-5-mini', 'reasoning model, slower']] },
+            gemini:  { label: 'Gemini (your Google AI Studio key)', short: 'Gemini', def: 'gemini-flash-latest', key: true, hint: 'AIza…', url: 'https://aistudio.google.com/apikey', suggest: [['gemini-flash-latest', 'fast, free tier'], ['gemini-pro-latest', 'stronger, slower']] },
             ollama:  { label: 'Local app (Ollama on this computer)', short: 'Ollama', def: 'llama3.1:8b', url: 'https://ollama.com' }
         };
         const AI = { provider: 'off', models: {}, keys: {}, remember: false, autoReport: false, builtinCached: false, ollamaUrl: 'http://localhost:11434',
@@ -9399,47 +9400,115 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         }
 
         // ---------- the single entry point every feature uses ----------
+        // Token budgets per feature. Newer models think before they answer and the thinking shares this budget,
+        // so aiDispatch raises them to a per-provider floor and callAI retries once with a bigger budget if a reply is cut off.
+        const AI_BUDGET = { ping: 400, voice: 300, envoy: 300, chat: 700, advisorSmall: 300, advisor: 700, brief: 900, judge: 1400, ideas: 1500, review: 1800, report: 3500, treaty: 1400, site: 450 };
+        const AI_RETRY_STATUS = [408, 409, 425, 429, 500, 502, 503, 504, 520, 522, 524, 529];
+        function aiErr(msg, f = {}) { const e = new Error(msg); Object.assign(e, f); return e; }
+        // at most 2 requests in flight to a cloud / local server; background extras (voice rewrites, briefings) are dropped when a queue builds up
+        function aiSlot(low) {
+            AI.inflight = AI.inflight || 0; AI.waiting = AI.waiting || [];
+            if (AI.inflight < 2) { AI.inflight++; return Promise.resolve(true); }
+            if (low && AI.waiting.length >= 3) return Promise.resolve(false);
+            return new Promise(res => AI.waiting.push(res));
+        }
+        function aiRelease() {
+            const nx = (AI.waiting || []).shift();
+            if (nx) nx(true); else AI.inflight = Math.max(0, (AI.inflight || 1) - 1);
+        }
+        // a short, visible notice whenever the AI fails and the game falls back to its offline engine (never silent)
+        function aiToast(msg, title = 'AI unavailable') {
+            try {
+                const now = Date.now(); if (aiToast.last === msg && now - (aiToast.at || 0) < 60000) return;
+                aiToast.last = msg; aiToast.at = now;
+                let el = document.getElementById('ai-toast');
+                if (!el) { el = document.createElement('div'); el.id = 'ai-toast'; el.style.cssText = 'position:fixed;top:58px;right:14px;z-index:9999;max-width:360px;padding:8px 11px;font-size:11.5px;line-height:1.4;color:#f3e7c9;background:rgba(30,24,14,.96);border:1px solid #c4553c;border-left:3px solid #e0866b;border-radius:3px;box-shadow:0 4px 18px rgba(0,0,0,.5);cursor:pointer'; el.onclick = () => { el.style.display = 'none'; openAIModal(); }; document.body.appendChild(el); }
+                el.innerHTML = `<b style="color:#e0866b">${esc(title)}</b> — ${esc(msg)}<div style="color:#ab9f80;margin-top:3px">Your staff use the offline engine for now. Click to open AI settings.</div>`;
+                el.style.display = 'block'; clearTimeout(aiToast._t); aiToast._t = setTimeout(() => { el.style.display = 'none'; }, 9000);
+            } catch (e) { }
+        }
+        function aiSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
         async function callAI(systemText, userText, wantJSON = false, opts = {}) {
-            if (!aiReady()) return null;
+            if (!aiReady()) { if (opts.err) opts.err.msg = AI.provider === 'off' ? 'AI is off' : 'AI is not ready (' + (AI_PROVIDERS[AI.provider].key && !aiKey() ? 'no API key this session' : 'not started') + ')'; return null; }
             const small = AI.provider === 'builtin';
-            const max = opts.maxTokens || (wantJSON ? 900 : 450);
-            const sys = systemText + (wantJSON ? '\n\nReply with valid JSON only. No markdown fences, no commentary before or after the JSON.' : '');
+            let max = opts.maxTokens || (wantJSON ? 900 : 450);
+            const sys = systemText + (wantJSON ? '\n\nReply with ONE valid JSON object only. No markdown fences, no commentary before or after the JSON.' : '');
+            const ms = opts.timeout || (small ? 240000 : AI.provider === 'ollama' ? 180000 : 90000);
             const run = async () => {
+                if (!small && !(await aiSlot(opts.low))) { if (opts.err) opts.err.msg = 'skipped (AI busy)'; return null; }
                 AI.busy++; renderAIIndicator();
+                let attempt = 0, bumped = false, switched = false;
                 try {
-                    const txt = await aiWithTimeout(aiDispatch(sys, userText, small ? Math.min(max, 700) : max, wantJSON), small ? 240000 : 90000);
-                    if (!txt || !String(txt).trim()) throw new Error('The model returned an empty reply.');
-                    if (AI.status !== 'ok') aiSetStatus('ok', 'Connected');
-                    if (!wantJSON) return String(txt).trim();
-                    const j = extractJSON(txt);
-                    if (j === null) throw new Error('The model reply was not valid JSON.');
-                    return j;
-                } catch (e) {
-                    const m = String((e && e.message) || '').match(/(?:use|to)\s+(?:models\/)?((?:gemini|gpt|claude)[\w.\-]+)/i);
-                    if (!opts._retried && m && /no longer available|deprecated|not found|retired|update your code/i.test(e.message) && m[1] !== aiModel()) {
-                        AI.models[AI.provider] = m[1].replace(/[.,]+$/, ''); aiSaveConfig(); renderAIModal();
-                        aiSetStatus('loading', `Model retired — switching to ${AI.models[AI.provider]}…`);
-                        AI.busy--; renderAIIndicator();
-                        try { return await callAI(systemText, userText, wantJSON, { ...opts, _retried: true }); } finally { AI.busy++; }
+                    for (;;) {
+                        try {
+                            let txt = await aiDispatch(sys, userText, small ? Math.min(max, 700) : max, wantJSON, ms);
+                            txt = String(txt == null ? '' : txt).replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*?<\/think>/i, '').trim();
+                            if (!txt) throw aiErr('The model returned an empty reply.', { code: 'empty' });
+                            let out = txt;
+                            if (wantJSON) {
+                                out = extractJSON(txt);
+                                const cut = /^\s*[\[{]/.test(txt) && !/[\]}]\s*$/.test(txt);
+                                if (out === null) throw aiErr('The model reply was not valid JSON' + (cut ? ' (it was cut off).' : '.'), { code: cut ? 'budget' : 'json' });
+                            }
+                            AI.lastErr = ''; AI.lastOk = Date.now(); AI.calls = (AI.calls || 0) + 1;
+                            const tst = document.getElementById('ai-toast'); if (tst && !opts.quiet) tst.style.display = 'none';
+                            if (AI.status !== 'ok' && AI.status !== 'loading') aiSetStatus('ok', 'Connected');
+                            return out;
+                        } catch (e) {
+                            // a reply cut off by the token limit (thinking ate it) or broken JSON: once more with a bigger budget
+                            if (!bumped && !small && ['budget', 'empty', 'json'].includes(e.code)) { bumped = true; max = Math.min(8000, Math.max(Math.round(max * 3), wantJSON ? 6000 : 4000)); continue; }
+                            if (!bumped && small && e.code === 'json') { bumped = true; continue; }
+                            // overloaded / rate-limited / server hiccup: back off and retry (honours retry-after)
+                            const retryable = AI_RETRY_STATUS.includes(e.status) || /overload|rate.?limit|temporarily unavailable|try again/i.test(e.message || '');
+                            if (retryable && attempt < 2 && e.code !== 'timeout') {
+                                attempt++;
+                                if (opts.err) opts.err.retries = attempt;
+                                await aiSleep(Math.min(20000, e.retryAfter ? e.retryAfter * 1000 : attempt === 1 ? 1500 : 5000)); continue;
+                            }
+                            // the provider says the model was retired and names its successor: switch once
+                            const m = String((e && e.message) || '').match(/(?:use|to)\s+(?:models\/)?((?:gemini|gpt|claude)[\w.\-]+)/i);
+                            if (!switched && m && /no longer available|deprecated|not found|retired|update your code/i.test(e.message) && m[1] !== aiModel()) {
+                                switched = true; AI.models[AI.provider] = m[1].replace(/[.,]+$/, ''); aiSaveConfig(); renderAIModal();
+                                aiSetStatus('loading', `Model retired — switching to ${AI.models[AI.provider]}…`); continue;
+                            }
+                            throw e;
+                        }
                     }
+                } catch (e) {
                     console.warn('AI call failed — using the offline engine.', e);
-                    aiSetStatus('error', aiErrText(e));
+                    const t = aiErrText(e); AI.lastErr = t; AI.fails = (AI.fails || 0) + 1;
+                    if (opts.err) opts.err.msg = t;
+                    aiSetStatus('error', t);
+                    if (!opts.quiet) aiToast(t);
                     return null;
-                } finally { AI.busy--; renderAIIndicator(); }
+                } finally { AI.busy--; if (!small) aiRelease(); renderAIIndicator(); }
             };
             if (small) { const p = AI.chain.then(run, run); AI.chain = p.catch(() => null); return p; }   // the in-browser model runs one request at a time
             return run();
         }
-        function aiWithTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('The AI took too long to answer.')), ms))]); }
+        function aiWithTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(aiErr('The AI took too long to answer.', { code: 'timeout', ms })), ms))]); }
+        function aiHost() { return { claude: 'Anthropic', openai: 'OpenAI', gemini: 'Google', ollama: 'Ollama', builtin: 'the built-in model' }[AI.provider] || 'the AI server'; }
         function aiErrText(e) {
-            const m = String((e && e.message) || e);
-            if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return AI.provider === 'ollama' ? 'Cannot reach Ollama. Is it running, and started with OLLAMA_ORIGINS="*"?' : 'Network error — check your internet connection.';
-            if (/401|invalid.*key|authentication|API key not valid|incorrect api key/i.test(m)) return 'The API key was rejected. Check it and try again.';
-            if (/429|rate|quota|credit|billing/i.test(m)) return 'Rate limit or credit/quota problem on your account: ' + m.slice(0, 120);
+            const m = String((e && e.message) || e), st = e && e.status;
+            if (e && e.code === 'timeout') return `No answer from ${aiHost()} after ${Math.round((e.ms || 90000) / 1000)} s — the service is slow or the connection is blocked. Try again, or choose a faster model.`;
+            if (e && e.code === 'safety') return m;
+            if (e && e.code === 'empty') return `${m} Try again, or choose another model.`;
+            if (e && e.code === 'budget') return `${m} The model spent its whole token budget (probably thinking) before answering, even after a retry with a larger budget. Try again or choose a faster model.`;
+            if (e && e.code === 'json') return `${m} The model did not follow the reply format, even after a retry. A larger model usually does.`;
+            if ((e && e.code === 'network') || /Failed to fetch|NetworkError|Load failed|network error/i.test(m)) return AI.provider === 'ollama' ? `Cannot reach Ollama at ${AI.ollamaUrl}. Is it running, and started with OLLAMA_ORIGINS="*"?`
+                : `The browser could not reach ${aiHost()} — the request was blocked (CORS) or the network is down. Usual causes: an ad-blocker or privacy extension, a corporate proxy/firewall, or no internet. Try disabling extensions for this page or another browser profile.`;
+            if (st === 401 || /invalid.*(x-api-key|api.?key)|authentication|API key not valid|incorrect api key|unauthori[sz]ed/i.test(m)) return `${aiHost()} rejected the API key (401). Check that you pasted the whole key, for the right provider, and that it is still active.`;
+            if (/insufficient_quota|credit balance|billing|quota|exceeded your current/i.test(m)) return `Your ${aiHost()} account is out of credit or quota: ${m.slice(0, 140)}. Add credit / check billing, or switch provider.`;
+            if (st === 403 || /PERMISSION_DENIED|forbidden|permission/i.test(m)) return `${aiHost()} refused access (403): ${m.slice(0, 140)}. The key may lack access to this model, or the API is not enabled for your account / region.`;
+            if (st === 429 || /rate.?limit|too many requests/i.test(m)) return `Rate limit reached at ${aiHost()} (429), even after waiting and retrying. Wait a minute — free tiers allow only a few requests per minute.`;
+            if (st === 529 || /overload/i.test(m)) return `${aiHost()} is overloaded right now (${st || 529}), even after retrying. Try again in a minute.`;
+            if (st >= 500) return `${aiHost()} had a server error (${st}), even after retrying: ${m.slice(0, 120)}`;
+            if (st === 404 || /not_found|model.*not.*found|does not exist|is not found/i.test(m)) return `Model "${aiModel()}" was not found at ${aiHost()} (404). Press Test to load the list of your models and pick one.`;
+            if (st === 400) return `${aiHost()} rejected the request (400): ${m.slice(0, 160)}`;
             return m.slice(0, 200);
         }
         function extractJSON(txt) {
-            let s = String(txt).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+            let s = String(txt).trim().replace(/<think>[\s\S]*?<\/think>/gi, '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
             try { return JSON.parse(s); } catch (e) { }
             const a = s.search(/[\[{]/); if (a < 0) return null;
             const open = s[a], close = open === '{' ? '}' : ']';
@@ -9449,49 +9518,94 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             body = body.replace(/,\s*([}\]])/g, '$1').replace(/[“”]/g, '"');
             try { return JSON.parse(body); } catch (e) { return null; }
         }
-        async function aiFetchJSON(url, init) {
-            const r = await fetch(url, init);
+        // fetch with a real timeout (the request is aborted, not just ignored) and errors that carry status / retry-after
+        async function aiFetchJSON(url, init = {}, ms = 30000) {
+            const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const tm = ac ? setTimeout(() => ac.abort(), ms) : null;
+            let r;
+            try { r = await fetch(url, ac ? { ...init, signal: ac.signal } : init); }
+            catch (e) {
+                if (e && e.name === 'AbortError') throw aiErr('No answer after ' + Math.round(ms / 1000) + ' s.', { code: 'timeout', ms });
+                throw aiErr(String((e && e.message) || e), { code: 'network' });
+            } finally { if (tm) clearTimeout(tm); }
             let d = null; try { d = await r.json(); } catch (e) { }
-            if (!r.ok) throw new Error(((d && (d.error && (d.error.message || d.error))) || ('HTTP ' + r.status)) + ' (' + r.status + ')');
+            if (!r.ok) {
+                const ra = parseFloat(r.headers && r.headers.get && r.headers.get('retry-after'));
+                const er = d && d.error, em = er && (er.message || (typeof er === 'string' ? er : '')) || (d && d.message);
+                throw aiErr((em || ('HTTP ' + r.status)) + ' (' + r.status + ')', { status: r.status, retryAfter: isFinite(ra) ? ra : 0 });
+            }
             return d;
         }
-        async function aiDispatch(sys, user, max, wantJSON) {
+        // Claude: newer models always think (it cannot be switched off), so they get low effort for snappy game replies,
+        // and the server-side fallback beta so a safety-classifier refusal is retried on another model instead of failing.
+        function claudeVer(model) { const m = String(model).match(/claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2}))?(?!\d)/); return m ? { fam: m[1], v: +m[2] + (m[3] ? +m[3] / 10 : 0) } : null; }
+        function claudeEffortOK(model) { const c = claudeVer(model); return !!c && !(AI.noEffort || {})[model] && (c.fam === 'fable' || c.fam === 'mythos' || (c.fam === 'opus' && c.v >= 4.5) || (c.fam === 'sonnet' && c.v >= 4.6)); }
+        function claudeFallbackOK(model) { const c = claudeVer(model); return !!c && !(AI.noFallback || {})[model] && (c.fam === 'fable' || (c.fam === 'opus' && c.v >= 5) || (c.fam === 'sonnet' && c.v >= 5.5)); }
+        async function aiDispatch(sys, user, max, wantJSON, ms = 90000) {
             const P = AI.provider, model = aiModel(), key = aiKey();
             if (P === 'claude') {
-                const d = await aiFetchJSON('https://api.anthropic.com/v1/messages', { method: 'POST',
-                    headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-                    body: JSON.stringify({ model, max_tokens: max, system: sys, messages: [{ role: 'user', content: user }] }) });
-                return (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+                const send = async () => {
+                    const body = { model, max_tokens: Math.max(max, wantJSON ? 2048 : 1024), system: sys, messages: [{ role: 'user', content: user }] };
+                    const headers = { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' };
+                    if (claudeEffortOK(model)) body.output_config = { effort: 'low' };
+                    if (claudeFallbackOK(model)) { body.fallbacks = 'default'; headers['anthropic-beta'] = 'server-side-fallback-2026-07-01'; }
+                    try { return await aiFetchJSON('https://api.anthropic.com/v1/messages', { method: 'POST', headers, body: JSON.stringify(body) }, ms); }
+                    catch (e) {   // a model that does not know effort / fallbacks: remember that and resend without them
+                        if (e.status === 400 && body.output_config && /effort|output_config/i.test(e.message)) { (AI.noEffort = AI.noEffort || {})[model] = true; return send(); }
+                        if (e.status === 400 && body.fallbacks && /fallback|beta/i.test(e.message)) { (AI.noFallback = AI.noFallback || {})[model] = true; return send(); }
+                        throw e;
+                    }
+                };
+                const d = await send();
+                const txt = (d.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+                if (d.stop_reason === 'refusal') throw aiErr('Claude declined this request (safety filter' + (d.stop_details && d.stop_details.category ? ': ' + d.stop_details.category : '') + ').', { code: 'safety' });
+                if (d.stop_reason === 'max_tokens' && (!txt.trim() || (wantJSON && extractJSON(txt) === null))) throw aiErr('The reply was cut off at the token limit.', { code: 'budget' });
+                return txt;
             }
             if (P === 'openai') {
                 const reasoning = /^(o\d|gpt-5)/.test(model);
-                const body = { model, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_completion_tokens: reasoning ? max * 5 : max };
-                if (wantJSON) body.response_format = { type: 'json_object' };
-                const d = await aiFetchJSON('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key }, body: JSON.stringify(body) });
-                return d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content;
+                const send = async () => {
+                    const body = { model, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_completion_tokens: reasoning ? Math.max(max * 4, 4000) : Math.max(max, 300) };
+                    if (reasoning && !(AI.noEffort || {})[model]) body.reasoning_effort = 'low';
+                    if (wantJSON) body.response_format = { type: 'json_object' };
+                    try { return await aiFetchJSON('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', 'authorization': 'Bearer ' + key }, body: JSON.stringify(body) }, ms); }
+                    catch (e) { if (e.status === 400 && body.reasoning_effort && /reasoning_effort|reasoning/i.test(e.message)) { (AI.noEffort = AI.noEffort || {})[model] = true; return send(); } throw e; }
+                };
+                const d = await send();
+                const c = (d.choices && d.choices[0]) || {}, msg = c.message || {}, txt = msg.content || '';
+                if (msg.refusal) throw aiErr('ChatGPT declined this request: ' + String(msg.refusal).slice(0, 120), { code: 'safety' });
+                if (c.finish_reason === 'content_filter') throw aiErr('OpenAI\'s content filter blocked this reply.', { code: 'safety' });
+                if (c.finish_reason === 'length' && (!String(txt).trim() || (wantJSON && extractJSON(txt) === null))) throw aiErr('The reply was cut off at the token limit.', { code: 'budget' });
+                return txt;
             }
             if (P === 'gemini') {
                 const gc = { temperature: 0.7 };
                 if (wantJSON) gc.responseMimeType = 'application/json';
                 const d = await aiFetchJSON(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`, { method: 'POST',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: user }] }], systemInstruction: { parts: [{ text: sys }] }, generationConfig: gc }) });
-                const parts = (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts) || [];
-                return parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
+                    body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: user }] }], systemInstruction: { parts: [{ text: sys }] }, generationConfig: gc }) }, ms);
+                const block = d.promptFeedback && d.promptFeedback.blockReason;
+                if (block) throw aiErr('Gemini blocked this request (' + block + ').', { code: 'safety' });
+                const cand = (d.candidates && d.candidates[0]) || {}, fr = cand.finishReason || '';
+                const txt = ((cand.content && cand.content.parts) || []).filter(p => p.text && !p.thought).map(p => p.text).join('');
+                if (/SAFETY|RECITATION|PROHIBITED|BLOCKLIST|SPII/.test(fr) && !txt.trim()) throw aiErr('Gemini stopped this reply (' + fr + ' filter).', { code: 'safety' });
+                if (fr === 'MAX_TOKENS' && (!txt.trim() || (wantJSON && extractJSON(txt) === null))) throw aiErr('The reply was cut off at the token limit.', { code: 'budget' });
+                return txt;
             }
             if (P === 'ollama') {
-                const body = { model, stream: false, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], options: { num_predict: max } };
+                const body = { model, stream: false, messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], options: { num_predict: Math.max(max, 512) } };
                 if (wantJSON) body.format = 'json';
-                const d = await aiFetchJSON(AI.ollamaUrl.replace(/\/$/, '') + '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-                return d.message && d.message.content;
+                const d = await aiFetchJSON(AI.ollamaUrl.replace(/\/$/, '') + '/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, ms);
+                const txt = (d.message && d.message.content) || '';
+                if (d.done_reason === 'length' && (!txt.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').trim() || (wantJSON && extractJSON(txt) === null))) throw aiErr('The reply was cut off at the token limit.', { code: 'budget' });
+                return txt;
             }
             if (P === 'builtin') {
-                const r = await AI.engine.chat.completions.create({ messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: max, temperature: 0.6 });
-                return r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content;
+                const r = await aiWithTimeout(AI.engine.chat.completions.create({ messages: [{ role: 'system', content: sys }, { role: 'user', content: user }], max_tokens: max, temperature: 0.6 }), ms);
+                return r && r.choices && r.choices[0] && r.choices[0].message && r.choices[0].message.content;
             }
             return null;
         }
-
         // ---------- built-in model (WebLLM: runs on your graphics chip, downloaded once, then cached) ----------
         async function aiStartBuiltin() {
             if (AI.loading) return AI.loading;
@@ -9525,6 +9639,9 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         function aiModelFor(p) { return AI.models[p] || AI_PROVIDERS[p].def; }
 
         // ---------- Test connection + list available models ----------
+        // The model the player chose is kept (aliases such as "claude-haiku-4-5" match dated ids such as "claude-haiku-4-5-20251001").
+        // A model is only picked automatically when none was chosen and the default is not on the account's list.
+        function aiModelListed(m, ids) { m = String(m || '').trim(); return !!m && ids.some(id => id === m || id.startsWith(m + '-') || m.startsWith(id + '-') || id === 'models/' + m); }
         async function aiTest() {
             const P = AI.provider;
             if (P === 'off') return aiSetStatus('off', 'AI is off. The offline staff engine analyses your situation with rules instead.');
@@ -9534,28 +9651,31 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             try {
                 const key = aiKey(); let ids = [];
                 if (P === 'claude') {
-                    const d = await aiFetchJSON('https://api.anthropic.com/v1/models?limit=100', { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } });
+                    const d = await aiFetchJSON('https://api.anthropic.com/v1/models?limit=100', { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } }, 20000);
                     ids = (d.data || []).map(m => m.id);
                 } else if (P === 'openai') {
-                    const d = await aiFetchJSON('https://api.openai.com/v1/models', { headers: { authorization: 'Bearer ' + key } });
+                    const d = await aiFetchJSON('https://api.openai.com/v1/models', { headers: { authorization: 'Bearer ' + key } }, 20000);
                     ids = (d.data || []).sort((a, b) => (b.created || 0) - (a.created || 0)).map(m => m.id).filter(id => /^(gpt|o\d|chatgpt)/.test(id) && !/audio|realtime|transcribe|tts|image|search|embedding|instruct/.test(id));
                 } else if (P === 'gemini') {
-                    const d = await aiFetchJSON('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=' + encodeURIComponent(key), {});
+                    const d = await aiFetchJSON('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=' + encodeURIComponent(key), {}, 20000);
                     ids = (d.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace(/^models\//, '')).filter(id => /^gemini/.test(id) && !/embedding|tts|image|vision/.test(id));
                 } else if (P === 'ollama') {
-                    const d = await aiFetchJSON(AI.ollamaUrl.replace(/\/$/, '') + '/api/tags', {});
+                    const d = await aiFetchJSON(AI.ollamaUrl.replace(/\/$/, '') + '/api/tags', {}, 8000);
                     ids = (d.models || []).map(m => m.name);
                     if (!ids.length) throw new Error('Ollama is running but has no models. Run e.g. "ollama pull llama3.1:8b" first.');
                 }
                 AI.modelList[P] = ids;
-                if (ids.length && !ids.includes(aiModel())) { AI.models[P] = aiPreferredModel(P, ids); }
+                const chosen = (AI.models[P] || '').trim();
+                let note = '';
+                if (ids.length && !chosen && !aiModelListed(AI_PROVIDERS[P].def, ids)) { AI.models[P] = aiPreferredModel(P, ids); note = `Picked ${AI.models[P]} (the default is not on your account). `; }
+                else if (ids.length && chosen && !aiModelListed(chosen, ids)) note = `Note: "${chosen}" is not on your account's model list — keeping it as you chose. `;
                 aiSaveConfig(); renderAIModal();
-                await aiPing();
+                await aiPing(note);
             } catch (e) { aiSetStatus('error', aiErrText(e)); }
         }
         function aiPreferredModel(P, ids) {
             const first = rx => ids.find(i => rx.test(i));
-            if (P === 'claude') return first(/sonnet/) || first(/opus/) || ids[0];
+            if (P === 'claude') return first(/^claude-opus-5-5/) || first(/^claude-sonnet-5-5/) || first(/^claude-opus-5(?!\d)/) || first(/^claude-sonnet-5(?!\d)/) || first(/sonnet/) || first(/opus/) || first(/haiku/) || ids[0];
             if (P === 'openai') return first(/^gpt-5(\.\d+)?-mini$/) || first(/^gpt-4\.1-mini$/) || first(/^gpt-4o-mini$/) || first(/^gpt/) || ids[0];
             if (P === 'gemini') {
                 const ver = i => parseFloat((i.match(/^gemini-([\d.]+)/) || [])[1] || 0);
@@ -9564,13 +9684,22 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             }
             return ids[0];
         }
-        async function aiPing() {
-            aiSetStatus('loading', 'Asking the model for a test analysis…');
-            const t0 = Date.now();
-            const r = await callAI('You are a terse military staff officer.', `In one sentence, name the single biggest strategic risk facing ${state.player || 'a mid-sized country'} in 2026.`, false, { maxTokens: 120 });
-            if (r) aiSetStatus('ok', `Connected — ${AI_PROVIDERS[AI.provider].short} answered in ${((Date.now() - t0) / 1000).toFixed(1)}s: “${r.slice(0, 160)}”`);
+        // "Test analysis": a plain-text answer AND a structured (JSON) answer — most game features use JSON.
+        async function aiPing(prefix = '') {
+            const S = AI_PROVIDERS[AI.provider].short, who = state.player || 'a mid-sized country';
+            aiSetStatus('loading', prefix + 'Test 1/2 — asking for a short text analysis…');
+            const err = {}; let t0 = Date.now();
+            const r = await callAI('You are a terse military staff officer in a geopolitical strategy game set in 2026.', `In one sentence, name the single biggest strategic risk facing ${who} in 2026.`, false, { maxTokens: AI_BUDGET.ping, err, quiet: true });
+            const t1 = ((Date.now() - t0) / 1000).toFixed(1);
+            if (!r) { aiSetStatus('error', prefix + 'Text test failed: ' + (err.msg || AI.lastErr || 'no reply')); return false; }
+            aiSetStatus('loading', prefix + `Text ✓ (${t1}s). Test 2/2 — asking for a structured (JSON) analysis…`);
+            t0 = Date.now(); const err2 = {};
+            const j = await callAI('You are a terse military staff officer in a geopolitical strategy game set in 2026.', `Assess ${who}. Return JSON exactly like {"risk": "<one sentence>", "score": <0-100 number, how serious>, "order": "<one concrete order the leader could give>"}.`, true, { maxTokens: AI_BUDGET.ping, err: err2, quiet: true });
+            const t2 = ((Date.now() - t0) / 1000).toFixed(1);
+            if (!j || typeof j !== 'object' || !j.risk) { aiSetStatus('error', prefix + `Text ✓ (${t1}s) but the structured-analysis test failed: ` + (err2.msg || (j ? 'the reply had no "risk" field' : AI.lastErr) || 'no reply') + ' Diplomacy, reports and order judging need this — try another model.'); return false; }
+            aiSetStatus('ok', prefix + `Connected — ${S} · ${aiModel()}: text ✓ ${t1}s · JSON ✓ ${t2}s${err.retries || err2.retries ? ' (after retrying)' : ''}. “${String(r).slice(0, 150)}”`);
+            return true;
         }
-
         // ---------- UI: top-bar indicator + settings modal ----------
         function renderAIIndicator() {
             const b = document.getElementById('ai-ind'); if (!b) return;
@@ -9580,9 +9709,9 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             else if (AI.status === 'loading') { txt = AI.progress > 0 && AI.progress < 1 ? `AI ${Math.round(AI.progress * 100)}%` : 'AI …'; col = '#d8b45a'; }
             else if (AI.status === 'error' && !aiReady()) { txt = 'AI ✕'; col = '#c4553c'; }
             else if (!aiReady()) { txt = P === 'builtin' ? 'AI: start' : 'AI: key?'; col = '#d8b45a'; }
-            else { txt = AI.busy ? 'AI thinking' : AI_PROVIDERS[P].short; col = AI.status === 'error' ? '#e0975a' : '#93b25f'; }
+            else { txt = AI.busy ? 'AI thinking' : AI_PROVIDERS[P].short + (AI.status === 'error' ? ' ⚠' : ''); col = AI.status === 'error' ? '#e0975a' : '#93b25f'; }
             b.innerHTML = `${ic('ai')}<span>${esc(txt)}</span><span class="ai-dot${AI.busy ? ' ai-pulse' : ''}" style="background:${col}"></span>`;
-            b.title = `AI engine: ${AI_PROVIDERS[P].label}${AI.note ? '\n' + AI.note : ''}\nClick to configure.`;
+            b.title = `AI engine: ${AI_PROVIDERS[P].label}${AI.status === 'error' && aiReady() ? '\nLast AI call FAILED — the offline engine answered instead:' : ''}${AI.note ? '\n' + AI.note : ''}${P !== 'off' && !aiReady() ? '\nThe AI is not active — the offline staff engine is answering.' : ''}\nClick to configure.`;
             const s = document.getElementById('setup-ai-status');
             if (s) s.innerHTML = `<span style="color:${col}">●</span> ${esc(aiReady() ? AI_PROVIDERS[P].label : P === 'off' ? 'Off — offline staff engine (rules-based analysis)' : AI_PROVIDERS[P].label + ' — not ready yet')}`;
         }
@@ -9609,16 +9738,18 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 <input type="password" id="ai-key" class="tc-in w-full font-mono" placeholder="${esc(D.hint)}" value="${esc(AI.keys[P] || '')}" autocomplete="off" oninput="AI.keys[AI.provider]=this.value.replace(/[\s'\"]/g,'');renderAIIndicator()">
                 <label class="ai-lbl">Model</label>
                 <input id="ai-model" class="tc-in w-full font-mono" list="ai-model-list" value="${esc(aiModel())}" oninput="AI.models[AI.provider]=this.value.trim()">
-                <datalist id="ai-model-list">${(AI.modelList[P] || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
-                <label class="flex items-center gap-2 mt-2 text-[11.5px] cursor-pointer"><input type="checkbox" ${AI.remember ? 'checked' : ''} onchange="AI.remember=this.checked;aiSaveConfig()"> Remember my key on this computer</label>
+                <datalist id="ai-model-list">${aiModelOptions(P)}</datalist>
+                <div class="text-[10.5px] text-slate-400 mt-1">Your choice is kept. Leave empty for the default (${esc(D.def)}).${(AI.modelList[P] || []).length ? ` ${AI.modelList[P].length} models on your account — open the list.` : ''}</div>
+                <label class="flex items-center gap-2 mt-2 text-[11.5px] cursor-pointer"><input type="checkbox" ${AI.remember ? 'checked' : ''} onchange="AI.remember=this.checked;aiSaveConfig();renderAIModal()"> Remember my key on this computer</label>
+                ${AI.remember ? '' : `<div class="text-[10.5px] mt-1" style="color:#e0b35a">Not remembered: after you reload or reopen the game the key is gone and the AI switches off (the top bar then shows “AI: key?”). Tick the box to keep it in this browser.</div>`}
                 <div class="ai-note">${ic('lock')} Your key is sent only to ${esc(D.short === 'ChatGPT' ? 'OpenAI' : D.short === 'Claude' ? 'Anthropic' : 'Google')} directly from this browser. It is <b>never</b> written into save files or exports. If "remember" is off it is forgotten when you close the page. Don't share screenshots of this box, and set a monthly spending limit on your account — each report or review is one request (fractions of a cent to a few cents).</div>
-                <button type="button" class="gs-btn gs-btn-wide gs-btn-primary" onclick="aiTest()">Test key &amp; load model list</button>`;
+                <button type="button" class="gs-btn gs-btn-wide gs-btn-primary" onclick="aiTest()">Test connection &amp; analysis</button>`;
             if (P === 'ollama') body = `
                 <label class="ai-lbl">Ollama address</label>
                 <input class="tc-in w-full font-mono" value="${esc(AI.ollamaUrl)}" oninput="AI.ollamaUrl=this.value.trim()">
                 <label class="ai-lbl">Model</label>
                 <input class="tc-in w-full font-mono" list="ai-model-list" value="${esc(aiModel())}" oninput="AI.models[AI.provider]=this.value.trim()">
-                <datalist id="ai-model-list">${(AI.modelList[P] || []).map(m => `<option value="${esc(m)}">`).join('')}</datalist>
+                <datalist id="ai-model-list">${aiModelOptions(P)}</datalist>
                 <div class="ai-note">Install Ollama from ollama.com, run <span class="font-mono">ollama pull llama3.1:8b</span>, and start it with <span class="font-mono">OLLAMA_ORIGINS="*"</span> so this page may talk to it. Free and private.</div>
                 <button type="button" class="gs-btn gs-btn-wide gs-btn-primary" onclick="aiTest()">Test connection</button>`;
             box.innerHTML = `
@@ -9630,6 +9761,12 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 <div id="ai-status-line" class="ai-status"></div>`;
             renderAIModalStatus();
         }
+        function aiModelOptions(P) {
+            const D = AI_PROVIDERS[P] || {}, seen = new Set(), out = [];
+            (D.suggest || []).forEach(([m, l]) => { seen.add(m); out.push(`<option value="${esc(m)}">${esc(l)}</option>`); });
+            (AI.modelList[P] || []).forEach(m => { if (!seen.has(m)) { seen.add(m); out.push(`<option value="${esc(m)}">`); } });
+            return out.join('');
+        }
         function renderAIModalStatus() {
             const el = document.getElementById('ai-status-line'); if (!el) return;
             const col = { ok: '#93b25f', error: '#e0866b', loading: '#d8b45a' }[AI.status] || '#ab9f80';
@@ -9638,6 +9775,15 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         }
         aiLoadConfig();
         if (AI.provider === 'builtin' && AI.builtinCached) setTimeout(() => aiStartBuiltin(), 1500);     // reload a model you already downloaded
+        // when the game starts with an AI chosen but not usable (key not remembered, Ollama down…), say so instead of silently playing offline
+        function aiStartNotice() {
+            try {
+                if (AI.provider === 'off' || AI.provider === 'builtin' || aiReady()) return;
+                const D = AI_PROVIDERS[AI.provider];
+                aiToast(`${D.short} is selected but no API key is stored in this session${AI.remember ? '' : ' (“Remember my key” was off)'}. Click here to paste it.`, 'AI is off');
+            } catch (e) { }
+        }
+        try { document.getElementById('deploy-btn').addEventListener('click', () => setTimeout(aiStartNotice, 2500)); } catch (e) { }
         setTimeout(renderAIIndicator, 0);
 
         // =====================================================================
