@@ -5629,7 +5629,7 @@
             diplomacy: /\b(diplomat|envoy|ambassador|embass|talks|negotiat|summit|consult|meet|visit|treaty|alliance|recogni[sz]|sanction|condemn|statement|united nations|security council|mediat|ceasefire|truce|peace|dialogue|normali[sz]|delegation|propose|invite|back.channel|hotline|congratulat|condolence|isolate|expel|recall)/,
             economy: /\b(tax|tariffs?|invest|budget|stimulus|subsid|trade|exports?|imports?|infrastructure|privati[sz]|nationali[sz]|loan|debt|bonds?|currency|interest rate|inflation|oil|gas|energy|industr|factor|manufactur|mining|minerals|rare.earth|agricultur|tourism|sovereign wealth|imf|opec|price control|deficit|austerity|economy|economic|swap line|fund|vat|wages?|jobs|growth|tankers?|shadow fleet|shipping|refiner|pipeline|sanctions evasion|get around)/,
             domestic: /\b(speech|address|reform|protests?|crackdown|arrest|elections?|healthcare|hospital|education|schools?|pension|welfare|police|corruption|censor|media|curfew|martial law|amnesty|referendum|unity|morale|propaganda|housing|unemployment|crime|cabinet|reshuffle|parliament|congress|legislat|constitution|national assembly|campaign|prisoners?)/,
-            intelligence: /\b(intelligence|spy|spies|espionage|cyber|audit|surveil|covert|sabotage|counterintelligence|infiltrat|informant|investigat|intercept|leak|disinformation|assess|inquiry|reconnaissance|recon|satellite)/,
+            intelligence: /\b(intelligence|spy|spies|espionage|cyber|hack|audit|surveil|covert|sabotage|counterintelligence|counter.?intel|infiltrat|informant|investigat|intercept|leak|disinformation|propaganda|assess|inquiry|reconnaissance|recon|satellite|mole|agents?|bribe|blackmail|steal|destabili[sz]|subvert|subversion|assassinat|eavesdrop|wiretap|foment|psyop)/,
             humanitarian: /\b(aid|humanitarian|relief|refugees?|evacuat|donat|food|medical|vaccin|famine|disaster|reconstruction|rebuild)/
         };
         const HOSTILE_RX = /\b(strike|bomb|attack|invade|invasion|assault|shell|missile|airstrike|air strike|blockade|sanction|embargo|expel|condemn|threaten|warn|ultimatum|seize|annex|sabotage|assassinat|destabili[sz]|isolate|retaliat|punish|tariffs? on|cut ties|sever(ed)? (ties|relations)|freeze|declare war|war on|occupy|incursion|cyber.?attack|hack|pressure|deter\b|deterr|confront|accuse|reject|block|bans?\b|banned|demand|against|counter)/;
@@ -5642,6 +5642,20 @@
         const SCALE_UP = /\b(full.scale|massive|all.out|total|nationwide|general mobili[sz]ation|maximum|large.scale|sweeping|major)/;
         const SCALE_DOWN = /\b(limited|small|pilot|targeted|symbolic|modest|gradual|partial|precision)/;
         const COVERT_RX = /\b(covert|secret|quiet|quietly|discreet|deniable|back.channel|clandestine)/;
+        // ---------- Intelligence & covert operations: a typed system with real effects, never a cause of war ----------
+        const INTEL_RX = {
+            assassinate: /\b(assassinat|liquidat|targeted killing|target .{0,30}(scientist|general|commander|leader|official|officer)s?\b|eliminate .{0,30}(scientist|general|commander|leader|official)|poison .{0,20}(the|their|a))/,
+            sabotage: /\b(sabotage|blow up|cripple|disable .{0,30}(grid|pipeline|plant|reactor|facility|network|system|railway|port)|cut .{0,20}(the )?(power|cables?|supply)|plant (a |an )?(bomb|device|explosive))/,
+            cyber: /\b(cyber.?attack|cyber.?operation|hack|hacking|hacked|ddos|malware|ransomware|wiper|breach .{0,20}(network|system|grid|server)|penetrate .{0,20}(network|system)|digital (attack|intrusion)|take down .{0,30}(grid|network|systems?|servers?))/,
+            subvert: /\b(destabili[sz]|subvert|subversion|foment|incite|stir up (unrest|protest)|coup|regime change|overthrow|color revolution|fund (the )?(opposition|rebels|protest)|back (the )?(opposition|rebels|protest|uprising)|support (the )?(opposition|protest|uprising|rebels)|election (meddl|interfer|rig)|rig (the |an )?election|meddle in .{0,20}election|interfere in .{0,20}election|covertly fund)/,
+            disinfo: /\b(disinformation|propaganda campaign|fake news|influence (campaign|operation)|psyop|psychological operation|smear|sow (discord|division|doubt)|spread (rumou?rs|lies|propaganda)|troll (farm|campaign)|run a disinformation)/,
+            steal: /\b(steal .{0,30}(technolog|secrets?|plans?|data|designs?|blueprints?|intellectual property|ip\b)|exfiltrat|industrial espionage|plant (a |an )?mole|recruit (a |an )?(agent|informant|mole|asset|spy)|bribe .{0,20}official|blackmail)/,
+            counter: /\b(counter.?intelligence|counter.?espionage|counter.?intel|catch (the )?(spy|spies|mole)|mole hunt|roll up .{0,20}(network|cell|ring)|secure our (networks?|systems?)|harden our (networks?|systems?|cyber)|protect .{0,30}(against|from) .{0,20}(hackers?|cyber|espionage|spies|sabotage))/,
+            collect: /\b(spy on|spies|espionage|surveil|reconnaissance|\brecon\b|intercept .{0,20}communicat|eavesdrop|wiretap|bug .{0,20}(the|their)|monitor .{0,20}(their|the)|gather intelligence|collect intelligence|intelligence on|satellite (imagery|surveillance)|signals intelligence|infiltrat|informant|surveillance of)\b/
+        };
+        function intelTypeOf(s) { for (const k of ['assassinate', 'sabotage', 'cyber', 'subvert', 'disinfo', 'steal', 'counter', 'collect']) if (INTEL_RX[k].test(s)) return k; return null; }
+        const INTEL_OVERT_RX = /\b(invade|invasion|airstrike|air strike|cruise missile|ballistic missile|artillery|ground offensive|occupy|annex|send troops|deploy troops|bombing campaign)\b/;
+
         const CAT_STYLE = {
             military: "background:rgba(239,68,68,.15);color:#fca5a5", diplomacy: "background:rgba(129,140,248,.15);color:#c7d2fe",
             economy: "background:rgba(34,197,94,.15);color:#86efac", domestic: "background:rgba(250,204,21,.15);color:#fde68a",
@@ -5701,6 +5715,8 @@
             let cat = Object.keys(scores).reduce((a, b) => scores[b] > scores[a] ? b : a, 'diplomacy');
             if (Object.values(scores).every(v => v === 0)) cat = 'domestic';
             if (/\bcyber/.test(s) && !/(missile|bomb|troops|invade|invasion|kinetic|airstrike|air strike)/.test(s)) cat = 'intelligence';
+            const _itype = intelTypeOf(s);
+            if (_itype && !INTEL_OVERT_RX.test(s)) cat = 'intelligence';
             const ns = normName(text);
             const found = (state.playerIso ? detectCountries(text) : []);
             const targets = found.map(f => {
@@ -5729,7 +5745,13 @@
                                              /(election|referendum|campaign)/.test(s) ? 'politics' : /(subsid|welfare|pension|relief|healthcare|housing)/.test(s) ? 'welfare' : 'message') :
                         cat === 'diplomacy' ? (/(sanction|embargo|freeze)/.test(s) ? 'sanction' : /(ceasefire|truce|peace|mediat|proximity)/.test(s) ? 'peace' :
                                               /(condemn|expel|recall|warn|accuse|ultimatum|demand)/.test(s) ? 'protest' : 'engage') : 'general';
-            return { cat, targets, scale, covert: COVERT_RX.test(s), kind, blocs: detectBlocs(text) };
+            let intel = null;
+            if (cat === 'intelligence') {
+                const typ = _itype || intelTypeOf(s) || 'collect';
+                intel = { type: typ, covert: COVERT_RX.test(s) || !['collect', 'counter'].includes(typ) };
+                if (!['collect', 'counter'].includes(typ)) targets.forEach(t => { if (t.stance !== 'hostile') t.stance = 'hostile'; });
+            }
+            return { cat, targets, scale, covert: COVERT_RX.test(s), kind, blocs: detectBlocs(text), intel };
         }
 
         function planOrder(text) {
@@ -5818,6 +5840,7 @@
             else if (o.cat === 'construction') prob = 0.84 + (stab - 50) / 300;
             if (o.kind === 'move' || o.kind === 'withdraw') prob = 0.88 + (stab - 50) / 400;
             prob += (o.dirProb || 0) + D().prob;
+            if (main && state.intel && state.intel[main.iso] && state.intel[main.iso].until > state.dayIndex) prob += 0.05 * (state.intel[main.iso].lvl || 1);
             return clamp(prob, 0.05, 0.95);
         }
 
@@ -6000,14 +6023,8 @@
 
             // ---------------- INTELLIGENCE ----------------
             else if (o.cat === 'intelligence') {
-                const caught = main && (/(sabotage|covert|infiltrat|hack|cyber.?attack)/.test(o.text.toLowerCase())) && Math.random() < (outcome === 'Failure' ? 0.8 : 0.25);
-                if (m > 0) {
-                    fx(`Intelligence gathered${main ? ' on ' + tName : ''}`, true);
-                    if (main) { const c = conflictsOf(main.iso)[0]; logEvent(`🕵 Intel report on ${tName}: relations ${getRel(me, main.iso)}, power index ${power(main.iso).toFixed(0)} vs ours ${power(me).toFixed(0)}${c ? ', engaged in ' + c.name : ''}.`, 'neutral'); }
-                    else { p.stability = clamp(p.stability + 1, 0, 100); state.mods.defense += 0.5; fx(`Internal security improved`, true); }
-                }
-                if (main && main.stance === 'hostile' && /cyber.?attack|hack|sabotage/.test(o.text.toLowerCase())) { try { fxForOrder(o, outcome, main.iso); } catch (e) { console.warn(e); } if (m > 0) socCyberHit(main.iso, m, fx); }
-                if (caught) { addRel(me, main.iso, -25); fx(`Operation exposed! ${tName} expels diplomats (−25)`, false); queueMessage(main.iso, `Our counter-intelligence services have exposed your operation. Your diplomats have 48 hours to leave.`); }
+                if (!main && (o.intel ? o.intel.type === 'counter' : /(counter.?intel|internal security|secure our)/.test(o.text.toLowerCase()))) { resolveIntelOp(o, outcome, m, fx); }
+                else { try { if (main && main.stance === 'hostile' && /cyber.?attack|hack|sabotage/.test(o.text.toLowerCase())) fxForOrder(o, outcome, main.iso); } catch (e) { console.warn(e); } resolveIntelOp(o, outcome, m, fx); }
             }
 
             // ---------------- CONSTRUCTION ----------------
@@ -11589,7 +11606,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const r = pick(rivals), nm = shortName(r), sev = D().crisisSev;
             const acts = [
                 () => { state.sanctionsOnMe += 1; aiNews(r, `${esc(nm)} imposes new sanctions on ${esc(state.player)}'s banks and state companies.`, 'bad'); queueMessage(r, `Our new sanctions are a response to your hostile policies. They will stay until your conduct changes.`); },
-                () => { const hit = p.gdp * 0.0006 * sev; p.treasury -= hit; aiNews(r, `A cyberattack attributed to ${esc(nm)} disrupts ${esc(state.player)}'s banking and power systems (≈ ${formatVal(hit)} in damage).`, 'bad'); },
+                () => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7)) { aiNews(r, `${esc(state.player)}'s counter-intelligence thwarts a cyberattack traced to ${esc(nm)}.`, 'good'); return; } const hit = p.gdp * 0.0006 * sev; p.treasury -= hit; aiNews(r, `A cyberattack attributed to ${esc(nm)} disrupts ${esc(state.player)}'s banking and power systems (≈ ${formatVal(hit)} in damage).`, 'bad'); },
                 () => { p.stability = clamp(p.stability - Math.round(2 * sev), 0, 100); state.mods.defense -= 0.3; aiNews(r, `${esc(nm)} stages provocative military drills near ${esc(state.player)}'s border. Public alarm grows.`, 'bad'); queueMessage(r, `Our exercises are routine. If you feel threatened, perhaps you should reconsider your alignment.`); },
                 () => { state.mods.growth -= 0.001 * sev; aiNews(r, `${esc(nm)} bans imports from ${esc(state.player)} and pressures partners to follow.`, 'bad'); },
                 () => { p.stability = clamp(p.stability - Math.round(2 * sev), 0, 100); aiNews(r, `State media in ${esc(nm)} launch a disinformation campaign targeting ${esc(state.player)}'s government.`, 'bad'); },
@@ -12733,6 +12750,60 @@ function socCyberHit(iso, m, fx) {
     const d = 0.0004 * m; n.gdp *= (1 - d); s.infra = Math.max(2, s.infra - 1.2 * m);
     fx(`${shortName(iso)}'s grid and banking systems disrupted (GDP −${(d * 100).toFixed(2)}%, infrastructure −${(1.2 * m).toFixed(1)})`, true);
 }
+// Typed intelligence/covert operation: real, lasting effects on the target, a chance of exposure, and NEVER a new war.
+function resolveIntelOp(o, outcome, m, fx) {
+    const me = state.playerIso, main = o.targets[0], iso = main && main.iso;
+    const type = (o.intel && o.intel.type) || (typeof intelTypeOf === 'function' && intelTypeOf((o.text || '').toLowerCase())) || 'collect';
+    const covert = o.intel ? o.intel.covert !== false : true;
+    const good = m > 0, tN = iso ? shortName(iso) : '';
+    state.intel = state.intel || {}; state.counterOn = state.counterOn || {};
+    // ----- counter-intelligence: a purely domestic shield, no foreign target needed -----
+    if (type === 'counter') {
+        if (good) { state.counterIntel = { until: state.dayIndex + 120, lvl: Math.min(1, 0.5 + 0.5 * m) }; state.mods.defense += 0.4; fx('Counter-intelligence strengthened — hostile spying, hacking and sabotage against us are now far less likely to succeed', true); }
+        else fx('The counter-intelligence sweep found little', false);
+        return;
+    }
+    if (!iso) { if (good) fx('Intelligence gathered', true); return; }
+    const n = nationIso(iso), tf = (typeof fpOf === 'function') ? fpOf(iso) : { intelTol: 0.3, style: 'firm' };
+    // ----- effect of a successful operation (scaled by outcome) -----
+    if (good) {
+        if (type === 'collect') {
+            state.intel[iso] = { until: state.dayIndex + 60, lvl: m };
+            try { const c = conflictsOf(iso)[0]; logEvent(`🕵 Intel on ${esc(tN)}: relations ${getRel(me, iso)}, power ${power(iso).toFixed(0)} vs ours ${power(me).toFixed(0)}${c ? ', engaged in ' + esc(c.name) : ''}. Your services now track its forces (better odds against it for 60 days).`, 'neutral'); } catch (e) { }
+            fx(`Intelligence gathered on ${tN}`, true);
+        } else if (type === 'cyber') {
+            try { if (typeof socCyberHit === 'function') socCyberHit(iso, m, fx); } catch (e) { }
+            const loss = n.gdp * 0.0005 * m; n.gdp -= loss; fx(`${tN}'s networks disrupted (−${formatVal(loss)})`, true);
+        } else if (type === 'sabotage') {
+            let hit = false;
+            try { const site = (typeof detectSite === 'function') && detectSite(o.text); if (site && site.owner === iso && typeof damageSite === 'function') { damageSite(site, outcome, me); fx(`Sabotage damages ${site.name}`, true); hit = true; } } catch (e) { }
+            if (!hit) { try { const so = socOf(iso); so.infra = Math.max(2, so.infra - 1.5 * m); } catch (e) { } const loss = n.gdp * 0.0006 * m; n.gdp -= loss; fx(`Sabotage sets back ${tN}'s infrastructure (−${formatVal(loss)})`, true); }
+        } else if (type === 'steal') {
+            state.mods.growth += clamp(0.0006 * m, 0, 0.0015); fx(`Stolen technology and secrets boost our industry (growth +${(clamp(0.06 * m, 0, 0.15)).toFixed(2)} pts)`, true);
+        } else if (type === 'disinfo' || type === 'subvert') {
+            n.stability = clamp(n.stability - Math.round((type === 'subvert' ? 4 : 2) * m), 0, 100);
+            try { if (type === 'subvert' && typeof coupState === 'function' && ['autocracy', 'one-party', 'theocracy', 'junta', 'hybrid'].includes(tf.reg)) { const C = coupState(); C.heat[iso] = clamp((C.heat[iso] || 0) + 6 * m, 0, 100); } } catch (e) { }
+            fx(`${type === 'subvert' ? 'Subversion stirs unrest in' : 'Disinformation undermines'} ${tN} (its stability −${Math.round((type === 'subvert' ? 4 : 2) * m)})`, true);
+        } else if (type === 'assassinate') {
+            n.stability = clamp(n.stability - Math.round(5 * m), 0, 100); state.mods.defense += 0.2;
+            fx(`The operation against ${tN} succeeds — leadership shaken (its stability −${Math.round(5 * m)})`, true);
+        }
+    } else fx(`The operation against ${tN} failed`, false);
+    // ----- exposure: scaled by covertness, outcome, the target's capacity and type (never starts a war) -----
+    let cap = 1; try { cap = clamp(power(iso) / Math.max(1, power(me)), 0.3, 2.2); } catch (e) { }
+    const typeRisk = { collect: 0.6, steal: 1, cyber: 1.1, sabotage: 1.3, disinfo: 0.8, subvert: 1.1, assassinate: 1.7 }[type] || 1;
+    const shield = (state.counterIntel && state.counterIntel.until > state.dayIndex) ? 1 : 1;   // our own counter-intel shields US, not the target
+    const expose = Math.random() < clamp((covert ? 0.14 : 0.4) * (outcome === 'Failure' ? 2.4 : outcome === 'Partial' ? 1.3 : 1) * (0.55 + 0.45 * cap) * typeRisk, 0.02, 0.95);
+    if (expose) {
+        o.intelExposed = true;
+        const pen = Math.round(10 * (1 - 0.5 * tf.intelTol) * (type === 'assassinate' ? 2 : 1));
+        addRel(me, iso, -pen);
+        fx(`Operation EXPOSED — ${tN} reacts (relations −${pen})`, false);
+        try { if (typeof fpLine === 'function') queueMessage(iso, fpLine(iso, 'exposed')); else queueMessage(iso, `Our counter-intelligence has exposed your operation. Your officers have 48 hours to leave.`); } catch (e) { }
+        try { state.counterOn[iso] = state.dayIndex + 90; if (typeof reactDo === 'function' && Math.random() < 0.6) reactDo(iso, 'expel', { intel: true }); } catch (e) { }
+    } else if (good) fx('The operation stayed deniable', true);
+}
+
 function socAnchor() { const s = state.soc && state.soc[state.playerIso]; return s ? s.appr0 : 50; }
 
 // ---- order language: policy orders move the real budget ----
@@ -14853,7 +14924,16 @@ function reactRecord(o) {
             if (o.act === 'recognize') reactHostile(gov, 30);
             if (['strike', 'sanction'].includes(o.act)) p.patrons.filter(x => x !== state.playerIso).forEach(x => reactAdd(x, 'g', o.act === 'strike' ? 10 : 5));
             if (o.act === 'strike' && getRel(state.playerIso, gov) < 30) reactAdd(gov, 'g', 8);
-        } else hostile.concat(T.filter(t => t.stance !== 'friendly').map(t => t.iso)).forEach(i => reactAdd(i, 'g', 18 * m));
+        } else {
+            // intelligence operations never build war-grievance by themselves — they go in a separate covert channel that never counts toward war
+            const typ = (o.intel && o.intel.type) || 'collect';
+            const base = ({ collect: 6, steal: 10, cyber: 14, sabotage: 16, disinfo: 10, subvert: 12, assassinate: 20, counter: 0 })[typ] || 8;
+            const exposed = o.intelExposed;
+            T.filter(t => t.stance !== 'friendly').map(t => t.iso).concat(hostile).forEach(i => {
+                reactAdd(i, 'i', base * m * (1 - 0.6 * fpOf(i).intelTol) * (exposed ? 1.8 : 1));
+                if (exposed && ['sabotage', 'assassinate'].includes(typ)) reactAdd(i, 'g', 5 * m);   // an exposed attack that kills/destroys does breed some open grievance
+            });
+        }
     } else if (o.cat === 'humanitarian') friendly.concat(hostile).forEach(i => reactAdd(i, 'w', 15 * m));
     else if (o.cat === 'construction' && ['nuke_weapon', 'enrichment', 'missile'].includes(o.siteType)) { try { rivalsOf(state.playerIso).slice(0, 8).forEach(x => reactAdd(x, 'f', 14)); } catch (e) { } }
 }
@@ -14864,10 +14944,10 @@ function reactRecord(o) {
 const REACT_STANCE = s => state.conflicts.some(c => c.type === 'war' && ((c.sideA.includes(s.iso) && c.sideB.includes(state.playerIso)) || (c.sideB.includes(s.iso) && c.sideA.includes(state.playerIso)))) ? ['At war with you', '#c4553c'] : s.h >= 70 ? ['Preparing for war', '#c4553c'] : s.h >= 45 ? ['Retaliating', '#e0975a'] : s.h >= 25 ? ['Hostile', '#d8b45a'] : s.f >= 30 ? ['Arming in fear', '#d8b45a'] : s.w >= 25 ? ['Grateful', '#93b25f'] : ['Wary', '#ab9f80'];
 function reactStanding() {
     const R = reactState(), me = state.playerIso;
-    return [...new Set(Object.keys(R.g).concat(Object.keys(R.f), Object.keys(R.w)))].filter(i => WORLD[i] && i !== me).map(i => {
-        const g = R.g[i] || 0, f = R.f[i] || 0, w = R.w[i] || 0, rel = getRel(me, i);
-        return { iso: i, g, f, w, rel, h: g + Math.max(0, -rel) * 0.25 };
-    }).filter(s => s.g >= 8 || s.f >= 12 || s.w >= 12);
+    return [...new Set(Object.keys(R.g).concat(Object.keys(R.f), Object.keys(R.w), Object.keys(R.i)))].filter(i => WORLD[i] && i !== me).map(i => {
+        const g = R.g[i] || 0, f = R.f[i] || 0, w = R.w[i] || 0, iv = R.i[i] || 0, rel = getRel(me, i);
+        return { iso: i, g, f, w, i: iv, rel, h: g + Math.max(0, -rel) * 0.25 };
+    }).filter(s => s.g >= 8 || s.f >= 12 || s.w >= 12 || s.i >= 18);
 }
 function reactLog(iso, txt, type) { const R = reactState(); R.log.unshift({ iso, txt, day: state.dayIndex, date: state.date.toDateString(), type }); R.log = R.log.slice(0, 25); logEvent(`${flagHTML(nationIso(iso), 10)} ${txt}`, type); }
 // ---------- One reaction dispatcher: every government action against the player runs through here ----------
@@ -14932,7 +15012,7 @@ function fpRespondIntel(iso, sev) {
 function reactWeekly() {
     const R = reactState(), me = state.playerIso, pn = nationIso(me), nm = esc(state.player);
     // memories fade
-    ['g', 'f', 'w'].forEach(k => Object.keys(R[k]).forEach(i => { R[k][i] *= 0.93; if (R[k][i] < 1) delete R[k][i]; }));
+    ['g', 'f', 'w', 'i'].forEach(k => Object.keys(R[k]).forEach(i => { R[k][i] *= 0.93; if (R[k][i] < 1) delete R[k][i]; }));
     const cand = reactStanding().filter(s => !(R.cd[s.iso] > state.dayIndex)).sort((a, b) => Math.max(b.h, b.f, b.w, b.i * 0.6) - Math.max(a.h, a.f, a.w, a.i * 0.6)).slice(0, 8);
     let acted = 0; const maxActs = 1 + Math.round(Math.min(2, (D().retal || 1)));
     for (const s of cand) {
@@ -15610,7 +15690,7 @@ function mapFind(q) {
 //  WIRING — new game, saves, schedule
 // =====================================================================
 // saved with the game; a save from before these systems existed starts them fresh
-const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react', 'orgs', 'orgApp', 'orgCd', 'allyCalls', 'allyJoined'];
+const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react', 'orgs', 'orgApp', 'orgCd', 'allyCalls', 'allyJoined', 'intel', 'counterOn', 'counterIntel'];
 NEW_FIELDS.forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 function systemsEnsure() {
     if (!state.proxies) proxyInit(); else proxyMigrate();
