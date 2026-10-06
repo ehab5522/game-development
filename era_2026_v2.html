@@ -15132,38 +15132,49 @@ function warsAlliesHTML() {
 // always show; a group without a known flag, or one whose image cannot load, gets a plain grey badge with its initials.
 const GRP_SVG = (body, bg) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200"><rect width="300" height="200" fill="${bg}"/>${body}</svg>`);
 const GRP_AR = 'font-family="Amiri, Scheherazade, Noto Naskh Arabic, Arial, sans-serif" font-weight="700" text-anchor="middle" direction="rtl"';
-const BLACK_STANDARD = GRP_SVG(`<g fill="#fff" ${GRP_AR}><text x="150" y="80" font-size="34">لا إله إلا الله</text><circle cx="150" cy="130" r="38"/><text x="150" y="142" font-size="26" fill="#000">محمد رسول الله</text></g>`, '#000');
+// The flags of groups designated as terrorist organisations (US State Department FTO list / UN sanctions list) are not
+// shown; those groups get a plain grey badge with their initials. Other groups fly their flag: simple, well-known
+// designs are drawn here so they always show, the rest load from Wikimedia Commons.
+const TERROR_DESIGNATED = new Set(['hamas', 'hezbollah', 'houthi', 'jnim', 'shabaab', 'pmf', 'eln', 'sinaloa', 'vivansanm']);
+const STAR = (cx, cy, r, fill) => { let d = ''; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.4 : r; d += (i ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(1) + ' ' + (cy + rr * Math.sin(a)).toFixed(1); } return `<path d="${d}Z" fill="${fill}"/>`; };
+const SUN = (cx, cy, r, n, fill) => { let d = ''; for (let i = 0; i < n * 2; i++) { const a = -Math.PI / 2 + i * Math.PI / n, rr = i % 2 ? r * 0.62 : r; d += (i ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(1) + ' ' + (cy + rr * Math.sin(a)).toFixed(1); } return `<path d="${d}Z" fill="${fill}"/>`; };
+const HSTRIPES = (cols) => cols.map((c, i) => `<rect y="${(200 / cols.length * i).toFixed(2)}" width="300" height="${(200 / cols.length + 0.5).toFixed(2)}" fill="${c}"/>`).join('');
 const GROUP_FLAG = {
-    hamas: { c: 'Flag_of_Hamas.svg' },
-    hezbollah: { c: 'Flag_of_Hezbollah.svg' },
-    houthi: { svg: GRP_SVG(`<g ${GRP_AR} font-size="25"><text x="150" y="38" fill="#2e7d32">الله أكبر</text><text x="150" y="76" fill="#c62828">الموت لأمريكا</text><text x="150" y="114" fill="#c62828">الموت لإسرائيل</text><text x="150" y="152" fill="#c62828">اللعنة على اليهود</text><text x="150" y="190" fill="#2e7d32">النصر للإسلام</text></g>`, '#fff') },
-    jnim: { svg: BLACK_STANDARD }, shabaab: { svg: BLACK_STANDARD },
+    // Kurdistan Region: red, white, green with a golden 21-ray sun
+    krg: { svg: GRP_SVG(HSTRIPES(['#ed2024', '#fff', '#278e43']) + SUN(150, 100, 38, 21, '#febd11'), '#fff') },
+    // Sahrawi Republic (Polisario): black, white, green; red triangle; red crescent and star
+    polisario: { svg: GRP_SVG(HSTRIPES(['#000', '#fff', '#007a3d']) + '<path d="M0 0L100 100L0 200Z" fill="#c4111b"/><circle cx="160" cy="100" r="22" fill="#c4111b"/><circle cx="168" cy="100" r="18" fill="#fff"/>' + STAR(178, 100, 11, '#c4111b'), '#fff') },
+    // Transnistria: red, green, red
+    transnistria: { svg: GRP_SVG(HSTRIPES(['#c8102e', '#c8102e', '#00843d', '#c8102e', '#c8102e']) + '<rect y="80" width="300" height="40" fill="#00843d"/>', '#c8102e') },
+    // Abkhazia: seven green and white stripes, red canton with an open white hand and seven stars
+    abkhazia: { svg: GRP_SVG(HSTRIPES(['#00993e', '#fff', '#00993e', '#fff', '#00993e', '#fff', '#00993e']) + '<rect width="120" height="86" fill="#c8102e"/><path d="M52 66v-24l-6-6v-10l4 2v10l4 2v-18l4 0v18l3 0v-21l4 0v21l3 0v-18l4 0v20l3 0v-14l4 0v22l-4 10v6z" fill="#fff"/>' + [0, 1, 2, 3, 4, 5, 6].map(i => { const a = Math.PI * (0.95 + i * 0.185); return STAR(60 + 44 * Math.cos(a) * 0.95, 48 + 34 * Math.sin(a), 5, '#fff'); }).join(''), '#fff') },
+    // South Ossetia: white, red, yellow
+    sossetia: { svg: GRP_SVG(HSTRIPES(['#fff', '#c8102e', '#ffd100']), '#fff') },
+    // Northern Cyprus: white with two red stripes and a red crescent and star
+    trnc: { svg: GRP_SVG('<rect y="18" width="300" height="20" fill="#e30a17"/><rect y="162" width="300" height="20" fill="#e30a17"/><circle cx="130" cy="100" r="34" fill="#e30a17"/><circle cx="141" cy="100" r="27" fill="#fff"/>' + STAR(168, 100, 16, '#e30a17'), '#fff') },
+    // Somaliland: green with the white shahada, white with a black star, red
+    somaliland: { svg: GRP_SVG(HSTRIPES(['#006d21', '#fff', '#d21034']) + `<text x="150" y="44" fill="#fff" font-size="19" ${GRP_AR}>لا إله إلا الله محمد رسول الله</text>` + STAR(150, 100, 22, '#000'), '#fff') },
+    // Southern Transitional Council: the flag of former South Yemen
+    stc: { svg: GRP_SVG(HSTRIPES(['#ce1126', '#fff', '#000']) + '<path d="M0 0L130 100L0 200Z" fill="#3d9ee5"/>' + STAR(42, 100, 22, '#ce1126'), '#fff') },
+    // Suwayda Druze: the Druze five-colour flag
+    sweida: { svg: GRP_SVG(HSTRIPES(['#00a651', '#ed1c24', '#fff200', '#0072bc', '#fff']), '#fff') },
+    // SPLM-North flies the SPLM banner, the design South Sudan adopted
+    splmn: { iso2: 'ss' },
+    // the LNA uses Libya's national flag
+    lna: { iso2: 'ly' },
     sdf: { c: 'Flag_of_the_Syrian_Democratic_Forces.svg' },
-    krg: { c: 'Flag_of_Kurdistan.svg' },
-    polisario: { c: 'Flag_of_the_Sahrawi_Arab_Democratic_Republic.svg' },
-    transnistria: { c: 'Flag_of_Transnistria_(state).svg' },
-    abkhazia: { c: 'Flag_of_the_Republic_of_Abkhazia.svg' },
-    sossetia: { c: 'Flag_of_South_Ossetia.svg' },
-    trnc: { c: 'Flag_of_the_Turkish_Republic_of_Northern_Cyprus.svg' },
-    somaliland: { c: 'Flag_of_Somaliland.svg' },
-    stc: { c: 'Flag_of_South_Yemen.svg' },                      // the STC flies the flag of the former South Yemen
     tplf: { c: 'Flag_of_the_Tigray_Region.svg' },
-    sweida: { c: 'Druze_flag.svg' },                            // Suwayda's National Guard flies the Druze five-colour flag
     uwsa: { c: 'Flag_of_Wa_State.svg' },
     aa: { c: 'Flag_of_the_Arakan_Army.svg' },
     kia: { c: 'Flag_of_the_Kachin_Independence_Organisation.svg' },
-    pmf: { c: "Flag_of_Kata'ib_Hezbollah.svg" },
-    lna: { iso2: 'ly' },                                        // the LNA uses Libya's national flag
-    eln: { c: 'Flag_of_ELN.svg' },
     rsf: { c: 'Flag_of_the_Rapid_Support_Forces.svg' },
-    m23: { c: 'Flag_of_M23.svg' },
-    splmn: { c: 'Flag_of_SPLM-N.svg' }
+    m23: { c: 'Flag_of_M23.svg' }
 };
-function grpBadge(p, h) { const w = Math.round(h * 1.5); return `<span class="grp-badge" style="width:${w}px;height:${h}px;font-size:${Math.max(7, Math.round(h * 0.42))}px">${esc((p.em || p.short).slice(0, 3))}</span>`; }
+function grpBadge(p, h) { const w = Math.round(h * 1.5); return `<span class="grp-badge" title="${TERROR_DESIGNATED.has(p.id) ? 'No flag shown: designated terrorist organisation' : ''}" style="width:${w}px;height:${h}px;font-size:${Math.max(7, Math.round(h * 0.42))}px">${esc((p.em || p.short).slice(0, 3))}</span>`; }
 function groupFlagHTML(p, h = 14) {
     const F = GROUP_FLAG[p.id], w = Math.round(h * 1.5), st = `height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)`;
     const fb = grpBadge(p, h).replace(/"/g, '&quot;');
-    if (!F) return grpBadge(p, h);
+    if (!F || TERROR_DESIGNATED.has(p.id)) return grpBadge(p, h);
     const src = F.svg ? F.svg : F.iso2 ? `https://flagcdn.com/w80/${F.iso2}.png` : `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(F.c)}?width=120`;
     return `<img src="${src}" alt="" referrerpolicy="no-referrer" loading="lazy" style="${st}" onerror="this.outerHTML='${fb.replace(/'/g, "\\'")}'">`;
 }
