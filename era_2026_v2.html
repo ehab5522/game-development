@@ -15062,14 +15062,14 @@ function orgMonthly() {
 }
 
 // ---------- UI ----------
-function orgBadge(o, size) { return `<span class="org-badge" style="background:${o.color};font-size:${size || 10}px">${esc(o.short)}</span>`; }
+function orgBadge(o, size) { return `<span style="white-space:nowrap">${orgFlagHTML(o, Math.round((size || 10) * 1.3))} <b>${esc(o.short)}</b></span>`; }
 function orgsHTML() {
     const me = state.playerIso, mine = ORG_DEFS.filter(o => inOrg(o.id, me, false));
     const targets = Object.keys(WORLD).filter(i => i !== me && socEligible(i) && !NON_SOVEREIGN.has(i) && WORLD[i][3] > 0.3).sort((a, b) => shortName(a).localeCompare(shortName(b)));
     const tsel = (id, def) => `<select id="org-t-${id}" class="gs-btn" style="max-width:170px">${targets.map(i => `<option value="${i}" ${i === def ? 'selected' : ''}>${esc(shortName(i))}</option>`).join('')}</select>`;
     const rival = rivalsOf(me).sort((a, b) => getRel(me, a) - getRel(me, b))[0] || 'RUS';
     let h = `<div class="text-[11.5px] text-slate-300 mb-2">Your country belongs to <b>${mine.length}</b> organization${mine.length === 1 ? '' : 's'}: ${mine.map(o => orgBadge(o)).join(' ') || '—'}. Apply to join (members decide), leave, or use each one's tools. Organizations also react when one of their members is attacked — by you or anyone else.</div>`;
-    h += `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">`;
+    h += `<table class="nsa-list w-full text-[11.5px]"><thead><tr><th></th><th>Organization</th><th>Members</th><th>Your status</th><th></th></tr></thead><tbody>`;
     ORG_DEFS.forEach(o => {
         const S = orgState()[o.id], member = S.members.includes(me), susp = S.suspended.includes(me), app = (state.orgApp || []).find(a => a.id === o.id), [can, why] = orgCanApply(o);
         const status = susp ? '<span style="color:#e0975a">Suspended</span>' : member ? '<span style="color:#93b25f">Member</span>' : app ? `<span style="color:#d8b45a">Applied · decision in ${app.due - state.dayIndex} days</span>` : '<span class="text-slate-500">Not a member</span>';
@@ -15088,14 +15088,16 @@ function orgsHTML() {
         }
         const join = member ? (o.join.how === 'closed' || o.id === 'un' ? '' : `<button type="button" class="gs-btn" onclick="orgLeave('${o.id}')">Leave</button>`) : (can ? `<button type="button" class="gs-btn gs-btn-primary" onclick="orgApply('${o.id}')">Apply to join</button>` : `<span class="text-[10px] text-slate-500">${esc(why)}</span>`);
         const M = S.members, groups = (o.groups || []).map(proxyById).filter(Boolean);
-        h += `<div class="gs-stat" style="padding:8px 10px;border-left:3px solid ${o.color}"><div class="flex items-center gap-2 mb-1">${orgBadge(o, 11)}<b class="text-[12.5px]">${esc(o.name)}</b>${o.informal ? '<span class="text-[9.5px] text-slate-500">(informal)</span>' : ''}</div>
-            <div class="text-[10.5px] text-slate-400">${esc(o.type)} · founded ${o.founded} · ${esc(o.hq)} · <b>${M.length}</b> members${S.suspended.length ? ` (${S.suspended.length} suspended)` : ''} · ${status}</div>
-            <div class="text-[11px] text-slate-300 my-1">${esc(o.desc)}</div>
-            <ul class="text-[10.5px] text-slate-400" style="margin:0 0 4px 14px;list-style:disc">${o.perks.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
-            <div class="flex flex-col gap-1">${acts}</div><div class="mt-1">${join}</div>
-            <details class="text-[10.5px] mt-1"><summary style="cursor:pointer;color:#ab9f80">Members</summary><div style="line-height:1.7">${M.map(i => `<span style="white-space:nowrap;${S.suspended.includes(i) ? 'opacity:.45' : ''}">${flagHTML(nationIso(i), 9)} ${esc(shortName(i))}${S.suspended.includes(i) ? ' (suspended)' : ''}</span>`).join(' · ')}${groups.length ? ' · ' + groups.map(g => `<span style="white-space:nowrap;color:${pxText(g.color)}">◆ ${esc(g.short)}</span>`).join(' · ') : ''}</div></details></div>`;
+        h += `<tr><td style="width:34px">${orgFlagHTML(o, 18)}</td>
+            <td><b class="text-[12px]">${esc(o.name)}</b>${o.informal ? ' <span class="text-[9.5px] text-slate-500">(informal)</span>' : ''}<div class="text-[10px] text-slate-500">${esc(o.type)} · founded ${o.founded} · ${esc(o.hq)}</div>
+                <details class="text-[10.5px] mt-0.5"><summary style="cursor:pointer;color:#ab9f80">About &amp; members</summary><div class="text-[11px] text-slate-300 my-1">${esc(o.desc)}</div>
+                <ul class="text-[10.5px] text-slate-400" style="margin:0 0 4px 14px;list-style:disc">${o.perks.map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+                <div style="line-height:1.7">${M.map(i => `<span style="white-space:nowrap;${S.suspended.includes(i) ? 'opacity:.45' : ''}">${flagHTML(nationIso(i), 9)} ${esc(shortName(i))}${S.suspended.includes(i) ? ' (suspended)' : ''}</span>`).join(' · ')}${groups.length ? ' · ' + groups.map(g => `<span style="white-space:nowrap">${groupFlagHTML(g, 9)} ${esc(g.short)}</span>`).join(' · ') : ''}</div></details></td>
+            <td style="white-space:nowrap"><b>${M.length}</b>${S.suspended.length ? `<div class="text-[10px] text-slate-500">${S.suspended.length} suspended</div>` : ''}</td>
+            <td>${status}</td>
+            <td style="width:1%;white-space:nowrap;text-align:right">${join}</td></tr>${acts ? `<tr class="org-acts"><td></td><td colspan="4" style="border-top:0;padding-top:0"><div class="flex flex-col gap-1">${acts}</div></td></tr>` : ''}`;
     });
-    return h + '</div>';
+    return h + '</tbody></table>';
 }
 function warsAlliesHTML() {
     const me = state.playerIso, wars = state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me)));
@@ -15170,6 +15172,57 @@ const GROUP_FLAG = {
     rsf: { c: 'Flag_of_the_Rapid_Support_Forces.svg' },
     m23: { c: 'Flag_of_M23.svg' }
 };
+// Organization flags: drawn here, flagcdn (UN, EU) or Wikimedia Commons; forums with no flag (G7, G20, BRICS) get their wordmark
+const ORG_RAYS = (cx, cy, R, r, fillA, fillB) => [0, 1, 2, 3].map(k => { const a = k * Math.PI / 2 - Math.PI / 2, P = (ang, rad) => (cx + rad * Math.cos(ang)).toFixed(1) + ' ' + (cy + rad * Math.sin(ang)).toFixed(1); return `<path d="M${cx} ${cy}L${P(a, R)}L${P(a - Math.PI / 4, r)}Z" fill="${fillA}"/><path d="M${cx} ${cy}L${P(a, R)}L${P(a + Math.PI / 4, r)}Z" fill="${fillB}" stroke="${fillA}" stroke-width="2"/>`; }).join('');
+const ORG_WORD = (txt, bg, fg, size) => GRP_SVG(`<text x="150" y="${100 + size * 0.36}" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="${size}" fill="${fg}">${txt}</text>`, bg);
+const ORG_FLAG = {
+    un: { iso2: 'un' }, eu: { iso2: 'eu' },
+    nato: { svg: GRP_SVG(`<circle cx="150" cy="100" r="40" fill="none" stroke="#fff" stroke-width="4"/>${ORG_RAYS(150, 100, 64, 18, '#fff', '#004990')}<path d="M150 8V30M150 170V192M58 100H82M218 100H242" stroke="#fff" stroke-width="4"/>`, '#004990') },
+    asean: { svg: GRP_SVG(`<circle cx="150" cy="100" r="66" fill="#fff"/><circle cx="150" cy="100" r="59" fill="#ce1126"/>${Array.from({ length: 10 }, (_, i) => `<ellipse cx="150" cy="96" rx="4" ry="38" fill="#fcd116" transform="rotate(${-36 + i * 8} 150 150)"/>`).join('')}<rect x="132" y="128" width="36" height="7" fill="#fcd116"/>`, '#0039a6') },
+    brics: { svg: GRP_SVG(['#1c62ae', '#e3262f', '#f5b400', '#2d9b47', '#1c62ae'].map((c, i) => `<text x="${54 + i * 48}" y="122" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="64" fill="${c}">${'BRICS'[i]}</text>`).join(''), '#fff') },
+    g7: { svg: ORG_WORD('G7', '#16305e', '#fff', 92) }, g20: { svg: ORG_WORD('G20', '#2a5ca8', '#fff', 84) },
+    au: { c: 'Flag of the African Union.svg' }, arab: { c: 'Flag of the Arab League.svg' }, gcc: { c: 'Flag of the Gulf Cooperation Council.svg' },
+    sco: { c: 'Flag of the Shanghai Cooperation Organisation.svg' }, csto: { c: 'Flag of the Collective Security Treaty Organization.svg' },
+    aes: { c: 'Flag of the Alliance of Sahel States.svg' }, opec: { c: 'Flag of OPEC.svg' }, oas: { c: 'Flag of the Organization of American States.svg' },
+    ecowas: { c: 'Flag of ECOWAS.svg' }, mercosur: { c: 'Flag of Mercosur.svg' }
+};
+function orgFlagHTML(o, h = 14) {
+    const F = ORG_FLAG[o.id], w = Math.round(h * 1.5), st = `height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)`;
+    const badge = `<span class="grp-badge" title="${o.informal ? 'Informal alliance: no flag' : ''}" style="width:${w}px;height:${h}px;font-size:${Math.max(7, Math.round(h * 0.36))}px">${esc(o.short.slice(0, 4))}</span>`;
+    if (!F) return badge;
+    const src = F.svg ? F.svg : F.iso2 ? `https://flagcdn.com/w80/${F.iso2}.png` : `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(F.c)}?width=120`;
+    return `<img src="${src}" alt="" title="${esc(o.name)}" referrerpolicy="no-referrer" loading="lazy" style="${st}" onerror="this.outerHTML='${badge.replace(/"/g, '&quot;').replace(/'/g, "\\'")}'">`;
+}
+// Who backs each group besides the states in its patrons list (those carry aid in the game): extra state supporters (flags only) and other support
+const PROXY_BACKING = {
+    hamas: { txt: 'Political office in Doha; some leaders live in Turkey', st: ['TUR'] },
+    rsf: { txt: 'Supplies run through eastern Libya (LNA) and Chad; gold exports' },
+    splmn: { txt: 'Allied with the RSF in the "Tasis" coalition' },
+    houthi: { txt: 'Iranian missile and drone parts smuggled by sea' },
+    stc: { txt: 'UAE-trained Security Belt and Giants forces' },
+    hezbollah: { txt: 'Lost its land route from Iran when Assad fell (Dec 2024)' },
+    jnim: { txt: 'No state backer · al-Qaeda network; kidnapping ransoms, gold mines and "taxes"' },
+    shabaab: { txt: 'No state backer · al-Qaeda network; extortion and "taxes"; arms through Yemen' },
+    sdf: { txt: 'Partner of the US-led coalition against ISIS' },
+    sweida: { txt: 'Israel strikes Syrian forces that move on Suwayda' },
+    krg: { txt: 'Oil exports through Turkey; Western-trained Peshmerga' },
+    aa: { txt: 'No open state backer · arms via the Wa (UWSA); cross-border trade with China' },
+    kia: { txt: 'No open state backer · funded by jade and rare-earth mining; China buys and pressures' },
+    uwsa: { txt: 'Chinese arms, currency and trade' },
+    lna: { txt: 'Russian Africa Corps bases; Haftar family control' },
+    polisario: { txt: 'Camps and government-in-exile at Tindouf, Algeria' },
+    tplf: { txt: 'Eritrea, its former enemy, now quietly aligned against Addis Ababa' },
+    transnistria: { txt: 'Russian troops ("Operational Group") stationed there' },
+    abkhazia: { txt: 'Russian troops, budget subsidies and passports' },
+    sossetia: { txt: 'Russian troops, budget subsidies and passports' },
+    vivansanm: { txt: 'No state backer · kidnapping, extortion; guns smuggled from the United States' },
+    sinaloa: { txt: 'No state backer · fentanyl and cocaine trafficking' },
+    eln: { txt: 'Safe havens in Venezuela; cocaine and illegal mining' },
+    pmf: { txt: 'Also on the Iraqi state payroll as part of the PMF' },
+    m23: { txt: 'Rwandan troops fight alongside it (UN experts); coltan and gold revenue' },
+    trnc: { txt: 'Recognised only by Turkey, which keeps ~35,000 troops there' },
+    somaliland: { txt: 'Recognised by Israel (Dec 2025); UAE runs Berbera port; Taiwan ties', st: ['ISR', 'ARE', 'TWN'] }
+};
 function grpBadge(p, h) { const w = Math.round(h * 1.5); return `<span class="grp-badge" title="${TERROR_DESIGNATED.has(p.id) ? 'No flag shown: designated terrorist organisation' : ''}" style="width:${w}px;height:${h}px;font-size:${Math.max(7, Math.round(h * 0.42))}px">${esc((p.em || p.short).slice(0, 3))}</span>`; }
 function groupFlagHTML(p, h = 14) {
     const F = GROUP_FLAG[p.id], w = Math.round(h * 1.5), st = `height:${h}px;width:${w}px;object-fit:cover;display:inline-block;vertical-align:middle;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,0.15)`;
@@ -15187,7 +15240,8 @@ function proxiesHTML() {
     h += `<table class="nsa-list w-full text-[11.5px]"><thead><tr><th></th><th>Group</th><th>Where</th><th>Strength</th><th>Backed by</th><th></th></tr></thead><tbody>`;
     state.proxies.filter(p => p.status !== 'dissolved').sort((a, b) => b.S - a.S).forEach(p => {
         const T = proxyTerritory(p);
-        const pats = p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).map(x => `${flagHTML(nationIso(x), 10)} ${esc(shortName(x))}`).join(', ') || '<span class="text-slate-500">none known</span>';
+        const B = PROXY_BACKING[p.id] || {}, sts = p.patrons.filter(x => (p.aid[x] || 0) > 0 && WORLD[x]).concat((B.st || []).filter(x => WORLD[x] && !p.patrons.includes(x)));
+        const pats = (sts.map(x => `<span style="white-space:nowrap">${flagHTML(nationIso(x), 10)} ${esc(shortName(x))}</span>`).join(', ') || (B.txt ? '' : '<span class="text-slate-500">none known</span>')) + (B.txt ? `<div class="text-[10px] text-slate-500">${esc(B.txt)}</div>` : '');
         const where = p.state ? `governs the ${esc(shortName(p.state))}` : p.claim ? `Free Zone (${esc(T.where)}), claimed by ${esc(shortName(p.claim))}` : `${esc(T.where)}${T.share ? ` · ≈${Math.round(T.share * 100)}% of its land` : ''}`;
         const acts = [['Arm', 'Arm the '], ['Talk', 'Open talks with the '], ['Strike', 'Strike the '], ['Sanction', 'Sanction the ']].filter(([l]) => !(p.state && l === 'Strike') && !(p.host.includes(me) && l === 'Arm'))
             .map(([l, t]) => `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" onclick="helpFill('${(t + p.short).replace(/'/g, "\\'")}')">${l}</button>`).join('');
