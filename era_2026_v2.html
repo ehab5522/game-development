@@ -13225,11 +13225,32 @@ async function fxPump() {
             try { d > 0 ? map.zoomIn(1, { animate: true }) : map.zoomOut(1, { animate: true }); } catch (e) { }
         }
         function mapHome() { playClick(); window.__userCamAt = Date.now(); try { map.flyTo([20, 0], 3, { duration: 0.9 }); } catch (e) { } }
+        // The part of a country to frame: its largest landmass plus nearby islands. Far-away territories
+        // (French Guiana and Réunion for France, Hawaii and Alaska for the US…) would otherwise pull the view off the country.
+        function homeBounds(l) {
+            const g = l.feature && l.feature.geometry; if (!g) return l.getBounds ? l.getBounds() : null;
+            const polys = g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+            if (!polys.length) return l.getBounds ? l.getBounds() : null;
+            const box = r => { let a = 999, b = 999, c = -999, d = -999; r.forEach(([x, y]) => { if (x < a) a = x; if (x > c) c = x; if (y < b) b = y; if (y > d) d = y; }); return [a, b, c, d]; };
+            const area = r => { let s = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) s += (r[j][0] - r[i][0]) * (r[j][1] + r[i][1]); return Math.abs(s / 2) * Math.cos((box(r)[1] + box(r)[3]) / 2 * Math.PI / 180); };
+            const P = polys.map(pl => ({ b: box(pl[0]), a: area(pl[0]) })).sort((x, y) => y.a - x.a), m = P[0].b;
+            // islands join if they lie within a few degrees of what is already framed (repeated, so island chains link up)
+            const mx = Math.max(Math.min(0.3 * Math.max(m[2] - m[0], m[3] - m[1]), 3), 1);
+            let B = m.slice(), rest = P.slice(1), grew = true;
+            while (grew) {
+                grew = false;
+                rest = rest.filter(({ b }) => {
+                    if (b[2] < B[0] - mx || b[0] > B[2] + mx || b[3] < B[1] - mx || b[1] > B[3] + mx) return true;
+                    B = [Math.min(B[0], b[0]), Math.min(B[1], b[1]), Math.max(B[2], b[2]), Math.max(B[3], b[3])]; grew = true; return false;
+                });
+            }
+            return L.latLngBounds([B[1], B[0]], [B[3], B[2]]);
+        }
         function mapMine() {
             playClick(); window.__userCamAt = Date.now();
             try {
-                const l = nameLayer[state.player];
-                if (l && l.getBounds) map.flyToBounds(l.getBounds(), { padding: [60, 60], maxZoom: 7, duration: 1 });
+                const l = nameLayer[state.player], mb = l && homeBounds(l);
+                if (mb) map.flyToBounds(mb, { padding: [60, 60], maxZoom: 7, duration: 1 });
                 else { const c = capitalOf(state.playerIso); map.flyTo([c.lat, c.lng], 5, { duration: 1 }); }
             } catch (e) { }
         }
