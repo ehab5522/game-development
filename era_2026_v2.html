@@ -3219,14 +3219,21 @@
                   { k: 'GOV', poly: [[43.25, 35.45], [43.95, 35.45], [43.95, 35.93], [43.62, 36.03], [43.25, 35.95], [43.25, 35.45]] }],   // Makhmur district: federal since 2017
             LBN: [{ k: 'HEZ', adm: ['LBN|South Lebanon', 'LBN|An Nabatiyah'] },
                   { k: 'HEZ', adm: ['LBN|Beqaa'], bbox: [35.9, 33.93, 37, 35] },                                     // Baalbek-Hermel (north Bekaa)
-                  { k: 'HEZ', poly: [[35.475, 33.835], [35.535, 33.835], [35.535, 33.872], [35.475, 33.872], [35.475, 33.835]] }],  // Dahiyeh
+                  { k: 'HEZ', poly: [[35.475, 33.835], [35.535, 33.835], [35.535, 33.872], [35.475, 33.872], [35.475, 33.835]] },  // Dahiyeh
+                  { k: 'ISR', poly: [[35.140, 33.075], [35.164, 33.075], [35.164, 33.099], [35.140, 33.099], [35.140, 33.075]] },   // Israeli-held since Feb 2025: Labbouneh hill (Naqoura)
+                  { k: 'ISR', poly: [[35.276, 33.084], [35.300, 33.084], [35.300, 33.108], [35.276, 33.108], [35.276, 33.084]] },   // Israeli-held since Feb 2025: Jabal Blat (Ramyeh)
+                  { k: 'ISR', poly: [[35.443, 33.103], [35.467, 33.103], [35.467, 33.127], [35.443, 33.127], [35.443, 33.103]] },   // Israeli-held since Feb 2025: Jal al-Deir (Aitaroun)
+                  { k: 'ISR', poly: [[35.496, 33.188], [35.520, 33.188], [35.520, 33.212], [35.496, 33.212], [35.496, 33.188]] },   // Israeli-held since Feb 2025: al-Aziyah hill (Markaba–Houla)
+                  { k: 'ISR', poly: [[35.588, 33.288], [35.612, 33.288], [35.612, 33.312], [35.588, 33.312], [35.588, 33.288]] }],  // Israeli-held since Feb 2025: Hamames hill (Khiam)
             SYR: [{ k: 'SDF', adm: ['SYR|Hasaka (Al Haksa)', 'SYR|Ar Raqqah'] },
                   { k: 'GOV', poly: [[38.85, 36.72], [40.15, 36.72], [40.15, 36.37], [38.85, 36.37], [38.85, 36.72]] },        // Tell Abyad – Ras al-Ain strip (Turkish-backed, now government)
                   { k: 'SDF', poly: [[39.55, 35.90], [39.80, 35.75], [40.0, 35.55], [40.14, 35.36], [40.30, 35.20], [40.45, 35.03], [40.65, 34.78], [40.92, 34.46], [42.6, 34.46], [42.6, 36.3], [39.55, 36.3], [39.55, 35.90]] },   // Deir ez-Zor east of the Euphrates
                   { k: 'SDF', poly: [[38.02, 36.86], [38.02, 36.52], [38.50, 36.47], [38.82, 36.55], [38.82, 36.88], [38.02, 36.86]] },   // Kobani
                   { k: 'SDF', poly: [[37.60, 36.22], [37.95, 36.26], [38.22, 36.05], [38.12, 35.86], [37.78, 35.93], [37.60, 36.10], [37.60, 36.22]] },   // Deir Hafer – Maskanah pocket
                   { k: 'DRUZE', adm: ["SYR|As Suwayda'"] },
-                  { k: 'ISR', adm: ['SYR|Quneitra', 'SYR|UNDOF'] }],
+                  { k: 'ISR', adm: ['SYR|UNDOF'] },                                                                                     // UN buffer zone, occupied since Dec 2024
+                  { k: 'ISR', poly: [[35.80, 33.33], [35.92, 33.33], [35.95, 33.43], [35.85, 33.47], [35.78, 33.42], [35.80, 33.33]] },   // Syrian side of Mount Hermon
+                  { adm: ['SYR|Quneitra'], pts: [['ISR', 33.23, 35.84], ['ISR', 33.12, 35.84], ['ISR', 33.00, 35.86], ['ISR', 32.92, 35.87], ['GOV', 33.30, 35.95], ['GOV', 33.23, 35.93], ['GOV', 33.12, 35.94], ['GOV', 33.00, 35.95], ['GOV', 32.90, 35.96]] }],   // Israeli posts a few km east of the buffer zone
             YEM: [{ k: 'HOUTHI', adm: ['YEM|Amanat Al Asimah', "YEM|Sana'a", 'YEM|Sa`dah', 'YEM|Amran', 'YEM|Hajjah', 'YEM|Al Hudaydah', 'YEM|Al Mahwit', 'YEM|Raymah', 'YEM|Dhamar', 'YEM|Ibb', "YEM|Al Bayda'", 'YEM|Al Jawf'] },
                   { k: 'GOV', poly: [[42.9, 14.04], [43.22, 14.04], [43.36, 14.0], [43.52, 13.96], [43.62, 13.85], [43.66, 13.7], [43.5, 13.45], [43.2, 13.3], [42.9, 13.5], [42.9, 14.04]] },                                    // southern Tihama coast (Khokha, Hays)
                   { k: 'GOV', poly: [[42.6, 16.45], [42.83, 16.46], [42.96, 16.4], [42.93, 16.24], [42.8, 16.18], [42.6, 16.24], [42.6, 16.45]] },                                     // Midi / Haradh coast
@@ -3261,7 +3268,7 @@
                   { adm: ['MMR|Kayah'], pts: [['RES', 19.53, 97.15], ['RES', 19.20, 97.35], ['RES', 18.90, 97.45], ['GOV', 19.67, 97.21]] },
                   { adm: ['MMR|Kayin'], pts: [['RES', 18.07, 97.44], ['RES', 17.50, 97.90], ['RES', 16.30, 98.40], ['RES', 18.70, 97.10], ['GOV', 16.89, 97.63], ['GOV', 16.69, 98.51], ['GOV', 17.20, 97.30], ['GOV', 15.70, 98.20]] },
                   { adm: ['MMR|Sagaing'], pts: [['RES', 23.20, 94.60], ['RES', 23.90, 95.40], ['RES', 22.70, 94.90], ['RES', 22.50, 95.60], ['RES', 24.70, 95.00], ['GOV', 22.11, 95.13], ['GOV', 21.88, 95.98], ['GOV', 23.19, 94.06], ['GOV', 24.18, 96.33], ['GOV', 25.90, 95.70], ['GOV', 23.70, 95.90]] }],
-            GAZ: [{ k: 'ISR', poly: [[34.47, 31.61], [34.505, 31.555], [34.482, 31.53], [34.480, 31.50], [34.462, 31.47], [34.430, 31.44], [34.390, 31.41], [34.355, 31.375], [34.330, 31.345], [34.290, 31.330], [34.240, 31.330], [34.180, 31.300], [34.200, 31.200], [34.620, 31.200], [34.640, 31.620], [34.47, 31.61]] },   // Gaza east of the yellow line + Rafah
+            GAZ: [{ k: 'ISR', poly: [[34.46, 31.61], [34.478, 31.577], [34.50, 31.555], [34.49, 31.535], [34.473, 31.51], [34.458, 31.485], [34.438, 31.465], [34.403, 31.435], [34.373, 31.405], [34.343, 31.372], [34.31, 31.352], [34.282, 31.338], [34.25, 31.336], [34.225, 31.338], [34.18, 31.30], [34.20, 31.20], [34.62, 31.20], [34.64, 31.62], [34.46, 31.61]] },   // Israeli side of the ceasefire "yellow line" (~55–58% of Gaza by late Dec 2025): the north-east, Beit Hanoun, eastern Gaza City, the east of the central camps and Khan Younis, and all of Rafah
                   ],
             PSE: [{ k: 'ISR', poly: [[35.45, 32.40], [35.60, 32.40], [35.60, 31.75], [35.42, 31.75], [35.47, 31.95], [35.44, 32.20], [35.45, 32.40]] },     // Jordan Valley (Area C)
                   { k: 'GOV', poly: [[35.42, 31.83], [35.48, 31.83], [35.48, 31.90], [35.42, 31.90], [35.42, 31.83]] },                                 // Jericho (Palestinian Authority)
@@ -3299,7 +3306,7 @@
         const CTRL_META = {
             GOV: ['Government', '#9cbf5a', ''],
             RUS: ['Russia', '#e04b4b', 'Russian-occupied (DeepState map, 1 Jan 2026)'],
-            ISR: ['Israel', '#4f8ff0', 'Israeli-held'],
+            ISR: ['Israel', '#4f8ff0', 'Israeli-held on 1 Jan 2026: Gaza east of the ceasefire "yellow line", five hilltop posts in south Lebanon, and the UN buffer zone, Mount Hermon and nearby posts in Syria'],
             HEZ: ['Hezbollah strongholds', '#e8c22e', 'Hezbollah\'s core areas: south of Lebanon, Nabatieh, northern Bekaa and Beirut\'s southern suburbs. The Lebanese army has deployed south of the Litani under the 2024 ceasefire, so this is influence rather than a front line.'],
             KRG: ['Kurdistan Region', '#e07b39', 'Autonomous Kurdistan Region of Iraq (Erbil, Duhok, Sulaymaniyah, Halabja): own government and Peshmerga'],
             SDF: ['SDF (Kurdish-led)', '#5fb04a', 'Syrian Democratic Forces on 1 Jan 2026: Hasakah, Raqqa, Tabqa, Deir ez-Zor east of the Euphrates, Kobani and the Deir Hafer–Maskanah pocket'],
@@ -3335,17 +3342,19 @@
         };
         const OCC_START = [
             { conf: 'ukr', iso: 'UKR', by: 'RUS', bias: 0.2 }, { conf: 'sdn', iso: 'SDN', by: 'RSF', bias: 0.05 }, { conf: 'sdn', iso: 'SDN', by: 'SPLMN' },
-            { conf: 'yem', iso: 'YEM', by: 'HOUTHI' }, { conf: 'drc', iso: 'COD', by: 'M23' }, { conf: 'gaza', iso: 'GAZ', by: 'ISR' },
+            { conf: 'yem', iso: 'YEM', by: 'HOUTHI' }, { conf: 'drc', iso: 'COD', by: 'M23' }, { conf: 'gaza', iso: 'GAZ', by: 'ISR' }, { conf: 'lbn', iso: 'LBN', by: 'ISR' }, { conf: null, iso: 'SYR', by: 'ISR' },
             { conf: 'syr', iso: 'SYR', by: 'SDF' }, { conf: 'mmr', iso: 'MMR', by: 'AA' }, { conf: 'mmr', iso: 'MMR', by: 'KIA' }, { conf: 'mmr', iso: 'MMR', by: 'RES' },
             { conf: 'som', iso: 'SOM', by: 'SHABAAB' }, { conf: null, iso: 'GEO', by: 'ABKH' }, { conf: null, iso: 'GEO', by: 'SOSS' }, { conf: null, iso: 'MDA', by: 'TRANSNISTRIA' }
         ];
+        // foreign military zones: shown on the Front lines view only, not as internal control
+        const FRONT_ONLY = new Set(['GAZ|ISR', 'LBN|ISR', 'SYR|ISR']);
         const FRONT = { layers: {}, stat: {}, on: true, legend: null };
         const CTL = { layers: {}, stat: {}, building: false };
         let MAPVIEW = 'front';
         try { MAPVIEW = localStorage.getItem('era2026_mapview') || 'front'; } catch (e) { }
         FRONT.on = MAPVIEW === 'front';
         function ensureOccState() {
-            if (state.occV !== 3) { state.occ = null; state.control = {}; state.occV = 3; }
+            if (state.occV !== 4) { state.occ = null; state.control = {}; state.occV = 4; }
             if (!state.occ) state.occ = OCC_START.map(o => ({ conf: o.conf, iso: o.iso, by: o.by, bias: o.bias || 0 }));
             if (!state.control) state.control = {};
         }
@@ -3481,7 +3490,7 @@
                     }
                 }
             }
-            const showKey = keys.map(k => k !== 'GOV' && (mode === 'control' || state.occ.some(x => x.iso === iso && x.by === k) || (ov && Object.values(ov).includes(k))));
+            const showKey = keys.map(k => k !== 'GOV' && (mode === 'control' ? !FRONT_ONLY.has(iso + '|' + k) : state.occ.some(x => x.iso === iso && x.by === k) || (ov && Object.values(ov).includes(k))));
             const cols = keys.map(k => hex2rgb(ctlMeta(k, iso)[1]));
             const out = cx.createImageData(W, H), od = out.data, cnt = new Array(keys.length).fill(0); let tot = 0;
             const cosR = latRow.map(la => Math.cos(la * Math.PI / 180) ** 2);
@@ -3613,7 +3622,7 @@
                         if (b[0] < tb[0] || a[0] > tb[2] || b[1] < tb[1] || a[1] > tb[3]) return;
                         paint(ov[key], c => { c.fillStyle = '#000'; c.fillRect(a[0] * sc - X - 0.5, a[1] * sc - Y - 0.5, (b[0] - a[0]) * sc + 1, (b[1] - a[1]) * sc + 1); });
                     }); }
-                    const show = k => k !== 'GOV' && (mode === 'control' || state.occ.some(o => o.iso === iso && o.by === k) || (ov && Object.values(ov).includes(k)));
+                    const show = k => k !== 'GOV' && (mode === 'control' ? !FRONT_ONLY.has(iso + '|' + k) : state.occ.some(o => o.iso === iso && o.by === k) || (ov && Object.values(ov).includes(k)));
                     const keys = Object.keys(masks); if (!keys.length) return;
                     const clipCountry = c => { c.save(); c.globalCompositeOperation = 'destination-in'; c.beginPath(); path(c, G.country); c.fillStyle = '#000'; c.fill('evenodd'); c.restore(); };
                     keys.forEach(k => clipCountry(masks[k]));
@@ -3718,7 +3727,7 @@
             isos.forEach(iso => {
                 try {
                     const T = territoryOf(iso), g = geomFor(iso); if (!g) return;
-                    const by = {}; T.others.forEach(x => { if (MAPVIEW === 'control' || state.occ.some(o => o.iso === iso && o.by === x.key) || x.key === state.playerIso) by[x.key] = x.pct; });
+                    const by = {}; T.others.forEach(x => { if (MAPVIEW === 'control' ? !FRONT_ONLY.has(iso + '|' + x.key) : state.occ.some(o => o.iso === iso && o.by === x.key) || x.key === state.playerIso) by[x.key] = x.pct; });
                     const b = ringsBox(geomRings(g)); store.stat[iso] = { by, bounds: [[b[1], b[0]], [b[3], b[2]]] }; store.layers[iso] = { sig: 1 };
                 } catch (e) { }
             });
@@ -3857,10 +3866,10 @@
             'GEO|ABKH': 'Abkhazia', 'GEO|SOSS': 'South Ossetia (Tskhinvali region, Akhalgori)',
             'MDA|TRANSNISTRIA': 'Transnistria (left bank of the Dniester: Tiraspol, Rîbnița, Dubăsari, Camenca, Grigoriopol) and Bender',
             'SYR|SDF': 'Hasakah, Qamishli, Raqqa, Tabqa, Deir ez-Zor east of the Euphrates, Kobani and the Deir Hafer–Maskanah pocket',
-            'SYR|DRUZE': 'Suwayda province', 'SYR|ISR': 'the Quneitra / UN buffer zone and Mount Hermon',
+            'SYR|DRUZE': 'Suwayda province', 'SYR|ISR': 'the UN buffer zone, the Syrian side of Mount Hermon and posts just east of it in Quneitra', 'LBN|ISR': 'five hilltop positions along the border (Labbouneh, Jabal Blat, Jal al-Deir, al-Aziyah, Hamames)',
             'IRQ|KRG': 'Erbil, Duhok, Sulaymaniyah and Halabja',
             'LBN|HEZ': 'South Lebanon, Nabatieh, Baalbek-Hermel and Beirut\'s southern suburbs (Dahiyeh) — influence, the Lebanese army is deployed in the south',
-            'GAZ|ISR': 'eastern Gaza behind the "yellow line" incl. Rafah, Beit Hanoun and east Khan Younis',
+            'GAZ|ISR': 'Gaza east of the "yellow line": Beit Hanoun, eastern Gaza City, the east of the central camps and Khan Younis, and all of Rafah',
             'PSE|ISR': 'Area C of the West Bank incl. the Jordan Valley and the Dead Sea shore',
             
             'YEM|HOUTHI': 'Sanaa, Saada, Amran, Hajjah, Hodeidah, Mahwit, Raymah, Dhamar, Ibb, Bayda, Jawf and parts of Taiz, Marib and Dhale',
