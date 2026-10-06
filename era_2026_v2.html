@@ -4619,7 +4619,7 @@
             const stdInput = document.getElementById('standard-chat-input-container');
             {
                 const t = getNation(name);
-                title.innerHTML = `${flagHTML(t, 12)} <span style="vertical-align:middle">${t.hog} (${name})</span>`;
+                title.innerHTML = `${flagHTML(t, 12)} <span style="vertical-align:middle">${esc(chatSpeaker(name))} (${name})</span>`;
                 title.className = "text-xs uppercase font-bold tracking-wider text-orange-400";
                 document.getElementById('chat-status-indicator').className = "w-2.5 h-2.5 rounded-full bg-orange-500";
                 
@@ -4647,7 +4647,7 @@
             });
             if (CONVO[activeChat] && CONVO[activeChat].busy) {
                 const t = document.createElement('div'); t.className = 'chat-bubble-ai chat-typing';
-                t.innerHTML = `${esc(getNation(activeChat).hog)} is writing<span class="dots"><i>.</i><i>.</i><i>.</i></span>`;
+                t.innerHTML = `${esc(chatSpeaker(activeChat))} is writing<span class="dots"><i>.</i><i>.</i><i>.</i></span>`;
                 log.appendChild(t);
             }
             log.scrollTop = log.scrollHeight;
@@ -4669,7 +4669,7 @@
                 setTyping(who, true);
                 setTimeout(() => {
                     const t = isRepeat(who, tradeReply) ? followUpLine(who, tradeReply, resolveIso(who)) : tradeReply;
-                    appendForeign(who, `${getNation(who).hog}: ${t}`);
+                    appendForeign(who, `${chatSpeaker(who)}: ${t}`);
                     setTyping(who, false); renderDiplomacyMenu();
                     if (convo(who).pending.length) { const more = convo(who).pending.splice(0).join('\n'); diploTurn(who, resolveIso(who), more); } else flushInbox(who);
                 }, 450);
@@ -4684,6 +4684,8 @@
         //  DIPLOMACY ENGINE — one reply at a time per country, no repeated or crossed-over messages,
         //  and an AI briefing built from the live game state so leaders understand the situation.
         // =====================================================================
+        // who really speaks for a country in chat — the real decision-maker, by country name
+        function chatSpeaker(name) { try { const iso = resolveIso(name); if (iso && typeof diploSpeaker === 'function') return diploSpeaker(iso); } catch (e) { } return (getNation(name) || {}).hog || name; }
         const CONVO = {};                      // name -> { busy, pending: [], inbox: [] }
         const convo = name => CONVO[name] || (CONVO[name] = { busy: false, pending: [], inbox: [] });
         const stripSpeaker = t => String(t || '').replace(/^[^:\n.!?]{1,60}:\s*/, '');
@@ -4764,7 +4766,9 @@
                 let reply = null, quick = mech && mech.quick, mood = 0;
                 if (aiReady() && iso) {
                     const prev = recentForeign(who, 3).map(stripSpeaker);
-                    const history = (state.chatData[who] || []).slice(-14).map(m => (m.sender === 'user' ? state.player : them.hog) + ': ' + stripSpeaker(m.text)).join('\n');
+                    const spk = chatSpeaker(who);
+                    const arr0 = state.chatData[who] || []; let kcut = arr0.length; while (kcut && arr0[kcut - 1].sender === 'user') kcut--;   // don't feed the just-typed message twice (B8)
+                    const history = arr0.slice(Math.max(0, kcut - 14), kcut).map(m => (m.sender === 'user' ? state.player : spk) + ': ' + stripSpeaker(m.text)).join('\n');
                     const sys = `${leaderPersona(iso)}\n\nLIVE GAME BRIEFING:\n${diploBrief(iso)}\n\nRULES: You are negotiating by message with ${state.player}. Stay consistent with the briefing (relations, borders, power, agreements, conflicts) and with what you said before. Be concrete: numbers, dates, venues, conditions, what you want in return. Never repeat a previous message — move the conversation forward. ` +
                         (mech ? `Your government has ALREADY DECIDED this answer; keep every decision, number, date, venue and listed term exactly, but say it in your own voice:\n"${mech.reply.replace(/"/g, "'")}"\n` : `No formal decision is needed; respond naturally and steer toward your national interest.\n`) +
                         (prev.length ? `Your last messages (do NOT repeat them): ${prev.map(x => '"' + x.slice(0, 160).replace(/"/g, "'") + '"').join(' | ')}\n` : '') +
@@ -4787,8 +4791,8 @@
                     const d = (mech && mech.dRel) || (mech ? 0 : Math.round(mood));
                     if (d) addRel(state.playerIso, iso, d);
                 }
-                appendForeign(who, `${them.hog}: ${reply}`, quick && quick.length ? { quick } : {});
-            } catch (e) { console.warn('diplomacy reply failed', e); appendForeign(who, `${them.hog}: We will respond through official channels.`); }
+                appendForeign(who, `${chatSpeaker(who)}: ${reply}`, quick && quick.length ? { quick } : {});
+            } catch (e) { console.warn('diplomacy reply failed', e); appendForeign(who, `${chatSpeaker(who)}: We will respond through official channels.`); }
             setTyping(who, false);
             renderDiplomacyMenu(); if (state.target) updateTargetUI(state.target);
             if (c.pending.length) {                 // messages the player sent while we were answering → one combined answer
@@ -11214,7 +11218,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             let said = msg;
             if (aiReady()) {
                 const A = AGR; A.busy = true; renderAgrPreview();
-                const t = await callAI(`${leaderPersona(P)} You are ${nationIso(P).hog}, leader of ${shortName(P)}, replying to ${state.player} about a proposed agreement in a realistic 2026 geopolitical simulation. Relations: ${getRel(state.playerIso, P)} (−100..100). Stay in character, be diplomatic but firm, 2–3 sentences. Do NOT change the decision — explain it.`,
+                const t = await callAI(`${leaderPersona(P)} You are ${diploSpeaker(P)}, speaking for ${shortName(P)}, replying to ${state.player} about a proposed agreement in a realistic 2026 geopolitical simulation. Relations: ${getRel(state.playerIso, P)} (−100..100). Stay in character, be diplomatic but firm, 2–3 sentences. Do NOT change the decision — explain it.`,
                     `Their proposal: ${A.clauses.map(c => clauseText(c, P)).join('; ')} for ${A.months} months, ${A.schedule} deliveries, payment ${A.payment}, penalty ${A.penalty}%.\nYour government's decision: ${R.verdict.toUpperCase()}. Reasons: ${R.summary}`, false, { maxTokens: 220 });
                 if (AGR !== A) return;
                 A.busy = false;
@@ -11313,7 +11317,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (!opts._voiced && !opts.noVoice && typeof aiVoiceAllowed === 'function' && aiVoiceAllowed()) { voiceMessage(iso, text, t => deliverMessage(iso, t, { ...opts, _voiced: true })); return; }
             const name = isoToName(iso);
             if (!state.chatData[name]) state.chatData[name] = [];
-            const msg = { sender: 'foreign', text: `${getNation(name).hog}: ${text}`, date: state.date.toLocaleDateString() };
+            const msg = { sender: 'foreign', text: `${chatSpeaker(name)}: ${text}`, date: state.date.toLocaleDateString() };
             if (opts.quick) msg.quick = opts.quick;
             if (opts.act) msg.act = opts.act;
             state.chatData[name].push(msg);
@@ -11321,7 +11325,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             state.unread[name] = true;
             renderDiplomacyMenu();
             playMessage();
-            if (opts.important) logEvent(`✉ ${flagHTML(nationIso(iso), 10)} <b>${esc(getNation(name).hog)}</b> (${esc(shortName(iso))}) replied to you. <a href="#" onclick='openChatWith(${JSON.stringify(name)});return false' class="underline">Open</a>`, 'neutral');
+            if (opts.important) logEvent(`✉ ${flagHTML(nationIso(iso), 10)} <b>${esc(chatSpeaker(name))}</b> (${esc(shortName(iso))}) replied to you. <a href="#" onclick='openChatWith(${JSON.stringify(name)});return false' class="underline">Open</a>`, 'neutral');
             if (opts.open && state.phase === 'playing' && !anyModalOpen() && !chatBusyElsewhere(name)) {
                 const d = document.getElementById('diplomacy-menu'); if (d && !d.classList.contains('diplo-open')) { d.classList.add('diplo-open'); document.body.classList.remove('diplo-closed'); }
                 openChatWith(name);
@@ -11440,7 +11444,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (deal) { state.envoyDeals = state.envoyDeals || {}; state.envoyDeals[name] = { ...deal, iso, round: 0, order: o.text }; }
             const post = text => deliverMessage(iso, text, { quick, act, open: true, important: true, noVoice: true });
             if (aiReady()) {
-                callAI(`${leaderPersona(iso)} You are ${nationIso(iso).hog}, leader of ${P}, in a realistic geopolitical simulation set in ${fmtDate(state.date)}. Relations with ${state.player}: ${rel} (−100..100). Write ONE or TWO sentences, in character and in your country's real diplomatic voice, as the opening of your reply. Do NOT list terms — they follow your sentences automatically. Do not change the decision.`,
+                callAI(`${leaderPersona(iso)} You are ${diploSpeaker(iso)}, speaking for ${P}, in a realistic geopolitical simulation set in ${fmtDate(state.date)}. Relations with ${state.player}: ${rel} (−100..100). Write ONE or TWO sentences, in character and in your country's real diplomatic voice, as the opening of your reply. Do NOT list terms — they follow your sentences automatically. Do not change the decision.`,
                     `${state.player} ordered: "${o.text}". Outcome of their initiative: ${outcome}. Your government's response (keep this decision): ${opening.split('\n')[0]}`, false, { maxTokens: 160 })
                     .then(t => post(t ? t.trim() + (opening.includes('\n') ? '\n' + opening.split('\n').slice(1).join('\n') : '') : opening));
             } else post(opening);
@@ -12186,6 +12190,47 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         }
 
         // =====================================================================
+        //  FOREIGN-POLICY PROFILE — derived from the game's own data (regime, blocs, power, nuclear status, relations).
+        //  One profile drives the rules engine (no AI) and is given to the AI (personas, chat, order judge), so both agree.
+        //  style: hawk (answers in kind, escalates) · firm (proportionate) · pragmatic (transactional) · dove (protests, coalitions)
+        // =====================================================================
+        const FP_VOICE = { hawk: 'uncompromising and quick to answer in kind', firm: 'measured, formal and proportionate', pragmatic: 'transactional and focused on what each side gains', dove: 'conciliatory, prefers law, courts and coalitions' };
+        function fpOf(iso) {
+            const cache = fpOf._c || (fpOf._c = {}), k = iso + '|' + (state.playerIso || '') + '|' + Math.floor((state.dayIndex || 0) / 7);
+            if (cache[k]) return cache[k];
+            const me = state.playerIso, reg = (typeof regimeOf === 'function') ? regimeOf(iso) : 'hybrid';
+            const nuke = NUCLEAR.includes(iso), major = MAJOR_POWERS.includes(iso);
+            let pw = 1; try { pw = power(iso) / Math.max(1, power(me)); } catch (e) { }
+            const shared = me ? Object.keys(BLOCS).filter(b => ['NATO', 'EU', 'USPAC', 'GCC', 'CSTO', 'AXIS', 'AES'].includes(b) && BLOCS[b].includes(iso) && BLOCS[b].includes(me)) : [];
+            const closed = ['autocracy', 'one-party', 'theocracy', 'junta'].includes(reg);
+            const style = closed ? (nuke || major || pw > 0.8 ? 'hawk' : 'firm') : reg === 'democracy' ? (major || nuke ? 'firm' : 'dove') : 'pragmatic';
+            let rel = 0; try { rel = me ? getRel(me, iso) : 0; } catch (e) { }
+            const intelTol = clamp((reg === 'democracy' ? 0.35 : closed ? 0.12 : 0.22) + (shared.length ? 0.35 : 0) + rel / 300, 0.05, 0.9);
+            const kinetic = clamp({ hawk: 0.6, firm: 0.35, pragmatic: 0.3, dove: 0.12 }[style] * clamp(Math.sqrt(pw), 0.4, 1.6), 0.05, 1);
+            const econ = clamp((reg === 'democracy' ? 0.7 : 0.45) * clamp(Math.sqrt(pw), 0.3, 1.5), 0.1, 1);
+            const covert = style === 'hawk' ? ['expel', 'counter_intel', 'cyberattack', 'disinfo'] : style === 'firm' ? ['expel', 'counter_intel', 'summon', 'sanctions'] : style === 'pragmatic' ? ['summon', 'counter_intel', 'expel', 'tariffs'] : ['protest', 'summon', 'counter_intel', 'expel'];
+            return cache[k] = { iso, style, reg, intelTol, kinetic, econ, shared, covert, voice: FP_VOICE[style] };
+        }
+        function fpBrief(iso) {
+            const f = fpOf(iso);
+            return `Foreign-policy style: ${f.style} (${f.voice}); ${f.reg} government; tolerance of foreign intelligence activity ${Math.round(f.intelTol * 100)}%, appetite for force ${Math.round(f.kinetic * 100)}%, for economic pressure ${Math.round(f.econ * 100)}%${f.shared.length ? '; shares ' + f.shared.join('/') + ' with ' + state.player : ''}. Intelligence operations are answered with ${f.covert.slice(0, 3).join(', ').replace(/_/g, ' ')} — never with war.`;
+        }
+        // the person who really speaks for a country (the decision-maker, not always the head of government)
+        function diploSpeaker(iso) {
+            const n = nationIso(iso) || {};
+            try { const ph = powerHolder(iso, n); if (ph && ph.name && !NOT_A_PERSON.test(ph.name)) return ph.name; } catch (e) { }
+            return n.hog || n.hos || ('Government of ' + shortName(iso));
+        }
+        // short lines in each style — used by the rules engine when no AI is connected (and as the AI's fallback)
+        const FP_LINES = {
+            exposed: { hawk: ['We caught your agents. They leave today, and you will hear from us in our own way.', 'Your operation is exposed. Do not mistake our restraint for weakness.'], firm: ['We have identified and expelled your intelligence officers. This conduct is unacceptable.', 'Our services exposed your operation. We expect it to stop.'], pragmatic: ['Your people were careless. We have sent them home; let us not make this a habit.', 'We know what you did. It will cost you in our next negotiation.'], dove: ['We have documented your operation and will raise it with our partners.', 'This breach of trust is deeply disappointing. We ask for an explanation.'] },
+            hitback: { hawk: ['Hostility has a price, and you are paying it now.', 'We answered your provocation. The next answer will be stronger.'], firm: ['These measures answer your conduct. Change course and they can be lifted.', 'We are defending our interests, proportionately.'], pragmatic: ['Nothing personal — you left us no option. Make us an offer and this ends.', 'We had to respond. There is still a deal to be made.'], dove: ['We regret having to take these steps, and we remain open to dialogue.', 'We are acting with our partners to defend the rules.'] },
+            concern: { hawk: ['We are watching closely and will respond if our interests are touched.'], firm: ['We note your decision with concern and expect transparency.'], pragmatic: ['We note your decision. Let us talk about what it means for our business.'], dove: ['We are concerned and call for restraint and dialogue.'] },
+            praise: { hawk: ['A sound decision. We will remember it.'], firm: ['We welcome this step.'], pragmatic: ['Good move — this opens doors for both of us.'], dove: ['We warmly welcome this decision.'] },
+            greet: { hawk: ['Speak plainly. What do you want?'], firm: ['We receive your message. What is on your agenda?'], pragmatic: ['Good to hear from you. What can we do together?'], dove: ['Thank you for reaching out. We value the dialogue.'] }
+        };
+        function fpLine(iso, kind) { const f = fpOf(iso), L = (FP_LINES[kind] || FP_LINES.concern)[f.style] || FP_LINES.concern.firm; return pick(L); }
+        // =====================================================================
         //  AI LEADERS — with a key, every country speaks through the AI with its own persona and agenda
         // =====================================================================
         function leaderPersona(iso) {
@@ -12197,7 +12242,8 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const ex = exportsOf(iso).slice(0, 3).map(r => RES[r].name.toLowerCase()), im = RKEYS.filter(r => { const [P, C] = rProfile(iso)[r]; return C - P > 0.05; }).slice(0, 3).map(r => RES[r].name.toLowerCase());
             const agenda = (NATION_IDEAS[iso] || []).slice(0, 5);
             const myAllies = rels.filter(x => getRel(me, x[0]) > 50).map(x => shortName(x[0]));
-            return `You are ${n.hog}${n.hos && n.hos !== n.hog ? ` (head of state: ${n.hos})` : ''}, leading ${shortName(iso)}. ` +
+            const spk = diploSpeaker(iso), other = [n.hos, n.hog].find(x => x && x !== spk);
+            return `You are ${spk}${other ? ` (alongside ${other})` : ''}, who decides ${shortName(iso)}'s foreign policy. ` + fpBrief(iso) + ' ' +
                 `Your country: GDP ${formatVal(n.gdp)}, military rank #${worldRanks().mil[iso] || '?'}${NUCLEAR.includes(iso) ? ', nuclear-armed' : ''}, blocs: ${blocs.join(', ') || 'none'}. ` +
                 `Neighbours: ${neighboursOf(iso).map(shortName).slice(0, 8).join(', ') || 'none'}. Allies: ${allies.join(', ') || 'none'}. Rivals: ${rivals.join(', ') || 'none'}. ` +
                 `Conflicts: ${confl.join('; ') || 'none'}. Exports: ${ex.join(', ') || 'little'}; imports: ${im.join(', ') || 'little'}. ` +
@@ -14769,7 +14815,7 @@ function worldRankingsHTML(iso) {
 //  (rearm, mobilise, seek protectors, go to the UN), hit back diplomatically, economically or militarily — up to
 //  declaring war — or, if you have treated them well, reward you.
 // =====================================================================
-function reactState() { if (!state.react) state.react = { g: {}, f: {}, w: {}, cd: {}, log: [], war: {} }; return state.react; }
+function reactState() { if (!state.react) state.react = { g: {}, f: {}, w: {}, i: {}, cd: {}, log: [], war: {} }; const R = state.react; ['g', 'f', 'w', 'i', 'cd', 'war'].forEach(k => { if (!R[k]) R[k] = {}; }); if (!R.log) R.log = []; return R; }
 function reactAdd(iso, kind, v) {
     if (!iso || iso === state.playerIso || !WORLD[iso] || NON_SOVEREIGN.has(iso)) return;
     const R = reactState(); R[kind][iso] = clamp((R[kind][iso] || 0) + v, 0, 100);
@@ -14824,17 +14870,78 @@ function reactStanding() {
     }).filter(s => s.g >= 8 || s.f >= 12 || s.w >= 12);
 }
 function reactLog(iso, txt, type) { const R = reactState(); R.log.unshift({ iso, txt, day: state.dayIndex, date: state.date.toDateString(), type }); R.log = R.log.slice(0, 25); logEvent(`${flagHTML(nationIso(iso), 10)} ${txt}`, type); }
+// ---------- One reaction dispatcher: every government action against the player runs through here ----------
+// Used by the weekly rules engine AND by the AI's reactions, so no-AI and AI games behave the same way.
+// `war` is only reachable from kinetic kinds (strikes/invasions), never from intelligence or economic grievance.
+const REACT_ACT = {
+    praise: (i, c) => { reactAdd(i, 'w', 10); return [`<b>${c.en}</b> publicly backs ${c.nm}'s move.`, 'good']; },
+    support: (i, c) => { reactAdd(i, 'w', 10); return [`<b>${c.en}</b> voices support for ${c.nm}.`, 'good']; },
+    aid: (i, c) => { const v = Math.min(c.p.gdp * 0.0004, nationIso(i).gdp * 0.0005); c.p.treasury += v; reactAdd(i, 'w', 12); return [`<b>${c.en}</b> pledges ${formatVal(v)} in support for ${c.nm}.`, 'good']; },
+    trade_offer: (i, c) => { state.mods.growth += 0.0012; reactAdd(i, 'w', 10); return [`<b>${c.en}</b> offers ${c.nm} closer trade and investment (growth +0.12 pts).`, 'good']; },
+    investment: (i, c) => REACT_ACT.trade_offer(i, c),
+    statement: (i, c) => [`<b>${c.en}</b> responds to ${c.nm}${c.msg ? `: "${esc(c.msg.slice(0, 160))}"` : '.'}`, 'neutral'],
+    concern: (i, c) => { reactAdd(i, 'g', 4); return [`<b>${c.en}</b> expresses concern over ${c.nm}'s actions${c.msg ? `: "${esc(c.msg.slice(0, 140))}"` : '.'}`, 'neutral']; },
+    protest: (i, c) => { reactAdd(i, c.intel ? 'i' : 'g', 8); return [`<b>${c.en}</b> formally protests ${c.nm}'s ${c.intel ? 'activities' : 'actions'}${c.order ? ` ("${esc(c.order)}")` : ''}.`, 'bad']; },
+    summon: (i, c) => { reactAdd(i, c.intel ? 'i' : 'g', 8); addRel(c.me, i, -2); return [`<b>${c.en}</b> summons ${c.nm}'s ambassador to protest.`, 'bad']; },
+    summon_ambassador: (i, c) => REACT_ACT.summon(i, c),
+    expel: (i, c) => { reactAdd(i, c.intel ? 'i' : 'g', 10); addRel(c.me, i, -6); return [`<b>${c.en}</b> expels ${c.nm}'s ${c.intel ? 'intelligence officers under diplomatic cover' : 'ambassador'} and scales back ties.`, 'bad']; },
+    recall: (i, c) => { reactAdd(i, 'g', 10); addRel(c.me, i, -4); return [`<b>${c.en}</b> recalls its ambassador from ${c.nm} for consultations.`, 'bad']; },
+    recall_ambassador: (i, c) => REACT_ACT.recall(i, c),
+    counter_intel: (i, c) => { reactAdd(i, 'i', 6); state.counterOn = state.counterOn || {}; state.counterOn[i] = state.dayIndex + 90; return [`<b>${c.en}</b> rolls up ${c.nm}'s networks and tightens counter-intelligence — your future operations there are harder.`, 'bad']; },
+    tariffs: (i, c) => { state.mods.growth -= 0.0008; reactAdd(i, 'g', 10); return [`<b>${c.en}</b> slaps tariffs on ${c.nm}'s exports (growth −0.08 pts).`, 'bad']; },
+    sanctions: (i, c) => { state.sanctionsOnMe += 1; state.mods.growth -= 0.0007; reactAdd(i, 'g', 14); return [`<b>${c.en}</b> imposes sanctions on ${c.nm}'s banks and state firms (growth −0.07 pts).`, 'bad']; },
+    freeze: (i, c) => { const loss = Math.min(c.p.treasury * 0.02, nationIso(i).gdp * 0.002); c.p.treasury -= loss; reactAdd(i, 'g', 12); return [`<b>${c.en}</b> freezes ${formatVal(loss)} of ${c.nm}'s state assets held in its banks.`, 'bad']; },
+    embargo: (i, c) => { state.mods.growth -= 0.0003; reactAdd(i, 'g', 10); return [`<b>${c.en}</b> halts key exports to ${c.nm}; prices for your importers rise.`, 'bad']; },
+    disinfo: (i, c) => { c.p.stability = clamp(c.p.stability - 1, 0, 100); reactAdd(i, c.intel ? 'i' : 'g', 6); return [`A disinformation campaign traced to <b>${c.en}</b> targets ${c.nm}'s government (approval −1).`, 'bad']; },
+    cyberattack: (i, c) => { const v = c.p.gdp * (c.intel ? 0.0002 : 0.0004); c.p.treasury -= v; reactAdd(i, c.intel ? 'i' : 'g', 10); return [`A cyberattack blamed on <b>${c.en}</b> hits ${c.nm}'s banks and grid (≈ ${formatVal(v)} in damage).`, 'bad']; },
+    sabotage_back: (i, c) => { const v = c.p.gdp * 0.0003; c.p.treasury -= v; reactAdd(i, 'i', 10); return [`Sabotage blamed on <b>${c.en}</b> damages ${c.nm}'s infrastructure (≈ ${formatVal(v)}).`, 'bad']; },
+    military_alert: (i, c) => { reactAdd(i, 'f', 18); return [`<b>${c.en}</b> puts its forces on alert in response to ${c.nm}.`, 'bad']; },
+    mobilize: (i, c) => { reactAdd(i, 'f', 22); addRel(c.me, i, -3); return [`<b>${c.en}</b> mobilises its forces and air defences, citing ${c.nm}'s actions.`, 'bad']; },
+    rally: (i, c) => { const fr = Object.keys(WORLD).filter(x => x !== i && x !== c.me && !NON_SOVEREIGN.has(x) && getRel(x, i) > 40).slice(0, 6); fr.forEach(x => addRel(c.me, x, -3)); return [`<b>${c.en}</b> rallies its partners against ${c.nm}${fr.length ? ` — ${fr.slice(0, 3).map(shortName).map(esc).join(', ')} join the criticism` : ''}.`, 'bad']; },
+    strike: (i, c) => { scheduleRetaliation(i, c.atWar ? 1.2 : 0.9); reactAdd(i, 'g', 6); return [`<b>${c.en}</b> warns it will answer ${c.nm}'s actions with force; its military is preparing strikes.`, 'bad']; },
+    retaliatory_strike: (i, c) => REACT_ACT.strike(i, c),
+    war: (i, c) => {
+        const n = shortName(i), me = c.me;
+        if (state.conflicts.some(k => k.type === 'war' && ((k.sideA.includes(i) && k.sideB.includes(me)) || (k.sideB.includes(i) && k.sideA.includes(me))))) return REACT_ACT.strike(i, c);
+        const conf = { id: 'ai_' + i + '_' + state.dayIndex, name: `${n}–${shortName(me)} War`, type: 'war', intensity: 70, sideA: [i], sideB: [me], backA: [], backB: [], mediators: [], brief: `${n} declared war on ${state.date.toDateString()} after repeated hostile acts by ${state.player}.`, flavor: [`Fighting continues between ${n} and ${shortName(me)}.`] };
+        state.conflicts.push(conf); reactState().war[i] = conf.id;
+        try { treatyOnWar(conf, i, me); } catch (e) { } try { treatyOnAttack(i, me); } catch (e) { } scheduleRetaliation(i, 1.4);
+        c.p.stability = clamp(c.p.stability + 3, 0, 100);
+        queueMessage(i, `You have left us no choice. From today our countries are at war.`);
+        return [`⚔ <b>${c.en} declares war on ${c.nm}</b> after months of hostile acts. Its forces begin attacking.`, 'bad'];
+    },
+    none: (i, c) => c.msg ? [`<b>${c.en}</b> responds to ${c.nm}: "${esc(c.msg.slice(0, 160))}"`, 'neutral'] : null
+};
+const REACT_NONKINETIC = ['protest', 'summon', 'expel', 'counter_intel', 'cyberattack', 'disinfo', 'sanctions', 'tariffs', 'recall', 'concern', 'statement'];
+// run one action; returns true if it logged something
+function reactDo(iso, action, ctx = {}) {
+    const fn = REACT_ACT[action] || REACT_ACT.statement;
+    const c = Object.assign({ me: state.playerIso, p: nationIso(state.playerIso), nm: esc(state.player), en: esc(shortName(iso)), atWar: false, intel: false }, ctx);
+    try { const r = fn(iso, c); if (r && r[0]) { reactLog(iso, r[0], r[1]); return true; } } catch (e) { console.warn('reactDo', action, e); }
+    return false;
+}
+// pick a realistic answer to an intelligence operation for this country (never kinetic, never war)
+function fpRespondIntel(iso, sev) {
+    const f = fpOf(iso), opts = f.covert.slice();
+    if (sev > 1.1 && f.style === 'hawk') opts.push('cyberattack');
+    const a = pick(opts);
+    reactDo(iso, a, { intel: true });
+    queueMessage(iso, fpLine(iso, 'exposed'));
+}
+
 function reactWeekly() {
     const R = reactState(), me = state.playerIso, pn = nationIso(me), nm = esc(state.player);
     // memories fade
     ['g', 'f', 'w'].forEach(k => Object.keys(R[k]).forEach(i => { R[k][i] *= 0.93; if (R[k][i] < 1) delete R[k][i]; }));
-    const cand = reactStanding().filter(s => !(R.cd[s.iso] > state.dayIndex)).sort((a, b) => Math.max(b.h, b.f, b.w) - Math.max(a.h, a.f, a.w)).slice(0, 8);
+    const cand = reactStanding().filter(s => !(R.cd[s.iso] > state.dayIndex)).sort((a, b) => Math.max(b.h, b.f, b.w, b.i * 0.6) - Math.max(a.h, a.f, a.w, a.i * 0.6)).slice(0, 8);
     let acted = 0; const maxActs = 1 + Math.round(Math.min(2, (D().retal || 1)));
     for (const s of cand) {
         if (acted >= maxActs) break;
         const i = s.iso, n = shortName(i), en = esc(n), pr = power(i) / Math.max(1, power(me)), atWar = state.conflicts.some(c => c.type === 'war' && ((c.sideA.includes(i) && c.sideB.includes(me)) || (c.sideB.includes(i) && c.sideA.includes(me))));
-        const chance = clamp(Math.max(s.h, s.f, s.w) / 90, 0.15, 0.85); if (Math.random() > chance) continue;
+        const chance = clamp(Math.max(s.h, s.f, s.w, s.i * 0.7) / 90, 0.15, 0.85); if (Math.random() > chance) continue;
         acted++; R.cd[i] = state.dayIndex + rint(14, 28);
+        // ---- answer covert operations (non-kinetic only; this can never cause war) ----
+        if (s.i >= 20 && s.i >= s.h && s.i >= s.f && s.w < s.i) { fpRespondIntel(i, s.i / 40); R.i[i] *= 0.6; continue; }
         // ---- reward a friend ----
         if (s.w >= 25 && s.w > s.g && s.rel > 0) {
             const opts = ['trade', 'aid', 'praise']; if (state.offers && state.offers.length < 3 && !treatyPartners(me).includes(i)) opts.push('treaty');
@@ -14868,30 +14975,18 @@ function reactWeekly() {
             else { const p = pick(proxiesIn(me)); p.aid[i] = clamp((p.aid[i] || 0) + 0.3, 0, 1); if (!p.patrons.includes(i)) p.patrons.push(i); p.S = clamp(p.S + 3, 3, 95); reactLog(i, `<b>${en}</b> starts arming ${esc(p.short)} inside ${nm} (strength +3).`, 'bad'); }
             R.f[i] = (R.f[i] || 0) * 0.7; continue;
         }
-        // ---- hit back ----
+        // ---- hit back (through the shared dispatcher; its answer follows the country's foreign-policy style) ----
         if (s.h >= 25) {
-            const can = { war: s.h >= 70 && pr >= 0.45 && !atWar && Math.random() < 0.35, strike: (s.h >= 45 && pr >= 0.25) || atWar, econ: true, dip: true };
-            const t = can.war ? 'war' : can.strike && Math.random() < 0.5 ? pick(['strike', 'strike', 'cyber']) : Math.random() < 0.55 ? pick(['sanctions', 'tariffs', 'freeze', 'embargo']) : pick(['expel', 'rally', 'recall']);
-            if (t === 'war') {
-                const c = { id: 'ai_' + i + '_' + state.dayIndex, name: `${n}–${shortName(me)} War`, type: 'war', intensity: 70, sideA: [i], sideB: [me], backA: [], backB: [], mediators: [], brief: `${n} declared war on ${state.date.toDateString()} after repeated hostile acts by ${state.player}.`, flavor: [`Fighting continues between ${n} and ${shortName(me)}.`] };
-                state.conflicts.push(c); R.war[i] = c.id;
-                reactLog(i, `⚔ <b>${en} declares war on ${nm}</b> after months of hostile acts. Its forces begin attacking.`, 'bad');
-                queueMessage(i, `You have left us no choice. From today our countries are at war.`);
-                try { treatyOnWar(c, i, me); } catch (e) { }
-                try { treatyOnAttack(i, me); } catch (e) { }
-                scheduleRetaliation(i, 1.4);
-                pn.stability = clamp(pn.stability + 3, 0, 100);       // rally round the flag
-            }
-            else if (t === 'strike') { scheduleRetaliation(i, atWar ? 1.2 : 0.9); reactLog(i, `<b>${en}</b> warns it will answer ${nm}'s actions with force; its military is preparing strikes.`, 'bad'); }
-            else if (t === 'cyber') { const loss = pn.treasury * 0.008; pn.treasury -= loss; reactLog(i, `A cyber attack traced to <b>${en}</b> hits ${nm}'s banks and power grid (${formatVal(loss)} in damage).`, 'bad'); }
-            else if (t === 'sanctions') { state.sanctionsOnMe += 1; state.mods.growth -= 0.0008; reactLog(i, `<b>${en}</b> imposes sanctions on ${nm}'s banks and state companies (growth −0.08 pts).`, 'bad'); }
-            else if (t === 'tariffs') { state.mods.growth -= 0.0005; reactLog(i, `<b>${en}</b> slaps tariffs on ${nm}'s exports (growth −0.05 pts).`, 'bad'); }
-            else if (t === 'freeze') { const loss = Math.min(pn.treasury * 0.02, nationIso(i).gdp * 0.002); pn.treasury -= loss; reactLog(i, `<b>${en}</b> freezes ${formatVal(loss)} of ${nm}'s state assets held in its banks.`, 'bad'); }
-            else if (t === 'embargo') { const r = pick(RKEYS); state.mods.growth -= 0.0003; reactLog(i, `<b>${en}</b> halts ${esc(RES[r].name.toLowerCase())} sales to ${nm}; prices for your importers rise.`, 'bad'); }
-            else if (t === 'expel') { addRel(me, i, -6); reactLog(i, `<b>${en}</b> expels ${nm}'s ambassador and closes its embassy.`, 'bad'); }
-            else if (t === 'recall') { addRel(me, i, -4); reactLog(i, `<b>${en}</b> recalls its ambassador from ${nm} for consultations.`, 'bad'); }
-            else { const fr = Object.keys(WORLD).filter(x => x !== i && x !== me && !NON_SOVEREIGN.has(x) && getRel(x, i) > 40).slice(0, 6); fr.forEach(x => addRel(me, x, -3)); reactLog(i, `<b>${en}</b> rallies its partners against ${nm}${fr.length ? ` — ${fr.slice(0, 3).map(shortName).map(esc).join(', ')} criticise you` : ''}.`, 'bad'); }
-            if (!['war', 'strike'].includes(t)) queueMessage(i, pick([`These measures are our answer to your hostile conduct. Change course and they can be lifted.`, `You will find that hostility has a price.`, `We are defending our interests. Further provocations will meet a stronger response.`]));
+            const f = fpOf(i);
+            const canWar = s.h >= 70 && pr >= 0.45 && !atWar && f.kinetic > 0.4 && Math.random() < 0.3 * f.kinetic;
+            const canStrike = ((s.h >= 45 && pr >= 0.25) || atWar) && f.kinetic > 0.25;
+            let t;
+            if (canWar) t = 'war';
+            else if (canStrike && Math.random() < f.kinetic) t = pick(['strike', 'strike', 'cyberattack']);
+            else if (Math.random() < f.econ) t = pick(['sanctions', 'tariffs', 'freeze', 'embargo']);
+            else t = pick(f.style === 'dove' ? ['protest', 'recall', 'rally'] : ['expel', 'rally', 'recall']);
+            reactDo(i, t, { atWar });
+            if (!['war', 'strike', 'retaliatory_strike'].includes(t)) queueMessage(i, fpLine(i, 'hitback'));
             R.g[i] = (R.g[i] || 0) * (t === 'war' ? 0.5 : 0.75);
         }
     }
@@ -15686,7 +15781,8 @@ function aioIso(x) {
 function aioBrief(iso) {
     const n = nationIso(iso) || {}, me = state.playerIso;
     const cs = state.conflicts.filter(c => c.sideA.includes(iso) || c.sideB.includes(iso) || (c.location || []).includes(iso)).map(c => c.name).slice(0, 3);
-    return `${iso} ${shortName(iso)}: leader ${n.hog || n.hos || '?'}, GDP ${formatVal(n.gdp)}, power ${power(iso).toFixed(0)}, relations with ${me} ${iso === me ? '-' : getRel(me, iso)}${(typeof NUCLEAR !== 'undefined' && NUCLEAR.includes(iso)) ? ', nuclear' : ''}${cs.length ? ', in: ' + cs.join('; ') : ''}`;
+    const fp = (iso !== me && typeof fpOf === 'function') ? ' [' + fpOf(iso).style + ']' : '';
+    return `${iso} ${shortName(iso)}: leader ${(typeof diploSpeaker === 'function' ? diploSpeaker(iso) : (n.hog || n.hos)) || '?'}${fp}, GDP ${formatVal(n.gdp)}, power ${power(iso).toFixed(0)}, relations with ${me} ${iso === me ? '-' : getRel(me, iso)}${(typeof NUCLEAR !== 'undefined' && NUCLEAR.includes(iso)) ? ', nuclear' : ''}${cs.length ? ', in: ' + cs.join('; ') : ''}`;
 }
 async function aiOrderJudge(o) {
     if (!o || o.aiAsked || typeof aiReady !== 'function' || !aiReady()) return;
@@ -15700,7 +15796,9 @@ async function aiOrderJudge(o) {
     const sys = `You are the game master of a realistic geopolitical strategy game set on ${fmtDate(state.date)} (it started 1 January 2026). The player leads ${state.player} (${me}). ` +
         `Decide realistically what the player's order does and how the world reacts. Keep every number the player gave EXACTLY as given (troops, money, units, sizes). ` +
         `Be realistic and proportionate: routine domestic orders cause few or no foreign reactions; strikes, invasions, sanctions, nuclear moves or bases near rivals cause strong ones; friendly acts earn goodwill. ` +
-        `Only include countries that would really react (0-5). Use ISO3 codes. Messages are what that country's leader or foreign ministry says to ${state.player}, in their own voice, 1-2 sentences.`;
+        `Each country answers in line with its [foreign-policy style] (hawk/firm/pragmatic/dove) shown below. ` +
+        `CRITICAL: intelligence and covert operations (espionage, cyber, sabotage, disinformation, subversion, assassination) NEVER start a war or military retaliation by themselves — realistic answers are expulsions, counter-intelligence, cyber retaliation, sanctions, summoning or protests, scaled by whether the operation was exposed. Use military_alert/mobilize/retaliatory_strike ONLY for overt military orders (strikes, invasions, blockades, troop moves). ` +
+        `Only include countries that would really react (0-5). Use ISO3 codes. Messages are what that country's real decision-maker or foreign ministry says to ${state.player}, in their own voice, 1-2 sentences.`;
     const user = `ORDER: "${o.text}"\nGame parse: category ${o.cat}, kind ${o.kind || '-'}, targets ${(o.targets || []).map(t => t.iso + '(' + t.stance + ')').join(', ') || 'none'}, cost ${formatVal(o.cost || 0)}, duration ${o.days} days${o.specs ? ', specs ' + JSON.stringify(o.specs) : ''}${o.move && o.move.strength ? ', force ' + o.move.strength.label : ''}${o.covert ? ', covert' : ''}.\n` +
         `Countries:\n${cast.map(aioBrief).join('\n')}\n` +
         `${state.player} now: approval ${nationIso(me).stability}%, treasury ${formatVal(nationIso(me).treasury)}.\n\n` +
@@ -15724,7 +15822,8 @@ function aiOrderApply(o) {
     const E = r.effects || {};
     // our side: good effects grow with success, bad side effects come anyway
     const sc = v => v > 0 ? v * Math.max(0, m) : v;
-    const g = sc(num(E.gdp_pct, -2, 2)), ap = sc(num(E.approval, -8, 8));
+    const gcap = ['economy', 'construction', 'humanitarian'].includes(o.cat) ? 2 : 0.5;
+    const g = sc(num(E.gdp_pct, -gcap, gcap)), ap = sc(num(E.approval, -8, 8));
     if (Math.abs(g) >= 0.01) { p.gdp *= 1 + g / 100; fx(`GDP ${g > 0 ? '+' : ''}${g.toFixed(2)}%`, g > 0); }
     if (Math.abs(ap) >= 0.5) { p.stability = clamp(Math.round(p.stability + ap), 0, 100); fx(`Approval ${ap > 0 ? '+' : ''}${Math.round(ap)}`, ap > 0); }
     (Array.isArray(r.target_effects) ? r.target_effects : []).slice(0, 4).forEach(t => {
@@ -15735,11 +15834,13 @@ function aiOrderApply(o) {
     });
     if (r.headline) try { logEvent(`📰 ${esc(String(r.headline).slice(0, 200))}`, 'neutral'); } catch (e) { }
     // reactions arrive over the next days, each leader in their own words
+    let relBudget = 30;   // cap the total relation swing one order can cause across all countries (B21)
     (Array.isArray(r.reactions) ? r.reactions : []).slice(0, 5).forEach((x, k) => {
         const iso = aioIso(x.country); if (!iso || iso === me || (typeof NON_SOVEREIGN !== 'undefined' && NON_SOVEREIGN.has(iso))) return;
+        let rel = num(x.relations, -30, 20); if (Math.abs(rel) > relBudget) rel = Math.sign(rel) * relBudget; relBudget = Math.max(0, relBudget - Math.abs(rel));
         state.aiReact = state.aiReact || [];
         state.aiReact.push({ iso, day: state.dayIndex + rint(1, 3) + k, action: AIO_ACTIONS.includes(x.action) ? x.action : 'statement', stance: String(x.stance || 'neutral'),
-            rel: num(x.relations, -30, 20), msg: String(x.message || '').slice(0, 400), order: o.text.slice(0, 80) });
+            rel, msg: String(x.message || '').slice(0, 400), order: o.text.slice(0, 80), cat: o.cat, intel: o.cat === 'intelligence' });
     });
     try { updateEconomyUI(); renderOrderLog(); } catch (e) { }
 }
@@ -15748,22 +15849,12 @@ function aiReactTick() {
     const me = state.playerIso, p = nationIso(me), nm = esc(state.player);
     state.aiReact = L.filter(x => {
         if (x.day > state.dayIndex) return true;
-        const i = x.iso, en = esc(shortName(i)), bad = 'bad', good = 'good';
-        if (x.rel) addRel(me, i, Math.round(x.rel));
-        const say = t => { try { aiNews(i, t, ['sanctions', 'tariffs', 'cyberattack', 'retaliatory_strike', 'mobilize', 'military_alert', 'recall_ambassador', 'summon_ambassador', 'protest'].includes(x.action) ? bad : ['praise', 'support', 'aid', 'trade_offer', 'investment'].includes(x.action) ? good : 'neutral'); } catch (e) { } };
-        switch (x.action) {
-            case 'praise': case 'support': say(`<b>${en}</b> backs ${nm}'s move.`); try { reactAdd(i, 'w', 10); } catch (e) { } break;
-            case 'aid': { const v = Math.min(p.gdp * 0.0004, nationIso(i).gdp * 0.0005); p.treasury += v; say(`<b>${en}</b> pledges ${formatVal(v)} in support for ${nm}.`); try { reactAdd(i, 'w', 12); } catch (e) { } break; }
-            case 'trade_offer': case 'investment': state.mods.growth += 0.0015; say(`<b>${en}</b> offers ${nm} closer trade and investment (growth +0.15 pts).`); try { reactAdd(i, 'w', 10); } catch (e) { } break;
-            case 'statement': case 'concern': case 'none': say(`<b>${en}</b> responds to ${nm}'s order: "${esc(x.msg.slice(0, 160))}"`); break;
-            case 'protest': case 'summon_ambassador': say(`<b>${en}</b> ${x.action === 'protest' ? 'formally protests' : "summons " + nm + "'s ambassador over"} the order "${esc(x.order)}".`); try { reactAdd(i, 'g', 8); } catch (e) { } break;
-            case 'recall_ambassador': say(`<b>${en}</b> recalls its ambassador from ${nm}.`); try { reactAdd(i, 'g', 14); } catch (e) { } break;
-            case 'tariffs': state.mods.growth -= 0.001; say(`<b>${en}</b> slaps tariffs on goods from ${nm} (growth −0.1 pts).`); try { reactAdd(i, 'g', 12); } catch (e) { } break;
-            case 'sanctions': state.sanctionsOnMe += 1; say(`<b>${en}</b> imposes sanctions on ${nm}.`); try { reactAdd(i, 'g', 16); } catch (e) { } break;
-            case 'military_alert': case 'mobilize': say(`<b>${en}</b> ${x.action === 'mobilize' ? 'mobilises its forces' : 'puts its forces on alert'} in response to ${nm}.`); try { reactAdd(i, 'f', 22); } catch (e) { } break;
-            case 'cyberattack': { const v = p.gdp * 0.0003; p.treasury -= v; say(`A cyberattack blamed on <b>${en}</b> hits ${nm} (≈ ${formatVal(v)} in damage).`); try { reactAdd(i, 'g', 12); } catch (e) { } break; }
-            case 'retaliatory_strike': say(`<b>${en}</b> vows to retaliate against ${nm}.`); try { reactAdd(i, 'g', 40); } catch (e) { } break;   // the reactions system decides if and when they actually strike
-        }
+        const i = x.iso, en = esc(shortName(i));
+        // intelligence orders are answered with non-kinetic measures only — never war/strikes/mobilisation
+        let act = x.action;
+        if (x.intel && ['retaliatory_strike', 'military_alert', 'mobilize'].includes(act)) act = pick(fpOf(i).covert);
+        if (x.rel) addRel(me, i, Math.round(x.rel * (x.ruleMoved ? 0.5 : 1)));
+        reactDo(i, act, { msg: x.msg, order: x.order, intel: x.intel });
         if (x.msg) try { queueMessage(i, x.msg); } catch (e) { }
         return false;
     });
