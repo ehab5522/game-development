@@ -12706,7 +12706,7 @@ function socCard(ind, iso, big) {
 function renderSociety() {
     const body = document.getElementById('soc-body'); if (!body) return;
     const iso = state.playerIso, s = socOf(iso), n = nationIso(iso);
-    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['treaties', 'Treaties & UN'], ['actors', 'Non-state actors'], ['orgs', 'Organizations'], ['world', 'World rankings'], ['politics', 'Politics']];
+    const tabs = [['overview', 'Overview'], ['budget', 'Budget'], ['economy', 'Money & markets'], ['war', 'War & casualties'], ['treaties', 'Treaties & UN'], ['actors', 'Non-state actors'], ['politics', 'Politics'], ['orgs', 'Organizations'], ['world', 'World rankings']];
     let h = `<div class="flex flex-wrap gap-1 mb-3">${tabs.map(([k, l]) => `<button type="button" class="gs-btn ${socTab === k ? 'gs-btn-primary' : ''}" onclick="socSetTab('${k}')">${l}</button>`).join('')}</div>`;
     if (socTab === 'politics') h += politicsHTML();
     else if (socTab === 'treaties') h += warsAlliesHTML() + treatiesHTML() + reactHTML() + unHTML();
