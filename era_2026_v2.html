@@ -3039,10 +3039,11 @@
             if (state.pinMode && state.phase === 'playing') { playClick(); setPin(ll, iso, name); return; }
             if (state.phase === 'playing') { try { const l = countryLayerFor(iso); if (l && l !== targetFeature) l.fire('click', { latlng: L.latLng(lat, lng), _now: true, _exact: true, target: l }); } catch (e) { } }
             playClick();
-            const me = state.playerIso, cn = shortName(iso), pop = C.c[4];
+            const me = state.playerIso, cn = shortName(iso), pop = typeof cityPopNow === 'function' ? cityPopNow(C.c) : C.c[4];
             const rows = [];
             rows.push(`<div style="color:#ab9f80">${C.c[5] ? `Capital of <b>${esc(cn)}</b>` : `City in <b>${esc(cn)}</b>`}</div>`);
-            if (pop) rows.push(`<div>Population ≈ <b>${pop >= 1 ? pop.toFixed(pop >= 10 ? 0 : 1) + 'M' : Math.max(1, Math.round(pop * 1000)).toLocaleString() + 'k'}</b> <span style="color:#7c7259">(metro area, approx.)</span></div>`);
+            if (pop) { const ch = C.c[4] ? (pop / C.c[4] - 1) * 100 : 0;
+                rows.push(`<div>Population ≈ <b>${pop >= 1 ? pop.toFixed(pop >= 10 ? 1 : 2) + 'M' : Math.max(1, Math.round(pop * 1000)).toLocaleString() + 'k'}</b> <span style="color:#7c7259">(metro area, approx.)</span>${state.phase === 'playing' && Math.abs(ch) >= 0.05 ? ` <span style="color:${ch >= 0 ? '#9cbf5a' : '#e08a72'}">${ch >= 0 ? '▲' : '▼'} ${Math.abs(ch).toFixed(1)}% since Jan 2026</span>` : ''}</div>`); }
             if (state.phase === 'playing' && me) {
                 if (iso === me) rows.push(`<div style="color:#9cbf5a">Your territory</div>`);
                 else { const r = getRel(me, iso), [lab, col] = relLabel(r); rows.push(`<div>Relations: <b style="color:${col}">${r > 0 ? '+' : ''}${r} · ${lab}</b></div>`); }
@@ -13757,8 +13758,9 @@ function socMonthly() {
                 else if (out.newsCount++ < 2) aiNews(iso, `${esc(nm)} is in a sovereign debt crisis: borrowing costs have spiralled and the IMF is being called.`, 'bad');
             } else if (s.crisis > 0 && (tolEff < 100 && s.rate < s.i0.rate0 + 3)) s.crisis = 0;
         }
-        // population
-        {
+        // population (real 2025 rates moved by health, schooling, stability, war, food, projects and policy — see popRate)
+        try { popMonthlyStep(iso, n, s); }
+        catch (e) {
             const hp = socHP(iso);
             const rNat = s.r0 + 0.020 * (s.health - s.i0.health) - 0.012 * (s.edu - s.i0.edu) * (1 - hp);
             n.pop = Math.max(1000, n.pop * (1 + rNat / 1200));
@@ -13795,6 +13797,197 @@ function socSnapshot() {
     s.hist.push({ t: state.date.getTime(), edu: s.edu, health: s.health, clean: s.clean, infra: s.infra, safety: s.safety, corrupt: s.corrupt, infl: s.infl, unemp: s.unemp,
         debt: s.debt / n.gdp * 100, gdp: n.gdp, pop: n.pop, appr: n.stability });
     if (s.hist.length > 180) s.hist.shift();
+}
+
+// ---- population: every country grows (or shrinks) from its real 2025 rate; health, schooling, stability, war, food, what you build
+//      and your policies move it; cities grow with their nation, big cities and capitals faster (urbanisation) ----
+// Population growth in 2025, % per year (births − deaths + net migration; UN World Population Prospects 2024, approximate).
+const POP_G25 = { CHN:-0.1, IND:0.9, USA:0.5, IDN:0.8, PAK:1.9, NGA:2.1, BRA:0.4, BGD:1.2, RUS:-0.4, ETH:2.5, MEX:0.7, JPN:-0.5, EGY:1.5, PHL:1.5,
+    COD:3.2, VNM:0.7, IRN:0.9, TUR:0.4, DEU:0.0, THA:0.0, GBR:0.6, TZA:2.9, FRA:0.2, ZAF:1.2, ITA:-0.3, KEN:1.9, MMR:0.7, COL:0.9, KOR:-0.1,
+    SDN:1.6, UGA:2.8, ESP:0.5, DZA:1.5, IRQ:2.1, ARG:0.5, AFG:2.7, YEM:2.6, CAN:0.9, POL:-0.4, MAR:1.0, AGO:3.0, UKR:-0.5, UZB:1.9, MYS:1.1,
+    MOZ:2.7, GHA:1.9, PER:1.0, SAU:1.5, MDG:2.3, CIV:2.4, NPL:1.0, CMR:2.6, VEN:0.5, NER:3.6, AUS:1.2, PRK:0.3, SYR:2.5, MLI:3.0, BFA:2.5,
+    TWN:-0.1, LKA:0.2, MWI:2.6, ZMB:2.7, CHL:0.4, KAZ:1.3, TCD:3.1, ROU:-0.4, SOM:3.1, SEN:2.6, GTM:1.4, NLD:0.5, ECU:0.9, KHM:1.1, ZWE:1.7,
+    GIN:2.3, BEN:2.7, RWA:2.2, BDI:2.6, BOL:1.3, TUN:0.7, HTI:1.1, BEL:0.4, JOR:1.0, DOM:0.9, CUB:-1.0, SSD:2.5, SWE:0.4, HND:1.5, CZE:0.1,
+    AZE:0.5, GRC:-0.4, PNG:1.8, PRT:0.2, HUN:-0.3, TJK:1.9, ARE:2.9, BLR:-0.5, ISR:1.6, TGO:2.3, AUT:0.4, CHE:0.7, SLE:2.1, LAO:1.4, HKG:0.2,
+    SRB:-0.6, NIC:1.3, LBY:1.1, PRY:1.1, KGZ:1.6, BGR:-0.8, TKM:1.3, SLV:0.4, COG:2.4, SGP:1.0, DNK:0.5, CAF:3.0, FIN:0.2, LBN:-0.3, NOR:0.6,
+    PSE:1.0, GAZ:-3.0, SVK:-0.1, LBR:2.1, OMN:2.0, IRL:1.1, NZL:0.8, MRT:2.6, CRI:0.5, KWT:1.0, PAN:1.2, HRV:-0.5, GEO:-0.3, ERI:1.7, MNG:1.3,
+    URY:0.0, BIH:-0.6, QAT:1.0, NAM:1.4, MDA:-1.2, ARM:0.3, JAM:-0.1, LTU:-0.4, GMB:2.5, ALB:-0.4, GAB:2.0, BWA:1.6, LSO:1.0, GNB:2.2, SVN:0.1,
+    GNQ:2.4, LVA:-0.9, MKD:-0.4, BHR:1.0, TTO:0.2, EST:-0.2, TLS:1.4, MUS:-0.1, CYP:1.0, SWZ:0.8, DJI:1.4, FJI:0.3, COM:1.8, GUY:0.6, BTN:0.6,
+    SLB:2.2, LUX:1.5, MNE:-0.1, SUR:0.8, CPV:0.9, MLT:1.0, BRN:0.7, BLZ:1.3, BHS:0.4, ISL:1.1, VUT:2.2, BRB:0.0, MAC:0.8, XKX:-0.6, ESH:1.8,
+    MDV:1.0, STP:1.8, SYC:0.6, GRL:0.0, CYN:0.8, SOL:2.0 };
+// Arid countries: a desalination plant makes room for many more people there (elsewhere it does much less)
+const POP_ARID = new Set(['SAU', 'ARE', 'QAT', 'KWT', 'BHR', 'OMN', 'YEM', 'JOR', 'ISR', 'PSE', 'GAZ', 'EGY', 'LBY', 'DZA', 'TUN', 'MAR', 'MRT', 'IRQ', 'IRN', 'SYR',
+    'DJI', 'SOM', 'ERI', 'SDN', 'NER', 'MLI', 'TCD', 'ESH', 'NAM', 'BWA', 'AFG', 'PAK', 'TKM', 'UZB', 'KAZ', 'AUS', 'CPV', 'MDV', 'MLT', 'CYP']);
+// Population effect (% per year, while operational) for types whose catalogue entry has no popGrowth field
+const POP_SITE_DEFAULT = { desal: 0.08, housing: 0.03, hospital: 0.02 };
+const POP_POLICY_RX = /\b(baby bonus(es)?|birth ?rates?|natalis\w*|pro-?natal\w*|fertility|child (benefit|allowance)s?|family (allowance|benefit)s?|encourage (more )?(births|children|families)|population growth|grow (the|our) population|(attract|welcome|recruit|bring in) (more )?(skilled |foreign )?(immigrants|migrants|foreign workers|workers from abroad|talent)|(open|ease|relax|liberali[sz]e) .{0,20}immigration|immigration (reform|program\w*|quota)|(restrict|cut|reduce|limit|curb|stop|ban|halt|end) .{0,20}(immigration|migration|migrants|immigrants)|deport\w*)\b/;
+const POP_RESTRICT_RX = /\b((restrict|cut|reduce|limit|curb|stop|ban|halt|end) .{0,20}(immigration|migration|migrants|immigrants)|deport\w*)\b/;
+['popm'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+function popState() {
+    if (!state.popm || typeof state.popm !== 'object') state.popm = {};
+    const P = state.popm; ['x', 'r', 'st0', 'boost'].forEach(k => { if (!P[k] || typeof P[k] !== 'object') P[k] = {}; });
+    return P;
+}
+function popBase(iso, s) { return POP_G25[iso] !== undefined ? POP_G25[iso] : (s && isFinite(s.r0) ? s.r0 : 1.2); }
+// operational projects that let the population grow (desalination, housing, hospitals… or any type with a popGrowth field)
+function popSites(iso) {
+    const out = [];
+    (state.sites || []).forEach(x => {
+        if (x.owner !== iso || x.status !== 'active' || !x.fromGame) return;
+        const T = SITE_TYPES[x.type]; if (!T) return;
+        let pg = isFinite(T.popGrowth) ? +T.popGrowth : (POP_SITE_DEFAULT[x.type] || 0); if (!pg) return;
+        if (x.type === 'desal' && !POP_ARID.has(iso)) pg *= 0.3;
+        out.push({ site: x, pg });
+    });
+    return out;
+}
+// growth rate of one country this month (% per year) and what makes it
+function popRate(iso, s) {
+    s = s || (state.soc || {})[iso];
+    const P = popState(), parts = [], base = popBase(iso, s);
+    let r = base, extra = 0;
+    const add = (label, v, gdp) => { if (!isFinite(v) || Math.abs(v) < 0.005) return; parts.push([label, v]); r += v; if (gdp) extra += v; };
+    if (s && s.i0) {
+        const hp = socHP(iso);
+        add('Health & schooling', 0.020 * (s.health - s.i0.health) - 0.012 * (s.edu - s.i0.edu) * (1 - hp), false);
+        // fear and hardship drive people out (or, in a rich and calm country, draw them in)
+        let st = 50; try { st = stabilityOf(iso); } catch (e) { }
+        if (P.st0[iso] === undefined) P.st0[iso] = st;
+        const dS = st - P.st0[iso];
+        add(dS < 0 ? 'Emigration (instability)' : 'Immigration (stability)', dS < 0 ? Math.max(-1.2, 0.035 * dS) : Math.min(0.3, 0.01 * dS * hp), true);
+        // war at home: fewer births (deaths and refugees are counted by the casualty model)
+        let wl = 0; try { wl = socWarLoad(iso) - (s.i0.wl || 0); } catch (e) { }
+        if (wl > 0) add('War (fewer births)', -Math.min(0.8, 0.35 * wl), true);
+        if (s.popAdj) add('Your population policy', s.popAdj, true);
+    }
+    if (iso === state.playerIso && state.resShort && state.resShort.food > 0) add('Food shortage', -Math.min(2.5, 2.5 * state.resShort.food), true);
+    const sites = popSites(iso).reduce((a, x) => a + x.pg, 0);
+    if (sites) add('Projects (desalination, housing…)', Math.min(1.5, sites), true);
+    return { r: clamp(r, -8, 8), base, parts, extra };
+}
+function popMonthlyStep(iso, n, s) {
+    const P = popState(), R = popRate(iso, s);
+    n.pop = Math.max(1000, n.pop * (1 + R.r / 1200));
+    P.r[iso] = +R.r.toFixed(3);
+    if (Math.abs(R.extra) >= 0.005) P.x[iso] = +R.extra.toFixed(3); else delete P.x[iso];
+    if (s && s.popAdj) { s.popAdj *= 0.97; if (Math.abs(s.popAdj) < 0.01) s.popAdj = 0; }
+}
+// city population now (millions): grows with its nation × urbanisation premium (capitals and big cities pull people in) × local projects
+function cityKey(c) { return c[0] + '|' + (+c[2]).toFixed(2); }
+function cityPopNow(c) {
+    if (!c || !(c[4] > 0)) return c ? c[4] : 0;
+    try {
+        if (!state || state.phase !== 'playing' || !state.nations) return c[4];
+        const iso = c[1]; if (!WORLD[iso] || !(WORLD[iso][3] > 0)) return c[4];
+        const n = nationIso(iso), base = WORLD[iso][3] * 1e6; if (!n || !(n.pop > 0)) return c[4];
+        const ratio = clamp(n.pop / base, 0.05, 5), share = clamp(c[4] * 1e6 / base, 0, 1);
+        const hp = socEligible(iso) ? socHP(iso) : 0.5;
+        const u = (c[5] ? 1 : c[4] >= 5 ? 0.85 : c[4] >= 1 ? 0.6 : 0.35) * clamp(0.15 + 1.6 * (1 - hp), 0.1, 1.8) * (1 - share);
+        const yrs = (state.dayIndex || 0) / 365.25, boost = (state.popm && state.popm.boost && state.popm.boost[cityKey(c)]) || 1;
+        return Math.max(0.001, Math.min(c[4] * ratio * Math.exp(u / 100 * yrs) * boost, n.pop / 1e6 * 0.95));
+    } catch (e) { return c[4]; }
+}
+function popFmt(v) { return v >= 1 ? formatPop(v) : '0'; }
+function cityPopLabel(pop) { return pop >= 1 ? pop.toFixed(pop >= 10 ? 1 : 2) + 'M' : Math.max(1, Math.round(pop * 1000)).toLocaleString() + 'k'; }
+// monthly: projects near a city make that city grow faster (a desalination plant or a housing programme serves the nearest city)
+function popCitiesMonthly() {
+    const P = popState();
+    (state.sites || []).forEach(x => {
+        if (x.status !== 'active' || !x.fromGame || typeof x.lat !== 'number') return;
+        const T = SITE_TYPES[x.type]; if (!T) return;
+        const pg = isFinite(T.popGrowth) ? +T.popGrowth : (POP_SITE_DEFAULT[x.type] || 0); if (!pg) return;
+        let best = null, bd = 150;
+        CITIES.forEach(c => { if (c[1] !== x.owner || typeof c[2] !== 'number') return; const d = km({ lat: c[2], lng: c[3] }, x); if (d < bd) { bd = d; best = c; } });
+        if (!best) return;
+        const k = cityKey(best), loc = Math.min(4, 2 * pg / 0.08) * (x.type === 'desal' && !POP_ARID.has(x.owner) ? 0.4 : 1);
+        P.boost[k] = Math.min(1.5, (P.boost[k] || 1) * (1 + loc / 1200));
+    });
+}
+// the player's cities, largest first: [{c, now, start}]
+function popTopCities(iso, n) {
+    const seen = new Set();
+    return CITIES.filter(c => c[1] === iso && c[4] > 0 && !seen.has(cityKey(c)) && seen.add(cityKey(c))).map(c => ({ c, now: cityPopNow(c), start: c[4] }))
+        .sort((a, b) => b.now - a.now).slice(0, n || 12);
+}
+function popPanelHTML() {
+    const me = state.playerIso, n = nationIso(me), s = socOf(me), R = popRate(me, s), P = popState();
+    const start = WORLD[me] ? WORLD[me][3] * 1e6 : n.pop, d = n.pop - start, pc = n.gdp / Math.max(1, n.pop);
+    const g = (v, dp) => `<span style="color:${v >= 0 ? '#86efac' : '#fca5a5'}">${v >= 0 ? '+' : ''}${v.toFixed(dp == null ? 2 : dp)}%</span>`;
+    const gdpPart = 0.7 * (P.x[me] || 0);
+    let h = `<div class="text-[11.5px] text-slate-300 mb-2">Population of <b>${esc(state.player)}</b>: <b>${formatPop(n.pop)}</b> (${d >= 0 ? '+' : '−'}${popFmt(Math.abs(d))} since 1 January 2026) · growing ${g(R.r)} a year · GDP per capita ${formatPerCapita(n.gdp, n.pop)}.</div>
+        <div class="grid gap-3" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Why the population changes (per year)</div>
+        <div class="flex justify-between"><span class="text-slate-400">2025 rate (births, deaths, migration)</span>${g(R.base)}</div>
+        ${R.parts.map(([k, v]) => `<div class="flex justify-between"><span class="text-slate-400">${esc(k)}</span>${g(v)}</div>`).join('')}
+        <div class="h-px bg-slate-700/60 my-1"></div><div class="flex justify-between"><b>Total</b><b>${g(R.r)}</b></div>
+        <div class="text-[10.5px] text-slate-500 mt-1">About ${popFmt(Math.abs(n.pop * R.r / 1200))} people ${R.r >= 0 ? 'more' : 'fewer'} each month.${Math.abs(gdpPart) >= 0.01 ? ` The extra ${R.extra >= 0 ? 'workers and taxpayers add' : 'losses take'} ${gdpPart >= 0 ? '+' : ''}${gdpPart.toFixed(2)} pts to GDP growth, so income per person stays in step.` : ' Taxes and GDP follow the number of workers.'}</div></div>
+        <div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Largest cities (metro area)</div><table class="w-full"><tbody>${popTopCities(me, 12).map(x => { const ch = (x.now / x.start - 1) * 100; return `<tr><td class="py-0.5">${x.c[5] ? '◆ ' : ''}${esc(x.c[0])}</td><td class="text-right font-mono">${cityPopLabel(x.now)}</td><td class="text-right font-mono text-[10.5px]" style="color:${Math.abs(ch) < 0.05 ? '#7c7259' : ch >= 0 ? '#86efac' : '#fca5a5'}">${Math.abs(ch) < 0.05 ? '—' : (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch).toFixed(1) + '%'}</td></tr>`; }).join('') || '<tr><td class="text-slate-500">No city data.</td></tr>'}</tbody></table>
+        <div class="text-[10.5px] text-slate-500 mt-1">Cities grow with the country; the capital and big cities grow faster as people move from the countryside. A desalination plant, housing programme or hospital near a city makes it grow faster still.</div></div></div>
+        <div class="mt-3 text-[11px] text-slate-500">Orders work too: ${['Introduce a baby bonus to raise the birth rate', 'Attract skilled immigrants', 'Build a desalination plant in ' + ((capitalOf(me) || {}).label || 'the capital')].map(t => `<button type="button" class="cc-qchip !py-0.5" onclick='quickAddOrder(${JSON.stringify(t)})'>＋ ${esc(t)}</button>`).join(' ')}</div>`;
+    return h;
+}
+// extra Government tabs added by later systems: [key, label, html()]
+const SOC_XTABS = [['people', '👥 Population', () => popPanelHTML()]];
+{
+    const _rs = renderSociety;
+    renderSociety = function () {
+        const X = SOC_XTABS.find(t => t[0] === socTab);
+        _rs.apply(this, arguments);
+        try {
+            const body = document.getElementById('soc-body'); if (!body) return;
+            const bar = body.firstElementChild;
+            if (bar && !document.getElementById('soc-xtab-css')) { const st = document.createElement('style'); st.id = 'soc-xtab-css'; st.textContent = '#soc-body > div.soc-xwrap:first-child { flex-wrap: wrap; overflow-x: visible; }'; document.head.appendChild(st); }
+            if (bar) bar.classList.add('soc-xwrap');
+            if (bar) SOC_XTABS.forEach(([k, l]) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'gs-btn' + (socTab === k ? ' gs-btn-primary' : ''); b.textContent = l; b.onclick = () => socSetTab(k); bar.appendChild(b); });
+            if (X) body.insertAdjacentHTML('beforeend', X[2]());
+        } catch (e) { console.warn('soc tabs', e); }
+    };
+    // population policy orders ("introduce a baby bonus", "attract skilled immigrants", "restrict immigration")
+    const _pol = policyOf;
+    policyOf = function (text) {
+        const s = ' ' + String(text || '').toLowerCase() + ' ';
+        if (POP_POLICY_RX.test(s)) return [{ k: 'pop', dir: POP_RESTRICT_RX.test(s) ? -1 : 1, mag: 1, mig: /migra|immigra|foreign workers|talent|deport|workers from abroad/.test(s) }];
+        return _pol.apply(this, arguments);
+    };
+    const _sap = socApplyPolicy;
+    socApplyPolicy = function (o, m, fx) {
+        const pp = (o && o.policies || []).filter(p => p.k === 'pop');
+        if (!pp.length) return _sap.apply(this, arguments);
+        const rest = (o.policies || []).filter(p => p.k !== 'pop');
+        let d = rest.length ? _sap.call(this, Object.assign({}, o, { policies: rest }), m, fx) : 0;
+        const s = socOf(state.playerIso), mEff = Math.max(m, 0);
+        if (mEff === 0) { if (!rest.length) fx(`The legislature stalls the measure — nothing changes`, false); return rest.length ? d : -1; }
+        pp.forEach(p => {
+            const old = s.popAdj || 0;
+            if (p.dir > 0) {
+                s.popAdj = clamp(old + 0.3 * mEff, -0.8, 0.9);
+                if (!p.mig) { const w0 = s.b.welfare; s.b.welfare = clamp(w0 * 1.06, 0.25 * s.b0.welfare, 3.2 * s.b0.welfare); fx(`Family benefits raised: welfare budget ${w0.toFixed(2)}% → ${s.b.welfare.toFixed(2)}% of GDP`, null); d += 1; }
+                else { d += POP_ARID.has(state.playerIso) || socHP(state.playerIso) > 0.7 ? -1 : 0; }
+                fx(`Population growth +${(s.popAdj - old).toFixed(2)}%/yr (${p.mig ? 'more immigrants and foreign workers' : 'more births'}); fades over the years unless renewed`, true);
+            } else {
+                s.popAdj = clamp(old - 0.3 * mEff, -0.8, 0.9);
+                fx(`Immigration curbed: population growth ${(s.popAdj - old).toFixed(2)}%/yr; fewer workers and taxpayers`, null); d += 1;
+            }
+        });
+        return clamp(d, -8, 6);
+    };
+    // GDP follows the number of workers: the population change beyond the 2025 trend feeds growth (per-capita stays coherent)
+    const _gg = getGrowth;
+    getGrowth = function (iso) {
+        const G = _gg.apply(this, arguments);
+        try { const x = state.popm && state.popm.x && state.popm.x[iso]; if (x && Math.abs(0.7 * x) >= 0.01) { G.parts.push(['Population', 0.7 * x]); G.g = clamp(G.g + 0.7 * x, -30, 30); } } catch (e) { }
+        return G;
+    };
+    const _iw = initWorld;
+    initWorld = function () { state.popm = null; _iw.apply(this, arguments); try { popState(); } catch (e) { } };
+    const _as = applySave;
+    applySave = function (d) { _as.apply(this, arguments); if (!d || !d.state || !d.state.popm) state.popm = null; try { popState(); } catch (e) { } };
+    const _sm = socMonthly;
+    socMonthly = function () { const r = _sm.apply(this, arguments); try { popCitiesMonthly(); } catch (e) { console.warn('cities', e); } return r; };
+    const _eco = updateEconomyUI;
+    updateEconomyUI = function () {
+        _eco.apply(this, arguments);
+        try { if (state.phase === 'playing' && typeof TIPS !== 'undefined') { const r = (state.popm && state.popm.r || {})[state.playerIso]; TIPS['res:Population'] = `Population\nPeople living in your country${isFinite(r) ? ` — growing ${r >= 0 ? '+' : ''}${(+r).toFixed(2)}% a year` : ''}. Details and your largest cities: Government → Population.`; } } catch (e) { }
+    };
 }
 
 // ---- war casualties, refugees, attrition ----
