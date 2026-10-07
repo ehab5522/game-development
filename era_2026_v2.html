@@ -634,6 +634,18 @@
         #war-modal .wm-btn { font: 600 11.5px 'Roboto Condensed',Arial,sans-serif; padding: 4px 9px; border: 1px solid #5c5236; background: linear-gradient(180deg,#3d3b2b,#2a2a1e); color: #ecdcae; cursor: pointer; }
         #war-modal .wm-btn:hover { border-color: #c9a64e; color: #fff3c8; } #war-modal .wm-go { border-color: #4d7c0f; background: linear-gradient(180deg,#4b5e22,#2f3c14); color: #ecfccb; }
         #war-modal .wm-mini { border: 1px solid #2c2a1d; padding: 6px 8px; margin-bottom: 5px; font-size: 11.5px; color: #d6c79c; }
+        #coup-btn .coup-ins { margin-left: 4px; color: #fca5a5; font-weight: 700; } #war-btn .war-capit { margin-left: 4px; animation: coupPulse 1.2s infinite; }
+        #war-modal details.wm-world > summary { cursor: pointer; color: #8f846a; font-size: 11px; margin: 10px 0 5px; } #war-modal .wm-dot { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border: 1px solid #0006; vertical-align: -1px; }
+        #war-modal .wm-terms-btn { border-color: #b45309; color: #fed7aa; } #war-modal .wm-capit { border-color: #f6e08f; background: rgba(246,224,143,.07); }
+        #war-modal .wt-sec { margin: 10px 0 4px; font: 600 10.5px 'Oswald','Arial Narrow',Arial,sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #c9b77a; }
+        #war-modal .wt-opt { display: flex; align-items: flex-start; gap: 7px; padding: 4px 6px; margin: 2px 0; border: 1px solid #2c2a1d; font-size: 12px; color: #ecdcae; cursor: pointer; line-height: 1.3; } #war-modal .wt-opt:hover { border-color: #5c5236; }
+        #war-modal .wt-opt.on { border-color: #b45309; background: rgba(180,83,9,.1); } #war-modal .wt-opt.off { opacity: .45; cursor: not-allowed; } #war-modal .wt-opt input { margin-top: 2px; accent-color: #d97706; flex: none; }
+        #war-modal .wt-opt em { display: block; font-style: normal; font-size: 10.5px; color: #8f846a; } #war-modal .wt-opt .wt-cost { margin-left: auto; flex: none; font-size: 10.5px; color: #8f846a; white-space: nowrap; }
+        #war-modal .wt-in { background: #15150f; border: 1px solid #5c5236; color: #ecdcae; padding: 1px 5px; width: 86px; font-size: 12px; } #war-modal input[type=range].wt-in { width: 130px; padding: 0; vertical-align: middle; }
+        #war-modal .wt-prov { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px 22px; } #war-modal .wt-prov label { font-size: 11px; border: 1px solid #3b3726; padding: 1px 6px; cursor: pointer; color: #d6c79c; } #war-modal .wt-prov label.on { border-color: #d97706; color: #fed7aa; background: rgba(180,83,9,.12); }
+        #war-modal .wt-out { position: sticky; bottom: -14px; margin: 10px -16px -14px; padding: 9px 16px 12px; background: linear-gradient(180deg, #24251c, #1c1d16); border-top: 1px solid #5c5236; }
+        #war-modal .wt-meter { height: 8px; background: #15150f; border: 1px solid #3b3726; position: relative; margin: 4px 0; } #war-modal .wt-meter i { position: absolute; left: 0; top: 0; bottom: 0; }
+        #war-modal .wt-reply { border: 1px solid #5c5236; background: rgba(0,0,0,.25); padding: 9px 11px; margin: 8px 0; font-size: 12.5px; color: #ecdcae; line-height: 1.45; } #war-modal .wt-reply .wt-who { display: flex; gap: 8px; align-items: center; margin-bottom: 5px; color: #f6e7b4; font-weight: 600; }
         .chat-typing { color: #94a3b8 !important; font-style: italic; }
         .chat-typing .dots i { font-style: normal; animation: chatdot 1.2s infinite; opacity: .2; }
         .chat-typing .dots i:nth-child(2) { animation-delay: .2s; } .chat-typing .dots i:nth-child(3) { animation-delay: .4s; }
@@ -4106,7 +4118,7 @@
             C.active = { leader: juntaName(state.playerIso), day: state.dayIndex, speed: state.speed || 0 };
             if (state.speed > 0) setSpeed(0);
             logEvent(`🚨 <b>Coup attempt!</b> Army units under ${esc(C.active.leader)} are moving on the capital.`, 'bad');
-                        openWarPanel(); setTimeout(() => { const el = document.getElementById('wm-coup'); if (el) el.scrollIntoView({ block: 'start' }); }, 50);
+            openCoupPanel();
         }
         function coupChance(kind) {
             const me = state.playerIso, n = nationIso(me), C = coupState(), s = state.soc && state.soc[me];
@@ -4169,11 +4181,13 @@
         function renderCoupBtn() {
             const b = document.getElementById('coup-btn'); if (!b || !state.playerIso) return;
             const C = coupState(), r = coupRisk(state.playerIso).risk;
-            b.innerHTML = C.active ? `🚨<span class="tb-lbl"> COUP!</span>` : `🪖<span class="tb-lbl"> Coup ${r}%</span>`;
+            let I = null; try { I = playerInternalState(); } catch (e) { }
+            const ins = I ? I.ins.length : 0;
+            b.innerHTML = C.active ? `🚨<span class="tb-lbl"> COUP!</span>` : `🪖<span class="tb-lbl"> Coup ${r}%</span>${ins ? `<span class="coup-ins" title="Fighting at home">⚔${ins > 1 ? ins : ''}</span>` : ''}`;
             b.style.color = C.active ? '#fff' : riskCol(r); b.style.borderColor = riskCol(r) + '99'; b.classList.toggle('coup-alarm', !!C.active);
-            b.title = `Coup risk: ${riskLabel(r)} (${r}% chance of an attempt in the next 12 months). Click for details and ways to secure the army.`;
+            b.title = `Internal security — coup risk: ${riskLabel(r)} (${r}% chance of an attempt in the next 12 months).${I && I.ins.length ? ' Fighting at home: ' + I.ins.map(c => c.name).join(', ') + '.' : ''}${I && I.groups.length ? ' Armed groups at home: ' + I.groups.map(p => p.short).join(', ') + '.' : ''} Click for coup risk, unrest, insurgencies and who controls your territory.`;
         }
-        function openCoupPanel() { openWarPanel(); setTimeout(() => { const el = document.getElementById('wm-coup'); if (el) el.scrollIntoView({ block: 'start' }); }, 50); }
+        function openCoupPanel() { openWarPanel('int'); }
         function coupSection() {
             const me = state.playerIso, C = coupState(), R = coupRisk(me);
             let h = `<div id="wm-coup"></div>`;
@@ -4818,22 +4832,38 @@
             const days = state.dayIndex - state.warSince[c.id];
             return days < 1 ? 'started today' : days < 60 ? `${days} days` : `${Math.round(days / 30)} months`;
         }
+        // The two top-bar buttons: ⚔ War & Peace = EXTERNAL (wars and disputes with other states, occupations and fronts abroad, allies);
+        // 🪖 Coup = INTERNAL (coup risk, insurgencies and civil war at home, armed groups on your soil, unrest, who controls your land)
+        const WAR_UI = { mode: 'ext', cid: null, draft: null, reply: null };
+        function isInternalConflict(c, me) {
+            me = me || state.playerIso; const loc = c.location || [];
+            if (c.sideA.includes(me) || c.sideB.includes(me)) return !warEnemies(c, me).length && (!loc.length || loc.includes(me));
+            return loc.includes(me) && ![...c.sideA, ...c.sideB].some(x => x !== me && WORLD[x]);
+        }
         function playerWarState() {
-            const me = state.playerIso; if (!me) return { k: 'peace', list: [] };
-            const list = partyConflicts(me);
-            const wars = list.filter(c => c.type === 'war'), cf = list.filter(c => c.type === 'ceasefire'), ins = list.filter(c => c.type === 'insurgency');
-            return { k: wars.length ? 'war' : ins.length ? 'insurgency' : cf.length ? 'ceasefire' : 'peace', list, wars, cf };
+            const me = state.playerIso; if (!me) return { k: 'peace', list: [], wars: [], cf: [], occ: [], tens: [] };
+            const list = partyConflicts(me).filter(c => c.type !== 'resolved' && !isInternalConflict(c, me));
+            const wars = list.filter(c => c.type === 'war'), cf = list.filter(c => c.type === 'ceasefire'), occ = list.filter(c => c.type === 'insurgency'), tens = list.filter(c => c.type === 'tension');
+            return { k: wars.length ? 'war' : occ.length ? 'occupation' : cf.length ? 'ceasefire' : tens.some(c => c.intensity >= 60) ? 'tension' : 'peace', list, wars, cf, occ, tens };
+        }
+        function playerInternalState() {
+            const me = state.playerIso; if (!me) return { k: 'stable', ins: [], tens: [], groups: [] };
+            const ins = state.conflicts.filter(c => c.type !== 'resolved' && (c.sideA.includes(me) || c.sideB.includes(me) || (c.location || []).includes(me)) && isInternalConflict(c, me));
+            let groups = []; try { groups = proxiesIn(me); } catch (e) { }
+            const n = nationIso(me), C = coupState(), fight = ins.filter(c => c.type !== 'tension');
+            const k = C.active || C.result ? 'coup' : fight.some(c => c.type === 'war') ? 'civilwar' : fight.length ? 'insurgency' : (n.stability || 50) < 35 || ((state.mods && state.mods.unrest) || 0) > 8 ? 'unrest' : 'stable';
+            return { k, ins: fight, tens: ins.filter(c => c.type === 'tension'), groups };
         }
         function renderWarButton() { try { renderCoupBtn(); } catch (e) { }
             const b = document.getElementById('war-btn'); if (!b || state.phase !== 'playing') return;
-            const W = playerWarState();
-            const look = { war: ['⚔', 'At war', 'war-on'], insurgency: ['⚔', 'Insurgency', 'war-on'], ceasefire: ['⚠', 'Ceasefire', 'war-cf'], peace: ['🕊', 'At peace', 'war-peace'] }[W.k];
+            const W = playerWarState(); let cap = []; try { cap = capitOffers(); } catch (e) { }
+            const look = { war: ['⚔', 'At war', 'war-on'], occupation: ['⚑', 'Occupation', 'war-cf'], ceasefire: ['⚠', 'Ceasefire', 'war-cf'], tension: ['⚠', 'Tension', 'war-cf'], peace: ['🕊', 'At peace', 'war-peace'] }[W.k];
             b.className = `gs-btn ${look[2]}`;
-            b.innerHTML = `${look[0]}<span class="tb-lbl"> ${look[1]}${W.wars && W.wars.length > 1 ? ' (' + W.wars.length + ')' : ''}</span>`;
-            b.title = W.k === 'peace' ? 'Your country is at peace — open the war & peace overview' : `${look[1]}: ${W.list.filter(c => c.type !== 'tension').map(c => c.name).join(', ')} — click to see the war and negotiate peace`;
-            const m = document.getElementById('war-modal'); if (m && !m.classList.contains('hidden')) renderWarPanel();
+            b.innerHTML = `${look[0]}<span class="tb-lbl"> ${look[1]}${W.wars.length > 1 ? ' (' + W.wars.length + ')' : ''}</span>${cap.length ? '<span class="war-capit" title="An enemy has capitulated">🏳</span>' : ''}`;
+            b.title = (W.k === 'peace' ? 'At peace with other states — click for disputes, allies and front lines abroad' : `${look[1]}: ${W.list.filter(c => c.type !== 'tension' || c.intensity >= 60).map(c => c.name).join(', ')} — click for the wars, disputes, allies and peace terms`) + (cap.length ? ` · ${cap.map(x => shortName(x)).join(', ')} has capitulated: dictate your terms` : '');
+            const m = document.getElementById('war-modal'); if (m && !m.classList.contains('hidden') && WAR_UI.mode !== 'terms') renderWarPanel();
         }
-        function openWarPanel() {
+        function openWarPanel(mode) {
             playClick();
             let m = document.getElementById('war-modal');
             if (!m) {
@@ -4842,32 +4872,119 @@
                 m.addEventListener('click', e => { if (e.target === m) closeWarPanel(); });
                 document.body.appendChild(m);
             }
+            WAR_UI.mode = mode === 'int' ? 'int' : 'ext'; WAR_UI.reply = null;
             m.classList.remove('hidden'); renderWarPanel();
+            const box = m.querySelector('.wm-box'); if (box) box.scrollTop = 0;
         }
-        function closeWarPanel() { const m = document.getElementById('war-modal'); if (m) m.classList.add('hidden'); }
+        function closeWarPanel() { const m = document.getElementById('war-modal'); if (m) m.classList.add('hidden'); if (WAR_UI.mode === 'terms' || WAR_UI.mode === 'reply') { WAR_UI.mode = 'ext'; WAR_UI.reply = null; } }
+        document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; const m = document.getElementById('war-modal'); if (!m || m.classList.contains('hidden')) return; try { if (coupState().active) return; } catch (er) { } if (WAR_UI.mode === 'terms' || WAR_UI.mode === 'reply') { WAR_UI.mode = 'ext'; WAR_UI.reply = null; renderWarPanel(); } else closeWarPanel(); });   // Esc: back out of the terms composer, then close (an active coup must be answered)
         function flagList(list) { return list.map(i => `<span class="wm-c">${flagHTML(nationIso(i), 11)} ${esc(shortName(i))}</span>`).join(' '); }
         function renderWarPanel() {
             const body = document.getElementById('wm-body'); if (!body) return;
-            const me = state.playerIso, W = playerWarState();
-            const head = { war: ['⚔ AT WAR', '#ef4444'], insurgency: ['⚔ FIGHTING AN INSURGENCY', '#f97316'], ceasefire: ['⚠ CEASEFIRE IN FORCE', '#f59e0b'], peace: ['🕊 AT PEACE', '#9cbf5a'] }[W.k];
+            const t = document.getElementById('wm-title'), box = body.closest('.wm-box'), st = box ? box.scrollTop : 0;
+            try {
+                if (WAR_UI.mode === 'terms' || WAR_UI.mode === 'reply') { if (t) t.textContent = 'Peace terms'; body.innerHTML = termsPanelHTML(); }
+                else if (WAR_UI.mode === 'int') { if (t) t.textContent = 'Internal security'; body.innerHTML = renderInternalPanel(); }
+                else { if (t) t.innerHTML = 'War &amp; Peace'; body.innerHTML = renderExternalPanel(); }
+            } catch (e) { console.warn('war panel', e); body.innerHTML = `<div class="wm-note">This panel could not be drawn (${esc(e.message)}).</div>`; }
+            if (box) box.scrollTop = st;
+        }
+        // ---- ⚔ War & Peace: everything between you and other states ----
+        function renderExternalPanel() {
+            const me = state.playerIso, W = playerWarState(), C = coupState();
+            const head = { war: ['⚔ AT WAR', '#ef4444'], occupation: ['⚑ OCCUPYING FOREIGN LAND', '#f97316'], ceasefire: ['⚠ CEASEFIRE IN FORCE', '#f59e0b'], tension: ['⚠ HIGH TENSION', '#eab308'], peace: ['🕊 AT PEACE', '#9cbf5a'] }[W.k];
             let h = `<div class="wm-status" style="color:${head[1]};border-color:${head[1]}66">${head[0]}</div>`;
-            try { const cs = coupSection(); if (coupState().active || coupState().result) { body.innerHTML = cs; return; } var coupHTML = cs; } catch (e) { console.warn('coup', e); }
+            if (C.active || C.result) h += `<div class="wm-card" style="border-color:#ef4444"><b style="color:#fca5a5">🚨 ${C.active ? 'A coup attempt is under way at home' : 'The coup attempt at home needs your answer'}</b><div class="wm-btns"><button type="button" class="wm-btn wm-go" onclick="openCoupPanel()">🪖 Open internal security</button></div></div>`;
+            try { h += capitulationCards(); } catch (e) { console.warn('capit', e); }
             const mine = W.list.filter(c => c.type !== 'tension').sort((a, b) => (b.type === 'war') - (a.type === 'war') || b.intensity - a.intensity);
-            const tens = W.list.filter(c => c.type === 'tension');
-            if (!mine.length) h += `<div class="wm-note">${esc(state.player)} is not a party to any war. ${tens.length ? 'Open disputes are listed below.' : ''}</div>`;
+            if (!mine.length) h += `<div class="wm-note">${esc(state.player)} is not at war with any state.${W.tens.length ? ' Open disputes are listed below.' : ''} Insurgencies, armed groups and unrest at home are under the 🪖 Coup button.</div>`;
             mine.forEach(c => h += warCard(c, me));
-            if (tens.length) h += `<div class="wm-sec">Disputes (no fighting)</div>` + tens.map(c => warCard(c, me, true)).join('');
-            const inv = state.conflicts.filter(c => !c.sideA.includes(me) && !c.sideB.includes(me) && (roleIn(c, me) || (c.location || []).includes(me)));
+            if (W.tens.length) h += `<div class="wm-sec">Disputes (no fighting)</div>` + W.tens.map(c => warCard(c, me, true)).join('');
+            const inv = state.conflicts.filter(c => c.type !== 'resolved' && !c.sideA.includes(me) && !c.sideB.includes(me) && (roleIn(c, me) || (c.location || []).includes(me)) && !isInternalConflict(c, me));
             if (inv.length) h += `<div class="wm-sec">Wars you are involved in</div>` + inv.map(c => {
-                const r = roleIn(c, me), role = r === 'backA' || r === 'backB' ? `You back ${flagList(r === 'backA' ? c.sideA : c.sideB)}` : r === 'med' ? 'You are a mediator' : 'Fighting on your territory';
+                const r = roleIn(c, me), role = r === 'backA' || r === 'backB' ? `You back ${flagList(r === 'backA' ? c.sideA : c.sideB)}` : r === 'med' ? 'You are a mediator' : 'Foreign forces fighting on your territory';
                 const p = [...c.sideA, ...c.sideB].find(x => WORLD[x] && x !== me);
                 return `<div class="wm-mini"><b>${esc(c.name)}</b> <span class="wm-chip" style="color:${(WAR_STATUS[c.type] || ['', '#ab9f80'])[1]}">${(WAR_STATUS[c.type] || [c.type])[0]}</span><div>${role} · intensity ${Math.round(c.intensity)}</div>${p ? `<button type="button" class="wm-btn" onclick="warAction('mediate','${c.id}')">🤝 Offer to mediate</button>` : ''}</div>`;
             }).join('');
-            const near = state.conflicts.filter(c => !W.list.includes(c) && !inv.includes(c) && c.type !== 'tension' && [...c.sideA, ...c.sideB, ...(c.location || [])].some(i => WORLD[i] && i !== me && distKm(me, i) < 1800));
+            const near = state.conflicts.filter(c => c.type !== 'resolved' && !W.list.includes(c) && !inv.includes(c) && !isInternalConflict(c, me) && c.type !== 'tension' && [...c.sideA, ...c.sideB, ...(c.location || [])].some(i => WORLD[i] && i !== me && distKm(me, i) < 1800));
             if (near.length) h += `<div class="wm-sec">Wars near you</div>` + near.map(c => `<div class="wm-mini"><b>${esc(c.name)}</b> <span class="wm-chip" style="color:${(WAR_STATUS[c.type] || ['', '#ab9f80'])[1]}">${(WAR_STATUS[c.type] || [c.type])[0]}</span> · intensity ${Math.round(c.intensity)}</div>`).join('');
-            try { const oc = occSummary(); if (oc.length) h += `<div class="wm-sec">Occupied territory</div>` + oc.map(x => `<div class="wm-mini"><b>${esc(shortName(x.iso))}</b> — ${esc(ctlMeta(x.by)[0])} holds about <b>${x.pct}%</b> (≈${x.km2.toLocaleString()} km²) <span class="wm-chip" style="color:${x.live ? '#ef4444' : '#f59e0b'}">${x.live ? 'front is moving' : x.state === 'frozen' ? 'frozen' : 'front frozen'}</span><button type="button" class="wm-btn" onclick="frontGo('${x.iso}')">🗺 Show on map</button></div>`).join(''); } catch (e) { }
-            if (typeof coupHTML !== 'undefined' && coupHTML) h += coupHTML;
-            body.innerHTML = h;
+            try {
+                const oc = occSummary(), mineOc = oc.filter(x => x.by === me || (x.iso === me && WORLD[x.by])), rest = oc.filter(x => !mineOc.includes(x));
+                const row = x => `<div class="wm-mini"><b>${esc(shortName(x.iso))}</b> — ${x.by === me ? '<b style="color:#f6e08f">you hold</b>' : esc(ctlMeta(x.by)[0]) + ' holds'} about <b>${x.pct}%</b> (≈${x.km2.toLocaleString()} km²)${x.iso === me ? ' <b style="color:#fca5a5">of your land</b>' : ''} <span class="wm-chip" style="color:${x.live ? '#ef4444' : '#f59e0b'}">${x.live ? 'front is moving' : x.ceded ? 'ceded by treaty' : x.state === 'frozen' ? 'frozen' : 'front frozen'}</span><button type="button" class="wm-btn" onclick="frontGo('${x.iso}')">🗺 Show on map</button></div>`;
+                if (mineOc.length) h += `<div class="wm-sec">Front lines &amp; occupied land</div>` + mineOc.map(row).join('');
+                if (rest.length) h += `<details class="wm-world"><summary>World front lines (${rest.length})</summary>${rest.map(row).join('')}</details>`;
+            } catch (e) { }
+            try { h += warAlliesSection(); } catch (e) { console.warn('allies', e); }
+            try { h += annexedSection(); } catch (e) { }
+            return h;
+        }
+        function warAlliesSection() {
+            const me = state.playerIso, wars = state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me)) && !isInternalConflict(c, me));
+            let tp = [], orgs = []; try { tp = treatyPartners(me, ['defense', 'alliance']); } catch (e) { } try { orgs = ORG_DEFS.filter(o => o.defence && inOrg(o.id, me)).map(o => o.short); } catch (e) { }
+            if (!wars.length && !tp.length && !orgs.length) return '';
+            let h = `<div class="wm-sec">Allies</div>`;
+            if (tp.length || orgs.length) h += `<div class="wm-mini">${orgs.length ? `<b>Collective defence:</b> ${orgs.map(esc).join(', ')}` : ''}${tp.length ? `${orgs.length ? '<br>' : ''}<b>Treaty allies:</b> ${flagList(tp.slice(0, 12))}${tp.length > 12 ? ' +' + (tp.length - 12) : ''}` : ''}</div>`;
+            if (wars.length) { try { h += `<div class="wm-mini wm-allies">${warsAlliesHTML()}</div>`; } catch (e) { } }
+            return h;
+        }
+        // ---- 🪖 Internal security: coup risk, insurgencies, armed groups, unrest, territorial control at home ----
+        function wmOrder(t) { closeWarPanel(); quickAddOrder(t); }
+        function wmOrd(t) { return `wmOrder(${JSON.stringify(t).replace(/"/g, '&quot;')})`; }
+        function renderInternalPanel() {
+            const me = state.playerIso, n = nationIso(me), C = coupState(), I = playerInternalState(), s = state.soc && state.soc[me];
+            const head = { coup: ['🚨 COUP ATTEMPT', '#ef4444'], civilwar: ['⚔ CIVIL WAR AT HOME', '#ef4444'], insurgency: ['⚔ INSURGENCY AT HOME', '#f97316'], unrest: ['✊ UNREST', '#f59e0b'], stable: ['🛡 INTERNAL SITUATION STABLE', '#9cbf5a'] }[I.k];
+            let h = `<div class="wm-status" style="color:${head[1]};border-color:${head[1]}66">${head[0]}</div>`;
+            if (C.active || C.result) return h + coupSection();
+            const appr = Math.round(n.stability || 0), stab = stabilityOf(me), sl = stabLabel(stab), R = coupRisk(me), ac = appr >= 55 ? '#93b25f' : appr >= 40 ? '#d8b45a' : '#c4553c';
+            h += `<div class="wm-card"><div class="wm-row"><span>Approval</span><div class="wm-bar"><i style="width:${appr}%;background:${ac}"></i></div><b style="color:${ac}">${appr}%</b></div>
+                <div class="wm-row"><span>Stability</span><div class="wm-bar"><i style="width:${stab}%;background:${sl[1]}"></i></div><b style="color:${sl[1]}">${stab}</b></div>
+                <div class="wm-row"><span>Coup risk</span><div class="wm-bar"><i style="width:${R.risk}%;background:${riskCol(R.risk)}"></i></div><b style="color:${riskCol(R.risk)}">${R.risk}%</b></div>
+                <div class="wm-eff">${sl[0]}. Wars and disputes with other states, front lines abroad and your allies are under the ⚔ War &amp; Peace button.</div></div>`;
+            h += `<div class="wm-sec">Insurgencies &amp; civil conflict</div>`;
+            h += I.ins.length ? I.ins.sort((a, b) => b.intensity - a.intensity).map(c => warCard(c, me)).join('') : `<div class="wm-note">No armed conflict is being fought on your soil.</div>`;
+            if (I.tens.length) h += I.tens.map(c => `<div class="wm-mini"><b>${esc(c.name)}</b> <span class="wm-chip" style="color:#eab308">Tension</span> · intensity ${Math.round(c.intensity)}${c.nonState ? ' · ' + esc(c.nonState) : ''}</div>`).join('');
+            try { h += internalControlHTML(me); } catch (e) { console.warn('control', e); }
+            try { h += homeGroupsHTML(me, I.groups); } catch (e) { console.warn('groups', e); }
+            try { h += unrestHTML(me, n, s); } catch (e) { console.warn('unrest', e); }
+            h += coupSection();
+            return h;
+        }
+        function internalControlHTML(me) {
+            const T = territoryOf(me), dom = T.others.filter(x => !WORLD[x.key] || x.key === me), rows = [];
+            if (!dom.length) rows.push(`<div class="wm-mini">The government controls <b>${T.others.length ? '≈' + T.govPct + '%' : 'all'}</b> of the national territory${T.others.length ? ' — the rest is held by foreign forces (see ⚔ War &amp; Peace)' : ''}.</div>`);
+            else {
+                rows.push(`<div class="wm-row"><span>Government</span><div class="wm-bar"><i style="width:${T.govPct}%;background:#9cbf5a"></i></div><b>≈${T.govPct}%</b></div>`);
+                dom.forEach(x => rows.push(`<div class="wm-mini"><i class="wm-dot" style="background:${x.col}"></i><b>${esc(x.name)}</b> holds ≈${x.pct}% (${x.km2.toLocaleString()} km²)${x.backer && WORLD[x.backer] ? ` · backed by ${esc(shortName(x.backer))}` : ''}${x.area || x.places.length ? `<div class="wm-eff" style="margin:2px 0 0">${esc(x.area || 'Around ' + x.places.join(', '))}</div>` : ''}</div>`));
+            }
+            if (T.lostSinceStart || T.regainedSinceStart) rows.push(`<div class="wm-eff">Since 1 Jan 2026: ${T.lostSinceStart ? `<span style="color:#fca5a5">−${T.lostSinceStart.toLocaleString()} km² lost</span>` : ''}${T.lostSinceStart && T.regainedSinceStart ? ' · ' : ''}${T.regainedSinceStart ? `<span style="color:#bef264">+${T.regainedSinceStart.toLocaleString()} km² retaken</span>` : ''}</div>`);
+            rows.push(`<div class="wm-btns"><button type="button" class="wm-btn" onclick="closeWarPanel();setMapView('control');frontGo('${me}', true)">🗺 Show internal control on the map</button></div>`);
+            return `<div class="wm-sec">Internal control</div>` + rows.join('');
+        }
+        function homeGroupsHTML(me, groups) {
+            const h = `<div class="wm-sec">Armed groups &amp; non-state actors at home</div>`;
+            if (!groups.length) return h + `<div class="wm-note">No armed group or breakaway authority operates on your territory.</div>`;
+            return h + groups.slice().sort((a, b) => b.S - a.S).map(p => {
+                let T = { share: 0, km2: 0 }; try { T = proxyTerritory(p); } catch (e) { }
+                const pats = (p.patrons || []).filter(x => (p.aid[x] || 0) > 0 && WORLD[x] && x !== me);
+                return `<div class="wm-card"><div class="wm-ctop"><b style="color:${pxText(p.color)}">${esc(p.name)}</b><span class="wm-chip" style="color:#f97316;border-color:#f9731666">${esc(p.kind || 'armed group')}</span><span class="wm-since">strength ${Math.round(p.S)} ${p.S >= p.S0 ? '▲' : '▼'}</span></div>
+                    <div class="wm-row"><span>Fighters</span><div class="wm-bar"><i style="width:${Math.round(p.S)}%;background:#f97316"></i></div><b>~${Math.round((p.fighters || 0) * p.S / Math.max(1, p.S0)).toLocaleString()}</b></div>
+                    ${T.share ? `<div class="wm-row"><span>Holds</span><div>≈${Math.round(T.share * 100)}% of the country (${(T.km2 || 0).toLocaleString()} km²)</div></div>` : ''}
+                    ${pats.length ? `<div class="wm-row"><span>Backers</span><div>${flagList(pats)}</div></div>` : ''}
+                    ${p.aims ? `<div class="wm-brief">${esc(p.aims)}</div>` : ''}
+                    <div class="wm-btns"><button type="button" class="wm-btn" onclick="${wmOrd('Open talks with the ' + p.short)}">🤝 Talks</button><button type="button" class="wm-btn" onclick="${wmOrd('Strike the ' + p.short)}">💥 Strike</button><button type="button" class="wm-btn" onclick="${wmOrd('Sanction the ' + p.short)}">⛔ Sanction</button><button type="button" class="wm-btn" onclick="${wmOrd('Offer an amnesty and reintegration programme to fighters of the ' + p.short)}">🕊 Amnesty</button></div></div>`;
+            }).join('');
+        }
+        function unrestHTML(me, n, s) {
+            const un = Math.round((state.mods && state.mods.unrest) || 0), appr = Math.round(n.stability || 0);
+            let h = `<div class="wm-sec">Unrest &amp; protests</div><div class="wm-card">`;
+            if (s) h += `<div class="wm-row"><span>Public safety</span><div class="wm-bar"><i style="width:${Math.round(s.safety)}%;background:${s.safety >= 55 ? '#93b25f' : s.safety >= 35 ? '#d8b45a' : '#c4553c'}"></i></div><b>${Math.round(s.safety)}</b></div>
+                <div class="wm-row"><span>Inflation</span><div>${s.infl.toFixed(1)}%</div></div><div class="wm-row"><span>Unemployment</span><div>${s.unemp.toFixed(1)}%</div></div>`;
+            const sf = s ? s.safety : 60, inf = s ? s.infl : 0, ue = s ? s.unemp : 0, mood = appr < 30 || un > 15 || inf > 40 ? ['Mass protests and strikes are likely.', '#ef4444'] : appr < 42 || un > 6 || inf > 15 || ue > 12 ? ['Discontent is spreading; protests break out regularly.', '#f59e0b'] : sf < 30 ? ['Protests are rare, but crime and violence weigh on daily life.', '#f59e0b'] : ['The streets are calm.', '#9cbf5a'];
+            h += `<div class="wm-eff" style="color:${mood[1]}">${mood[0]}${un ? ` Unrest index ${un}.` : ''}</div>`;
+            const cr = (state.crises || []).filter(x => state.dayIndex - x.day < 120).slice(-5).reverse();
+            if (cr.length) h += `<div class="wm-terms"><span>Recent domestic crises</span>${cr.map(x => `<div>${esc(x.t)} <span class="wm-since">${state.dayIndex - x.day} d ago</span> <button type="button" class="wm-btn" onclick="${wmOrd(x.fix)}">Respond</button></div>`).join('')}</div>`;
+            h += `<div class="wm-btns"><button type="button" class="wm-btn" onclick="${wmOrd('Address the nation and promise political reforms')}">📺 Address the nation</button><button type="button" class="wm-btn" onclick="${wmOrd('Launch a cost-of-living relief package with energy subsidies')}">💶 Relief package</button><button type="button" class="wm-btn" onclick="${wmOrd('Hire more police and improve public safety')}">🚔 More police</button><button type="button" class="wm-btn" onclick="${wmOrd('Open a national dialogue with protest leaders and the opposition')}">🗣 Dialogue</button></div></div>`;
+            return h;
         }
         function warCard(c, me, compact) {
             const en = warEnemies(c, me), al = warAllies(c, me), st = WAR_STATUS[c.type] || [c.type, '#ab9f80'];
@@ -4881,8 +4998,8 @@
                 if (c.type === 'war') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('ceasefire','${c.id}')">🕊 Propose ceasefire</button>`;
                 if (c.type === 'ceasefire') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('treaty','${c.id}')">📜 Negotiate peace treaty</button>`;
                 if (c.type === 'tension') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('deescalate','${c.id}')">🤝 Propose de-escalation</button>`;
-                btns += `<button type="button" class="wm-btn" onclick="warAction('terms','${c.id}')">❓ Ask their terms</button><button type="button" class="wm-btn" onclick="warAction('talk','${c.id}')">💬 Talk to ${esc(shortName(en[0]))}</button>`;
-            } else btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('rebels','${c.id}')">🕊 Open peace talks</button>`;
+                btns += `<button type="button" class="wm-btn" onclick="warAction('terms','${c.id}')">❓ Ask their terms</button><button type="button" class="wm-btn wm-terms-btn" onclick="openTerms('${c.id}')">${(state.capit || {})[en[0]] ? '🏳 Dictate terms' : c.type === 'tension' ? '📝 Propose a settlement' : '📝 Propose terms'}</button><button type="button" class="wm-btn" onclick="warAction('talk','${c.id}')">💬 Talk to ${esc(shortName(en[0]))}</button>`;
+            } else btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('rebels','${c.id}')">🕊 Open peace talks</button>${!(c.location || []).length || (c.location || []).includes(me) ? `<button type="button" class="wm-btn" onclick="${wmOrd(`Launch a counter-insurgency operation against ${c.nonState || 'the armed groups'} in the ${c.name}`)}">⚔ Counter-insurgency</button>` : ''}`;
             return `<div class="wm-card">
                 <div class="wm-ctop"><b>${esc(c.name)}</b><span class="wm-chip" style="color:${st[1]};border-color:${st[1]}66">${st[0]}</span><span class="wm-since">${c.type === 'tension' ? '' : esc(warSinceText(c))}</span></div>
                 <div class="wm-row"><span>Enemy</span><div>${enemyTxt}</div></div>
@@ -14910,7 +15027,8 @@ function gaVote(kind, target, proposer) {
 }
 
 // ---------- calling allies to war (they answer after a few days) ----------
-function warEnemies(c) { const me = state.playerIso; return (c.sideA.includes(me) ? c.sideB : c.sideA).concat(c.sideA.includes(me) ? (c.backB || []) : (c.backA || [])).filter(i => WORLD[i]); }
+function warEnemies(c, iso) { if (iso !== undefined) return (c.sideA.includes(iso) ? c.sideB : c.sideA).filter(x => WORLD[x]);   // (c, iso): the states on the other side; (c): the player's foes incl. their backers (ally calls)
+    const me = state.playerIso; return (c.sideA.includes(me) ? c.sideB : c.sideA).concat(c.sideA.includes(me) ? (c.backB || []) : (c.backA || [])).filter(i => WORLD[i]); }
 function warIsDefender(c) { return !c.playerMade; }   // wars you started are flagged playerMade
 function allyCandidates(c, via) {
     const me = state.playerIso, mySide = c.sideA.includes(me) ? 'A' : 'B', foes = warEnemies(c), have = new Set(c.sideA.concat(c.sideB, c.backA || [], c.backB || []));
@@ -15312,7 +15430,7 @@ function openHelp() {
         <li><b>🏛 Government</b> — budget, economy, war &amp; casualties, world rankings, <b>Politics</b> (elections, projected vote, political capital), <b>Treaties &amp; UN</b> (propose pacts, call on your allies in a war, answer their calls, Security Council votes), <b>Organizations</b> (UN, NATO, EU, BRICS, African Union, Arab League, ASEAN, GCC, SCO, CSTO, G7, G20, OPEC+ and more, plus the informal Axis of Resistance: join, leave, use their tools) and <b>Non-state actors</b>.</li>
         <li><b>🗺 Map view</b> — political map, front lines, or internal control (militias, autonomous regions, breakaway states). <b>Click inside a group's area</b> to see who rules it, like a country.</li>
         <li><b>🔍</b> (under the zoom buttons, or press <b>F</b>) — find any country, city or armed group.</li>
-        <li><b>🪖 Coup</b> — coup risk at home and abroad. <b>📑 Report</b> — your advisor's situation report.</li>
+        <li><b>🪖 Coup</b> — internal security: coup risk, insurgencies, armed groups at home, unrest and who controls your land. <b>⚔ War &amp; peace</b> — wars, disputes, fronts and allies abroad; propose or dictate peace terms. <b>📑 Report</b> — your advisor's situation report.</li>
         <li><b>👁</b> (next to ?) or <b>V</b> — view-only mode: hides every panel so you can look at the map; press V or Esc to bring the interface back.</li>
         <li><b>Space</b> pauses, <b>Esc</b> closes windows, <b>?</b> opens this screen.</li></ul>
         <div class="gs-stat-lbl mt-4 mb-1">What drives the world</div><div class="text-slate-300" style="line-height:1.6">Every country has education, health, safety, corruption, inflation, unemployment and debt that respond to spending. Wars move front lines. Armed groups hold their own ground and answer to their patrons. Treaties bind allies to defend each other, and breaking your word costs credibility. Elections can remove you from office.</div></div></div>`;
@@ -15418,8 +15536,8 @@ const TIPS = {
     'res:Sites': 'Sites\nYour strategic sites (power plants, bases, factories…) and the projects being built.',
     'ai-ind': 'AI engine\nConnect an AI (built-in, Claude, ChatGPT or Gemini) to write diplomacy, reports and treaty texts. Off means the offline staff engine.',
     'front-btn': 'Map view\nSwitch between the political map, front lines (wars) and internal control (militias, autonomous regions, breakaway states).',
-    'coup-btn': 'Coup risk\nThe chance the army moves against your government. Click for the coup panel and loyalty measures.',
-    'war-btn': 'War & peace\nThe wars you are fighting and how they are going. Click for the war panel.',
+    'coup-btn': 'Internal security\nCoup risk, insurgencies and civil war at home, armed groups on your soil, unrest and protests, and who controls your territory. Click for the internal panel.',
+    'war-btn': 'War & peace\nWars and disputes with other states, front lines and occupied land abroad, your allies, peace terms and capitulations. Click for the war panel.',
     'report-btn': 'Situation report\nYour advisor\'s summary of the economy, the military, diplomacy and threats.',
     'act:toggleCommandCenter': 'Orders (Command Center)\nType orders in plain English, then press Execute.',
     'act:openSociety': 'Government\nBudget, economy, war & casualties, non-state actors, politics, treaties & UN and world rankings.',
