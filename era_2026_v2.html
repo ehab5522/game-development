@@ -6618,6 +6618,8 @@
             counter: /\b(counter.?intelligence|counter.?espionage|counter.?intel|catch (the )?(spy|spies|mole)|mole hunt|roll up .{0,20}(network|cell|ring)|secure our (networks?|systems?)|harden our (networks?|systems?|cyber)|protect .{0,30}(against|from) .{0,20}(hackers?|cyber|espionage|spies|sabotage))/,
             collect: /\b(spy on|spies|espionage|surveil|reconnaissance|\brecon\b|intercept .{0,20}communicat|eavesdrop|wiretap|bug .{0,20}(the|their)|monitor .{0,20}(their|the) (communications?|forces|troops|military|movements|leaders?|leadership|networks?|officials|nuclear)|gather intelligence|collect intelligence|intelligence on|satellite (imagery|surveillance)|signals intelligence|infiltrat|informant|surveillance of)\b/
         };
+        // what an intelligence operation costs (agents, equipment, bribes) — its own price list, not a share of GDP
+        const INTEL_OP_COST = { collect: 15e6, counter: 25e6, cyber: 40e6, disinfo: 20e6, steal: 35e6, subvert: 120e6, sabotage: 80e6, assassinate: 60e6 };
         function intelTypeOf(s) { for (const k of ['assassinate', 'sabotage', 'cyber', 'subvert', 'disinfo', 'steal', 'counter', 'collect']) if (INTEL_RX[k].test(s)) return k; return null; }
         const INTEL_OVERT_RX = /\b(invade|invasion|airstrike|air strike|cruise missile|ballistic missile|missile strikes?|drone strikes?|bombing|bombard|shelling|artillery|ground offensive|occupy|annex|send troops|deploy troops|bombing campaign)\b/;
 
@@ -6745,11 +6747,15 @@
                     cost = ({ invasion: g * 0.003 + tg * 0.1, strike: g * 0.0006 + tg * 0.01, blockade: g * 0.0005 + tg * 0.008, arms: g * 0.0015, posture: g * 0.0008 }[c.kind]) * c.scale;
                     cost = Math.min(cost, g * 0.02); }
                     days = { invasion: rint(5, 9), strike: rint(1, 3), blockade: rint(3, 6), arms: rint(4, 8), posture: rint(2, 5) }[c.kind]; break;
-                case 'diplomacy': cost = g * 0.00002; days = rint(2, 7); break;
+                // COST POLICY: only real projects and purchases cost money. Talks, agreements, trade deals (the goods are paid on delivery),
+                // statements and policies (they change the budget itself) are free; spending / welfare programmes, aid, operations and
+                // intelligence operations (priced per operation type below) cost what they spend.
+                case 'diplomacy': cost = 0; days = rint(2, 7); break;
                 case 'economy':
-                    cost = c.kind === 'spend' ? g * 0.004 * c.scale : g * 0.00005; days = c.kind === 'tradeDeal' ? rint(2, 5) : rint(6, 16); break;
-                case 'domestic': cost = c.kind === 'welfare' ? g * 0.002 * c.scale : g * 0.0001; days = rint(1, 5); break;
-                case 'intelligence': cost = g * 0.0001; days = rint(4, 10); break;
+                    cost = c.kind === 'spend' ? g * 0.004 * c.scale : 0; days = c.kind === 'tradeDeal' ? rint(2, 5) : rint(6, 16); break;
+                case 'domestic': cost = c.kind === 'welfare' ? g * 0.002 * c.scale : 0; days = rint(1, 5); break;
+                case 'intelligence': { const it = (c.intel && c.intel.type) || 'collect', tg = c.targets && c.targets[0] ? nationIso(c.targets[0].iso) : null;
+                    cost = (INTEL_OP_COST[it] || INTEL_OP_COST.collect) * c.scale * (tg && tg.gdp > 1e12 ? 1.5 : 1); days = rint(4, 10); break; }
                 case 'humanitarian': cost = g * 0.0006 * c.scale; days = rint(3, 6); break;
                 case 'construction': {
                     if (c.kind === 'build') {
@@ -6771,11 +6777,11 @@
                     }
                     break; }
             }
-            cost = Math.max(Math.round(cost * D().cost), 1e6);
+            cost = cost > 0 ? Math.max(Math.round(cost * D().cost), 1e6) : 0;         // the one $1M minimum, and only for orders that cost something
             const o = { id: 'o' + (++state.orderSeq), text, ...c, cost, days, status: 'queued' };
             if (o.kind === 'move') {
                 o.move = planMove(o);
-                o.cost = Math.max(1e6, Math.round(o.cost * o.move.strength.mult * (1 + o.move.dist / 8000)));
+                o.cost = Math.round(o.cost * o.move.strength.mult * (1 + o.move.dist / 8000));
                 o.loc = { place: o.move.to.label, host: o.move.to.host === null ? state.playerIso : o.move.to.host };
                 o.eta = fmtDate(dateIn(o.days + o.move.prep + o.move.travel));
                 if (o.move.hostile && !o.targets.some(t => t.iso === o.move.to.host)) o.targets.unshift({ iso: o.move.to.host, stance: 'hostile' });
@@ -7461,7 +7467,7 @@
             const p = nationIso(state.playerIso);
             const run = [], skipped = [];
             state.orders.queue.forEach(o => {
-                if (o.cost > p.treasury) { skipped.push(o); return; }
+                if (o.cost > 0 && o.cost > p.treasury) { skipped.push(o); return; }        // a free order is never blocked by an empty treasury
                 p.treasury -= o.cost;
                 o.status = 'active'; o.elapsed = 0; o.issued = state.date.toLocaleDateString();
                 state.orders.history.push(o); run.push(o);
@@ -7503,7 +7509,7 @@
                         <span class="cc-pill" style="border-color:${col};color:${col}">${o.status === 'active' ? 'In progress' : o.outcome}</span>
                     </div>
                     <div class="flex items-center gap-2 mt-1.5"><span class="cc-pill" style="${CAT_STYLE[o.cat]};border-color:transparent">${o.cat}</span>
-                        <span class="text-[10px] font-mono text-slate-500">${o.issued}${o.doneDate ? ' → ' + o.doneDate : ''} · ${formatVal(o.cost)}</span>${logEtaPill(o)}${gradePill(o)}</div>
+                        <span class="text-[10px] font-mono text-slate-500">${o.issued}${o.doneDate ? ' → ' + o.doneDate : ''} · ${costLabel(o.cost)}</span>${logEtaPill(o)}${gradePill(o)}</div>
                     ${o.directive && o.directive.objective ? `<div class="text-[10.5px] text-slate-400 mt-1">🎯 ${esc(o.directive.objective)}</div>` : ''}
                     ${o.status === 'active' ? `<div class="cc-bar mt-2"><div style="width:${pct}%;background:${col}"></div></div>` : `<div class="mt-1.5">${eff}</div>`}
                 </div>`;
@@ -11143,7 +11149,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const push = r => {
                 if (r.kind !== 'agreement') {
                     const o = estimateOrder(r.order);
-                    if (o) { r.cost = o.cost; r.days = o.days; r.cat = r.cat || o.cat; r.okc = classifyOrder(r.order); }
+                    if (o) { r.cost = o.cost; r.days = o.kind === 'build' && o.buildDays ? o.buildDays : o.days; r.cat = r.cat || o.cat; r.okc = classifyOrder(r.order); }
                 }
                 r.affordable = r.cost === undefined || r.cost <= Math.max(p.treasury, 0);
                 if (!r.affordable) r.score -= 15;
@@ -11670,7 +11676,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 else if (B > o.cost * 1.3) o.overfunded = Math.min(0.5, B / o.cost - 1);
                 o.cost = B;
             }
-            o.cost = Math.max(1e6, Math.round(o.cost));
+            o.cost = o.cost > 0 ? Math.max(1e6, Math.round(o.cost)) : 0;        // a free order stays free unless the directive gives it a budget
             o.dirProb = (q - 60) / 300 - o.underfunded * 0.3 + o.overfunded * 0.12 + (D.timeline === 'deliberate' ? 0.04 : D.timeline === 'urgent' ? -0.04 : 0);
             o.dirBacklash = (q < 40 ? 1.3 : q >= 80 && (D.justification || '').length > 25 && !o.covert ? 0.75 : 1);
             o.quality = q; o.grade = gradeOf(q);
@@ -11801,7 +11807,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 ${o ? `<div class="rep-kv mt-2">
                     ${kv('Category', `<span class="cc-pill" style="${CAT_STYLE[o.cat]};border-color:transparent">${esc(o.cat)}${o.kind && o.kind !== 'general' ? ' · ' + esc(o.kind) : ''}</span>`)}
                     ${kv('Success odds', R.probDir !== null ? `${Math.round(R.probDir * 100)}%${R.probQuick !== null ? ` <span class="rep-sub">(one-liner: ${Math.round(R.probQuick * 100)}%)</span>` : ''}` : '—')}
-                    ${kv('Cost', `${formatVal(o.cost)}${o.estCost && Math.abs(o.estCost - o.cost) > 1e6 ? ` <span class="rep-sub">est. ${formatVal(o.estCost)}</span>` : ''}`)}
+                    ${kv('Cost', `${costLabel(o.cost)}${o.estCost && Math.abs(o.estCost - o.cost) > 1e6 ? ` <span class="rep-sub">est. ${formatVal(o.estCost)}</span>` : ''}`)}
                     ${kv('Duration', `~${o.days} day${o.days === 1 ? '' : 's'}${o.eta ? ' · ' + o.eta : ''}`)}
                     ${kv('Backlash', `<span style="color:${backl[1]}">${backl[0]}</span>`)}
                     ${kv('Targets', o.targets.length ? o.targets.slice(0, 3).map(t => `${flagHTML(nationIso(t.iso), 9)} ${esc(shortName(t.iso))}`).join(', ') : '—')}
@@ -12976,7 +12982,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             state.usedIdeas.add(text);
             const cc = document.getElementById('command-center'); cc.classList.remove('hidden'); cc.classList.add('cc-open'); ccTab('orders');
             renderQueue(); updateCapacity(); renderIdeasUI();
-            flashReply(`➕ Added: <b>${esc(text)}</b> (${esc(o.cat)}, ${formatVal(o.cost)}, ~${o.days}d). Press <b>Execute</b> when ready.`);
+            flashReply(`➕ Added: <b>${esc(text)}</b> (${esc(o.cat)}, ${costLabel(o.cost)}, ${o.kind === 'build' && o.buildDays ? fmtBuildTime(o.buildDays) : '~' + o.days + 'd'}). Press <b>Execute</b> when ready.`);
         }
         function fillOrder(text) { playClick(); const cc = document.getElementById('command-center'); cc.classList.remove('hidden'); cc.classList.add('cc-open'); const inp = document.getElementById('cc-input'); inp.value = text; inp.focus(); }
         function renderIdeasUI() {
@@ -15355,7 +15361,7 @@ function proxyResolve(o) {
     const _plan = planOrder;
     planOrder = function (text) {
         const o = _plan(text);
-        if (o && o.kind === 'proxy') { const g = nationIso(state.playerIso).gdp; o.cost = Math.max(1e6, Math.round(g * (PROXY_COST[o.act] || 0.0001) * o.scale * D().cost)); o.days = o.act === 'strike' ? rint(1, 3) : rint(3, 8); }
+        if (o && o.kind === 'proxy') { const g = nationIso(state.playerIso).gdp; o.cost = ['strike', 'arm', 'fund'].includes(o.act) ? Math.max(1e6, Math.round(g * (PROXY_COST[o.act] || 0.0001) * o.scale * D().cost)) : 0; o.days = o.act === 'strike' ? rint(1, 3) : rint(3, 8); }
         return o;
     };
     const _res = resolveOrder;
@@ -16169,7 +16175,7 @@ function unscAgainstPlayer(c, victim) {
 }
 {
     const _pl = planOrder;
-    planOrder = function (text) { const o = _pl(text); if (o && o.kind === 'unsc') { o.cost = Math.max(1e6, Math.round(nationIso(state.playerIso).gdp * 0.00005 * D().cost)); o.days = rint(3, 7); } return o; };
+    planOrder = function (text) { const o = _pl(text); if (o && o.kind === 'unsc') { o.cost = 0; o.days = rint(3, 7); } return o; };
     const _r2 = resolveOrder;
     resolveOrder = function (o) { if (o && o.kind === 'unsc') return unscResolve(o); return _r2(o); };
 }
@@ -18380,6 +18386,9 @@ function terrWarm() {
 //  ADVISOR → COMMAND BAR — every action your advisor recommends becomes a ＋ chip in the command bar
 //  (and in the advisor's reply). Chips stay for a week, then clear.
 // =====================================================================
+// an order starts with a verb ("Build…", "Sign…", "Impose…") and has a few words; "in Varanasi, India" or "Risks:" are not orders
+const ORDER_VERB_RX = /^(please\s+)?(build|construct|sign|propose|send|deploy|impose|raise|cut|increase|reduce|lower|launch|open|close|invest|negotiate|offer|request|ask|call|hold|expand|fund|finance|create|establish|set|start|begin|end|stop|halt|suspend|resume|recogni[sz]e|condemn|sanction|buy|sell|export|import|ban|lift|approve|pass|announce|declare|mobili[sz]e|withdraw|move|station|strengthen|secure|protect|spy|hack|sabotage|support|back|arm|train|recruit|upgrade|moderni[sz]e|reform|invite|host|visit|meet|appoint|dismiss|release|arrest|crack|boost|subsidi[sz]e|privati[sz]e|nationali[sz]e|develop|deepen|restore|repair|demolish|give|provide|deliver|ship|airlift|evacuate|pursue|seek|push|pressure|warn|threaten|accept|reject|join|leave|form|hire|double|triple|tax|borrow|issue|print|freeze|seize|block|blockade|strike|attack|invade|retaliate|demand|order|direct|instruct|authori[sz]e|conduct|carry|run|monitor|reinforce|deter|engage|mediate|broker|pledge|donate|allocate|redirect|shift|diversify|stockpile|reserve|commission|install|put|make|let|keep|maintain|prepare|plan|draft|introduce|tighten|loosen|relax|ease|expel|summon|recall|normali[sz]e|reopen|restart|scale|step|ramp|double|accelerate|prioriti[sz]e|target|track|survey|inspect|audit|investigate|share|coordinate|partner|cooperate|ally|align|court|woo|reassure|signal)\b/i;
+function looksLikeOrder(t) { t = String(t || '').trim(); return t.split(/\s+/).length >= 3 && ORDER_VERB_RX.test(t); }
 function advExtract(text) {
     const out = [];
     String(text).split(/\n+/).forEach(line => {
@@ -18388,6 +18397,7 @@ function advExtract(text) {
         else if ((m = t.match(/^order\s*:\s*(.{8,})$/i))) t = m[1];
         else return;
         t = t.replace(/\*\*/g, '').replace(/^["“]|["”]$/g, '').trim();
+        if (!looksLikeOrder(t)) return;                     // a bullet that is a place, a fact or a heading is not an order
         if (t.length > 220) t = t.slice(0, 217).replace(/\s+\S*$/, '') + '…';
         if (!out.includes(t)) out.push(t);
     });
