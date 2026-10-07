@@ -16747,6 +16747,638 @@ function reactHTML() {
 }
 
 // =====================================================================
+//  NUCLEAR FORCES — Enriched Uranium (EU), warheads and ICBMs (Rise of Nations style)
+//  EU comes from Uranium Enrichment Factories (10 EU a month each), from a nuclear-weapon state's own fuel cycle, or from
+//  the black market (cheap to start, risky to keep doing). Reactors you build burn EU (or legal reactor fuel); weapons cost
+//  EU and money to build, and EU and money every month to keep ready. Weapons a country already had on 1 January 2026
+//  (public SIPRI/FAS estimates) are paid from its defence budget. Works with and without an AI connected.
+// =====================================================================
+const NUKE_KIND = {
+    tactical: { label: 'tactical nuclear warhead', short: 'warhead', eu: 50, cost: 5e8, days: 60, per: 20, cap: 540 },
+    icbm: { label: 'strategic ICBM', short: 'ICBM', eu: 150, cost: 2e9, days: 180, per: 75, cap: 900 }
+};
+const NUKE_UPKEEP = { eu: 1, cost: 5e6 };                 // per weapon you build, per month
+const NUKE_SILO_CAP = 10;                                 // ICBMs one ICBM Launch Silo holds
+const NUKE_DISMANTLE_COST = 2e7;
+// iso: [other warheads, strategic missiles (ICBM/SLBM), EU stock, own fuel cycle (EU/month), launcher capacity for missiles]
+const NUKE_START = { USA: [4777, 400, 1500, 20, 450], RUS: [5129, 330, 1500, 30, 380], CHN: [300, 300, 600, 25, 400], FRA: [242, 48, 300, 8, 48], GBR: [177, 48, 150, 4, 48],
+    IND: [170, 10, 200, 6, 16], PAK: [170, 0, 200, 6, 0], ISR: [90, 0, 80, 2, 0], PRK: [40, 10, 150, 0, 14], IRN: [0, 0, 150, 0, 0] };
+const NPT_NWS = ['USA', 'RUS', 'CHN', 'FRA', 'GBR'], NPT_OUT = { IND: 'nonparty', PAK: 'nonparty', ISR: 'nonparty', SSD: 'nonparty', PRK: 'withdrawn' };
+const NPT_LABEL = { nws: 'Recognised nuclear-weapon state under the NPT', member: 'NPT member (non-nuclear-weapon state)', nonparty: 'Not a party to the NPT', withdrawn: 'Withdrawn from the NPT', exiting: 'Leaving the NPT (90-day notice)' };
+// black-market sellers: price per EU, chance a deal is exposed, the relations they need with you
+const NUKE_SELLERS = { smuggle: { name: 'Smuggling network', price: 30e6, risk: 0.30, rel: -100 }, PRK: { price: 22e6, risk: 0.25, rel: -10 }, RUS: { price: 25e6, risk: 0.20, rel: 40 },
+    PAK: { price: 28e6, risk: 0.22, rel: 50 }, IRN: { price: 26e6, risk: 0.25, rel: 50 } };
+const NUKE_LEU_PRICE = 6e6, NUKE_BM_MONTH = 50, NUKE_WEST = ['USA', 'GBR', 'FRA', 'DEU', 'JPN', 'CAN', 'AUS', 'ITA', 'KOR', 'NLD'];
+['nuke'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+
+function nukeSeed() {
+    const me = state.playerIso, S = NUKE_START[me];
+    const N = { v: 1, eu: S ? S[2] : 0, leu: 0, legacyT: S ? S[0] : 0, legacyI: S ? S[1] : 0, labs: S ? S[3] : 0, legacyCap: S ? S[4] : 0, tac: 0, icbm: 0,
+        readiness: 100, short: 0, queue: [], ship: [], autoFuel: true, npt: NPT_NWS.includes(me) ? 'nws' : (NPT_OUT[me] || 'member'), nptExit: null,
+        bm: { m: -1, q: 0 }, last: null, leaks: 0, seq: 0, tested: 0 };
+    if (!S && NUCLEAR.includes(me)) N.legacyT = 1;          // an older save in which your weapons facility had already produced its first weapons
+    return N;
+}
+function nukeOf() {
+    if (!state.playerIso) return nukeSeed();
+    if (!state.nuke || typeof state.nuke !== 'object' || state.nuke.v !== 1) state.nuke = nukeSeed();
+    const N = state.nuke; if (!Array.isArray(N.queue)) N.queue = []; if (!Array.isArray(N.ship)) N.ship = []; if (!N.bm) N.bm = { m: -1, q: 0 };
+    ['eu', 'leu', 'tac', 'icbm', 'legacyT', 'legacyI', 'labs', 'legacyCap', 'short', 'leaks', 'tested'].forEach(k => { if (!isFinite(N[k])) N[k] = 0; });
+    if (!isFinite(N.readiness)) N.readiness = 100;
+    return N;
+}
+function nukeMonthKey() { return state.date.getFullYear() * 12 + state.date.getMonth(); }
+function nukeWeapons(N) { N = N || nukeOf(); return { tac: N.tac + N.legacyT, icbm: N.icbm + N.legacyI, total: N.tac + N.legacyT + N.icbm + N.legacyI, built: N.tac + N.icbm, legacy: N.legacyT + N.legacyI }; }
+// your facilities that matter for the nuclear program
+function nukeSites() {
+    const me = state.playerIso, out = { enrich: [], weapons: [], silos: [], npp: [], mfac: [], prod: [] };
+    (state.sites || []).forEach(s => {
+        if (s.owner !== me || s.status !== 'active') return;
+        const T = SITE_TYPES[s.type] || {};
+        const eu = isFinite(T.eu) ? +T.eu : s.type === 'enrichment' ? 10 : 0;
+        if (eu > 0) out.prod.push({ s, eu });
+        if (s.type === 'enrichment') out.enrich.push(s);
+        if (s.type === 'nuke_weapon') out.weapons.push(s);
+        if (s.type === 'icbm_silo' || (s.type === 'missile' && /icbm|silo/i.test(s.name || ''))) out.silos.push(s);
+        if (s.type === 'missile_factory') out.mfac.push(s);
+        const use = isFinite(T.euUse) ? +T.euUse : s.type === 'nuclear' ? 2 : 0;
+        if (use > 0 && s.fromGame) out.npp.push({ s, use });       // reactors you start with run on long-term vendor fuel contracts
+    });
+    return out;
+}
+function nukeFlows(N, S) {
+    N = N || nukeOf(); S = S || nukeSites();
+    const sitesEU = S.prod.reduce((a, x) => a + x.eu, 0), prod = sitesEU + (N.labs || 0);
+    const fuel = S.npp.reduce((a, x) => a + x.use, 0), W = N.tac + N.icbm;
+    return { prod, sitesEU, labs: N.labs || 0, fuel, upkeepEU: W * NUKE_UPKEEP.eu, upkeepCost: W * NUKE_UPKEEP.cost, W, net: prod - fuel - W * NUKE_UPKEEP.eu };
+}
+// can we build this kind of weapon now? {ok, why, lines, cap, used}
+function nukeCan(kind) {
+    const N = nukeOf(), S = nukeSites(), legacy = N.legacyT + N.legacyI > 0;
+    const capable = S.weapons.length > 0 || S.enrich.length > 0 || legacy || NUCLEAR.includes(state.playerIso);
+    let lines = S.weapons.length + (legacy ? 2 : 0) + (!S.weapons.length && !legacy ? 0.5 : 0);
+    if (!capable) return { ok: false, why: 'You need an operational Nuclear Weapons Facility or Uranium Enrichment Factory first ("Build a nuclear weapons facility in …").', lines: 0 };
+    if (kind === 'icbm') {
+        const cap = NUKE_SILO_CAP * S.silos.length + (N.legacyCap || 0), used = N.legacyI + N.icbm + N.queue.filter(j => j.kind === 'icbm').reduce((a, j) => a + j.n, 0);
+        lines += S.mfac.length;
+        if (cap - used <= 0) return { ok: false, why: S.silos.length || N.legacyCap ? `All ${cap} ICBM launch slots are full — build another ICBM Launch Silo (holds ${NUKE_SILO_CAP}).` : `Strategic ICBMs need an operational ICBM Launch Silo ("Build an ICBM launch silo in …"); each holds ${NUKE_SILO_CAP}.`, lines, cap, used };
+        return { ok: true, lines, cap, used, free: cap - used };
+    }
+    return { ok: true, lines, slow: !S.weapons.length && !legacy };
+}
+function nukeBuildDays(kind, n, lines) {
+    const K = NUKE_KIND[kind];
+    return Math.min(K.cap, Math.round((K.days + K.per * (Math.max(1, n) - 1)) / Math.sqrt(Math.max(0.5, lines || 1))));
+}
+function nukeSchedule(kind, n) {
+    const N = nukeOf(), c = nukeCan(kind), days = nukeBuildDays(kind, n, c.lines || 1);
+    const after = N.queue.filter(j => j.kind === kind).reduce((a, j) => Math.max(a, j.done), state.dayIndex);     // one production line per kind: orders queue up
+    return { days, start: after, done: after + days };
+}
+function nukeNum(n) { return Math.round(n).toLocaleString('en-US'); }
+function nukePl(n, w) { return `${nukeNum(n)} ${w}${n === 1 ? '' : 's'}`; }
+
+// ---- start production (from an order or the Nuclear tab). opt.paid: the money was already taken by the order ----
+function nukeStart(kind, n, opt = {}) {
+    const K = NUKE_KIND[kind]; if (!K) return { ok: false, msg: 'Unknown weapon type.' };
+    n = Math.round(clamp(+n || 1, 1, kind === 'icbm' ? 20 : 50));
+    const N = nukeOf(), p = nationIso(state.playerIso), c = nukeCan(kind);
+    if (!c.ok) return { ok: false, msg: c.why };
+    if (kind === 'icbm' && n > c.free) return { ok: false, msg: `Only ${c.free} ICBM launch slot${c.free === 1 ? '' : 's'} free (${c.used}/${c.cap}). Build another ICBM Launch Silo or order fewer missiles.` };
+    const eu = n * K.eu, cost = n * K.cost;
+    if (N.eu < eu) return { ok: false, msg: `Not enough enriched uranium: ${nukePl(n, K.short)} need${n === 1 ? 's' : ''} ${nukeNum(eu)} EU, you have ${nukeNum(N.eu)}. Build Uranium Enrichment Factories (10 EU a month each) or buy EU.` };
+    if (!opt.paid) { if (p.treasury < cost) return { ok: false, msg: `Not enough money: ${formatVal(cost)} needed, treasury ${formatVal(p.treasury)}.` }; p.treasury -= cost; }
+    N.eu -= eu;
+    const sc = nukeSchedule(kind, n);
+    const job = { id: 'nj' + (++N.seq), kind, n, start: sc.start, done: sc.done, cost, eu, covert: !!opt.covert, day: state.dayIndex };
+    N.queue.push(job);
+    const when = fmtDate(dateIn(sc.done - state.dayIndex));
+    logEvent(`⚙ Nuclear program: production of ${nukePl(n, K.label)} started (${nukeNum(eu)} EU, ${formatVal(cost)}); ready about ${when}.`, 'neutral');
+    try { nukeReact('start', { kind, n, covert: job.covert }); } catch (e) { console.warn('nuke react', e); }
+    try { updateEconomyUI(); } catch (e) { }
+    return { ok: true, msg: `${nukePl(n, K.label)} in production — ready about ${when}${c.slow ? ' (slow: no dedicated weapons facility)' : ''}.`, job, when };
+}
+function nukeComplete(job) {
+    const N = nukeOf(), me = state.playerIso, K = NUKE_KIND[job.kind], first = !NUCLEAR.includes(me);
+    if (job.kind === 'icbm') N.icbm += job.n; else N.tac += job.n;
+    logEvent(`✅ Nuclear program: ${nukePl(job.n, K.label)} delivered to the arsenal (${nukeNum(nukeWeapons(N).total)} weapons in total).`, 'good');
+    nukeSyncStatus();
+    try { nukeReact(first ? 'first' : 'expand', { kind: job.kind, n: job.n, covert: job.covert }); } catch (e) { console.warn('nuke react', e); }
+}
+// NUCLEAR (the game's list of nuclear-armed states) follows whether you actually hold weapons
+function nukeSyncStatus() {
+    const me = state.playerIso, N = nukeOf(), has = nukeWeapons(N).total > 0, i = NUCLEAR.indexOf(me);
+    if (has && i < 0) { NUCLEAR.push(me); MILF[me] = (MILF[me] || 1) + 1; }
+    else if (!has && i >= 0) { NUCLEAR.splice(i, 1); MILF[me] = Math.max(1, Math.round(((MILF[me] || 2) - 1) * 100) / 100); }
+}
+
+// ---- buy enriched uranium: 'leu' = legal reactor fuel from a vendor, otherwise a black-market seller ('smuggle' or an ISO) ----
+function nukeSellerList() {
+    const me = state.playerIso;
+    return Object.keys(NUKE_SELLERS).filter(k => k !== me && (k === 'smuggle' || (WORLD[k] && !NON_SOVEREIGN.has(k)))).map(k => {
+        const S = NUKE_SELLERS[k], rel = k === 'smuggle' ? 0 : getRel(me, k);
+        const price = S.price * (1 + 0.04 * Math.min(state.sanctionsOnMe || 0, 20));
+        return { k, name: S.name || shortName(k), price, risk: S.risk, ok: k === 'smuggle' || rel >= S.rel, need: S.rel, rel };
+    });
+}
+function nukeLeuVendor() {
+    const me = state.playerIso;
+    return (TECH.nuclear.who || []).filter(x => x !== me && WORLD[x]).map(x => [x, getRel(me, x)]).sort((a, b) => b[1] - a[1])[0] || null;
+}
+function nukeBuy(seller, qty, opt = {}) {
+    const N = nukeOf(), me = state.playerIso, p = nationIso(me);
+    qty = Math.round(+qty || 0);
+    if (seller === 'leu') {
+        const F = nukeFlows(N), inc = N.ship.filter(x => x.kind === 'leu').reduce((a, x) => a + x.qty, 0), room = Math.max(0, Math.ceil(12 * F.fuel - N.leu - inc));
+        if (!F.fuel) return { ok: false, msg: 'Legal reactor fuel is sold only for reactors you have built — you have none running.' };
+        const v = nukeLeuVendor();
+        if ((state.sanctionsOnMe || 0) >= 10 || !v || v[1] < -20) return { ok: false, msg: 'No reactor-fuel vendor will sell to you (sanctions or hostile relations). Use your own enrichment.' };
+        if (!qty) qty = room; qty = Math.min(qty, room);
+        if (qty <= 0) return { ok: false, msg: 'Your reactors already have a year of fuel on order.' };
+        const cost = qty * NUKE_LEU_PRICE;
+        if (!opt.paid) { if (p.treasury < cost) return { ok: false, msg: `Not enough money: ${formatVal(cost)} needed.` }; p.treasury -= cost; }
+        N.ship.push({ id: 'ns' + (++N.seq), kind: 'leu', qty, seller: v[0], day: state.dayIndex + rint(30, 60), cost });
+        logEvent(`🛒 Reactor fuel: ${nukeNum(qty)} EU-equivalent of low-enriched fuel bought from ${esc(shortName(v[0]))} for ${formatVal(cost)} under IAEA safeguards (arrives in 1–2 months).`, 'neutral');
+        return { ok: true, msg: `${nukeNum(qty)} EU of reactor fuel ordered from ${shortName(v[0])} (${formatVal(cost)}).`, cost };
+    }
+    const S = nukeSellerList().find(x => x.k === seller); if (!S) return { ok: false, msg: 'That seller does not exist or will not deal with you.' };
+    if (!S.ok) return { ok: false, msg: `${S.name} will not sell to you (relations ${S.rel}, it needs ${S.need}+).` };
+    const mk = nukeMonthKey(); if (N.bm.m !== mk) N.bm = { m: mk, q: 0 };
+    const room = NUKE_BM_MONTH - N.bm.q;
+    if (room <= 0) return { ok: false, msg: `The black market cannot move more than ${NUKE_BM_MONTH} EU a month without being noticed. Try next month.` };
+    qty = clamp(qty || room, 1, room);
+    const cost = Math.round(qty * S.price);
+    if (!opt.paid) { if (p.treasury < cost) return { ok: false, msg: `Not enough money: ${formatVal(cost)} needed.` }; p.treasury -= cost; }
+    N.bm.q += qty;
+    const exposed = Math.random() < S.risk + (state.counterOn && Object.keys(state.counterOn).length ? 0.05 : 0);
+    const sh = { id: 'ns' + (++N.seq), kind: 'bm', qty, seller, day: state.dayIndex + rint(15, 45), cost, exposed, seized: exposed && Math.random() < 0.4 };
+    N.ship.push(sh);
+    logEvent(`📦 Black-market enriched uranium: ${nukeNum(qty)} EU bought from ${esc(S.name)} for ${formatVal(cost)}; the shipment is on its way (2–6 weeks).`, 'neutral');
+    if (exposed) try { nukeReact('bm_exposed', { seller, qty }); } catch (e) { console.warn('nuke react', e); }
+    return { ok: true, msg: `${nukeNum(qty)} EU bought from ${S.name} for ${formatVal(cost)}${exposed ? ' — but foreign intelligence has spotted the deal' : ''}.`, cost, exposed };
+}
+function nukeDismantle(kind, n) {
+    const N = nukeOf(), W = nukeWeapons(N);
+    const have = kind === 'icbm' ? W.icbm : W.tac; n = Math.round(clamp(+n || 1, 1, Math.max(1, have)));
+    if (!have) return { ok: false, msg: `You have no ${kind === 'icbm' ? 'ICBMs' : 'warheads'} to dismantle.` };
+    const fromBuilt = Math.min(n, kind === 'icbm' ? N.icbm : N.tac), fromLegacy = n - fromBuilt;
+    if (kind === 'icbm') { N.icbm -= fromBuilt; N.legacyI -= fromLegacy; } else { N.tac -= fromBuilt; N.legacyT -= fromLegacy; }
+    const back = Math.floor(n * NUKE_KIND[kind].eu * 0.5); N.eu += back;
+    logEvent(`⚙ Nuclear program: ${nukePl(n, NUKE_KIND[kind].label)} dismantled; ${nukeNum(back)} EU recovered.`, 'neutral');
+    const was = NUCLEAR.includes(state.playerIso); nukeSyncStatus();
+    try { nukeReact(was && !NUCLEAR.includes(state.playerIso) ? 'disarm' : 'dismantle', { kind, n }); } catch (e) { }
+    return { ok: true, msg: `${nukePl(n, NUKE_KIND[kind].label)} dismantled, ${nukeNum(back)} EU recovered.` };
+}
+function nukeTest() {
+    const N = nukeOf(), W = nukeWeapons(N); if (!W.total) return { ok: false, msg: 'You have no nuclear weapon to test.' };
+    if (N.tac) N.tac--; else if (N.legacyT) N.legacyT--; else if (N.icbm) N.icbm--; else N.legacyI--;
+    N.tested = (N.tested || 0) + 1; nukeSyncStatus();
+    try { nukeReact('test', {}); } catch (e) { console.warn('nuke react', e); }
+    return { ok: true, msg: 'Nuclear test carried out; seismic stations worldwide detect it.' };
+}
+function nukeNpt(act) {
+    const N = nukeOf(), me = state.playerIso;
+    if (act === 'exit') {
+        if (N.npt !== 'member' && N.npt !== 'nws') return { ok: false, msg: `${state.player} is not bound by the NPT (${NPT_LABEL[N.npt].toLowerCase()}).` };
+        N.npt = 'exiting'; N.nptExit = state.dayIndex + 90;
+        try { nukeReact('npt_exit', {}); } catch (e) { }
+        return { ok: true, msg: 'Notice of withdrawal from the NPT delivered to the UN Security Council; it takes effect in 90 days.' };
+    }
+    if (N.npt === 'member' || N.npt === 'nws') return { ok: false, msg: `${state.player} is already an NPT party.` };
+    const W = nukeWeapons(N);
+    if (W.total && !NPT_NWS.includes(me)) return { ok: false, msg: `To join the NPT as a non-nuclear-weapon state you must first dismantle all ${nukeNum(W.total)} nuclear weapons ("Dismantle all our nuclear warheads").` };
+    N.npt = NPT_NWS.includes(me) ? 'nws' : 'member'; N.nptExit = null;
+    try { nukeReact('npt_join', {}); } catch (e) { }
+    return { ok: true, msg: `${state.player} accedes to the Treaty on the Non-Proliferation of Nuclear Weapons and accepts IAEA safeguards.` };
+}
+
+// ---- how the world answers (through the shared reaction system: grievance/fear memory + reactDo answers) ----
+function nukeReact(type, ctx = {}) {
+    const me = state.playerIso, N = nukeOf(), p = nationIso(me), nm = esc(state.player);
+    const W = NUKE_WEST.filter(x => x !== me && WORLD[x]), riv = rivalsOf(me).filter(x => WORLD[x]).slice(0, 6);
+    let nb = []; try { nb = neighboursOf(me).slice(0, 6); } catch (e) { }
+    const member = N.npt === 'member' || N.npt === 'exiting', ai = typeof aiReady === 'function' && aiReady();
+    const fear = (arr, v) => arr.forEach(x => { try { reactAdd(x, 'f', v); } catch (e) { } });
+    const angry = (arr, v) => arr.forEach(x => { try { reactAdd(x, 'g', v); } catch (e) { } });
+    const say = (iso, action, order) => { try { if (iso && iso !== me && WORLD[iso]) reactDo(iso, action, { order: order || '', noMem: true }); } catch (e) { } };
+    const hawk = riv[0] || nb.find(x => getRel(me, x) < 0);
+    const K = ctx.kind ? NUKE_KIND[ctx.kind] : null;
+    switch (type) {
+        case 'start': {
+            if (!NUCLEAR.includes(me)) {
+                if (ctx.covert && Math.random() < 0.6) return;            // a secret program stays secret for now
+                logEvent(`☢ Intelligence agencies report that ${nm} has begun assembling nuclear warheads. The IAEA calls an emergency board meeting.`, 'bad');
+                W.forEach(x => addRel(me, x, member ? -8 : -5)); fear(riv.concat(nb), 18); angry(['USA', 'ISR'].filter(x => x !== me), 10);
+                if (!ai) { say('USA', 'protest', 'nuclear weapons program'); if (hawk) say(hawk, 'military_alert'); }
+            } else if (ctx.kind === 'icbm') {
+                logEvent(`☢ ${nm} orders ${nukePl(ctx.n, 'new intercontinental ballistic missile')}; rivals warn of a new arms race.`, 'bad');
+                riv.forEach(x => addRel(me, x, -3)); fear(riv, 10); if (me !== 'USA') fear(['USA'], 6);
+                if (!ai && hawk) say(hawk, 'concern', 'new ICBMs');
+            } else if (ctx.n >= 10 && !ctx.covert) {
+                logEvent(`☢ ${nm} announces it will add ${nukePl(ctx.n, 'nuclear warhead')} to its arsenal.`, 'bad');
+                fear(riv, 6);
+            } else fear(riv, 3);
+            break;
+        }
+        case 'first': {
+            logEvent(`☢ <b>${nm} now has nuclear weapons.</b> The UN Security Council meets in emergency session${member ? '; the IAEA reports a breach of ' + nm + "'s NPT safeguards obligations" : ''}.`, 'bad');
+            W.forEach(x => addRel(me, x, member ? -22 : -15)); ['CHN', 'RUS', 'IND'].filter(x => x !== me && WORLD[x]).forEach(x => addRel(me, x, getRel(me, x) > 40 ? -4 : -10));
+            state.sanctionsOnMe = (state.sanctionsOnMe || 0) + (member ? 4 : 2); p.gdp *= member ? 0.988 : 0.994;
+            fear(riv.concat(nb), 30); angry(['USA', 'ISR'].filter(x => x !== me), 18);
+            p.stability = clamp(p.stability + 4, 0, 100);         // a rally at home
+            if (!ai) { say('USA', 'sanctions', 'nuclear weapons'); if (hawk) say(hawk, 'mobilize'); }
+            const site = nukeSites().weapons[0] || nukeSites().enrich[0];
+            if (site) ['USA', 'ISR'].forEach(x => { if (x !== me && WORLD[x] && getRel(me, x) < -40 && Math.random() < 0.35) state.scheduled.push({ day: state.dayIndex + rint(15, 60), type: 'siteStrike', iso: x, siteId: site.id }); });
+            queueMessage(member ? 'USA' : (hawk || 'USA'), `Your nuclear weapons change everything between us. Disarm verifiably, or face the consequences.`);
+            break;
+        }
+        case 'expand': {
+            if (ctx.covert && Math.random() < 0.7) return;
+            const big = ctx.kind === 'icbm' || ctx.n >= 10;
+            if (big) logEvent(`☢ ${nm}'s arsenal grows: ${nukePl(ctx.n, K.label)} enter service. Rivals denounce the expansion.`, 'bad');
+            riv.forEach(x => addRel(me, x, ctx.kind === 'icbm' ? -5 : -2)); fear(riv, ctx.kind === 'icbm' ? 14 : 5);
+            if (big && !ai && hawk) say(hawk, 'concern', 'nuclear build-up');
+            break;
+        }
+        case 'bm_exposed': {
+            const sn = ctx.seller === 'smuggle' ? 'a nuclear smuggling network' : esc(shortName(ctx.seller));
+            logEvent(`☢ Western intelligence services expose a black-market purchase of enriched uranium by ${nm} from ${sn}. The IAEA demands an explanation.`, 'bad');
+            [['USA', -10], ['ISR', -14], ['GBR', -6], ['FRA', -6], ['DEU', -6]].forEach(([x, d]) => { if (x !== me) addRel(me, x, d); });
+            state.sanctionsOnMe = (state.sanctionsOnMe || 0) + 2;
+            if (ctx.seller !== 'smuggle' && WORLD[ctx.seller]) { ['USA', 'GBR', 'FRA'].forEach(x => addRel(ctx.seller, x, -8)); addRel(me, ctx.seller, -3); }
+            angry(['USA', 'ISR'].filter(x => x !== me), 12); fear(riv, 10);
+            say('USA', 'sanctions', 'black-market uranium');
+            break;
+        }
+        case 'leak': {
+            logEvent(`☢ <b>Radiation leak</b> at ${esc(ctx.where || 'a nuclear weapons site')} in ${nm}: ${ctx.why || 'poorly maintained weapons'}. Neighbours demand answers; the IAEA offers assistance.`, 'bad');
+            nb.forEach(x => addRel(me, x, -5)); fear(nb, 12); W.slice(0, 4).forEach(x => addRel(me, x, -3));
+            if (!ai && nb[0]) say(nb[0], 'protest', 'radiation leak');
+            break;
+        }
+        case 'test': {
+            logEvent(`☢ <b>${nm} carries out a nuclear test.</b> Seismic stations detect the blast; the UN Security Council condemns it${member ? ' as a violation of the NPT' : ''}.`, 'bad');
+            Object.keys(WORLD).filter(x => x !== me && !NON_SOVEREIGN.has(x) && WORLD[x][3] > 3 && regimeOf(x) === 'democracy').forEach(x => addRel(me, x, -6));
+            W.forEach(x => addRel(me, x, -6)); state.sanctionsOnMe = (state.sanctionsOnMe || 0) + (member ? 4 : 2);
+            fear(riv.concat(nb), 25); p.stability = clamp(p.stability + 3, 0, 100);
+            if (!ai) { say('USA', 'sanctions', 'nuclear test'); if (hawk) say(hawk, 'military_alert'); if (nb[0] && nb[0] !== hawk) say(nb[0], 'protest', 'nuclear test'); }
+            break;
+        }
+        case 'npt_exit': {
+            logEvent(`☢ ${nm} notifies the UN Security Council that it is withdrawing from the Non-Proliferation Treaty in 90 days.`, 'bad');
+            W.forEach(x => addRel(me, x, -12)); ['CHN', 'RUS'].filter(x => x !== me).forEach(x => addRel(me, x, -4));
+            state.sanctionsOnMe = (state.sanctionsOnMe || 0) + 2; fear(riv.concat(nb), 20);
+            if (!ai) { say('USA', 'protest', 'NPT withdrawal'); if (hawk) say(hawk, 'military_alert'); }
+            break;
+        }
+        case 'npt_join': {
+            logEvent(`☢ ${nm} joins the Non-Proliferation Treaty and opens its nuclear sites to IAEA inspectors.`, 'good');
+            W.forEach(x => addRel(me, x, 10)); state.sanctionsOnMe = Math.max(0, (state.sanctionsOnMe || 0) - 2);
+            if (!ai) say(W[0], 'praise', 'joining the NPT');
+            break;
+        }
+        case 'disarm': {
+            logEvent(`☢ <b>${nm} gives up nuclear weapons.</b> The IAEA will verify the dismantlement; governments welcome the step.`, 'good');
+            W.forEach(x => addRel(me, x, 15)); riv.forEach(x => addRel(me, x, 6)); state.sanctionsOnMe = Math.max(0, (state.sanctionsOnMe || 0) - 3);
+            try { const R = reactState(); riv.concat(nb).forEach(x => { if (R.f[x]) R.f[x] *= 0.5; }); } catch (e) { }
+            if (!ai) say(W[0], 'praise', 'nuclear disarmament');
+            break;
+        }
+        case 'dismantle': {
+            const d = Math.min(4, Math.ceil(ctx.n / 10)); W.slice(0, 5).forEach(x => addRel(me, x, d));
+            if (ctx.n >= 10) logEvent(`☢ ${nm} dismantles ${nukePl(ctx.n, K ? K.label : 'nuclear weapon')}; arms-control groups welcome the cut.`, 'good');
+            break;
+        }
+    }
+}
+// a radiation accident: approval, health, people, neighbours — and maybe a damaged site
+function nukeLeak(why) {
+    const N = nukeOf(), me = state.playerIso, p = nationIso(me), S = nukeSites();
+    const pool = S.weapons.concat(S.silos, S.enrich), site = pool.length ? pick(pool) : null;
+    const where = site ? site.name : 'a weapons storage depot';
+    N.leaks = (N.leaks || 0) + 1;
+    const ap = rint(3, 6); p.stability = clamp(p.stability - ap, 0, 100);
+    try { const s = socOf(me); s.health = Math.max(2, s.health - 2); } catch (e) { }
+    const dead = rint(20, 400); p.pop = Math.max(1000, p.pop - dead);
+    if (site && Math.random() < 0.4) try { setSiteStatus(site, 'damaged', 'Radiation leak — part of the site is sealed off.'); } catch (e) { }
+    nukeReact('leak', { where, why });
+    logEvent(`⚠ Radiation leak at ${esc(where)}: about ${dead} people hurt or killed, approval −${ap}%, health index −2.`, 'bad');
+}
+
+// ---- monthly (runs inside the month's economy, before the report and the autosave) ----
+function nukeMonthly() {
+    if (state.phase !== 'playing' || !state.playerIso) return;
+    const N = nukeOf(), me = state.playerIso, p = nationIso(me), S = nukeSites(), F = nukeFlows(N, S);
+    const L = { prod: F.prod, fuel: 0, fuelBought: 0, fuelCost: 0, unfueled: 0, upkeepEU: 0, upkeepCost: 0, missing: 0 };
+    // 1. production
+    N.eu += F.prod;
+    // 2. reactor fuel: legal fuel first, then EU; the vendor contract tops up automatically (if allowed)
+    if (F.fuel > 0) {
+        let need = F.fuel; const a = Math.min(N.leu, need); N.leu -= a; need -= a;
+        if (need > 0) { const b = Math.min(N.eu, need); N.eu -= b; need -= b; }
+        if (need > 0 && N.autoFuel) { const v = nukeLeuVendor(); if (v && v[1] >= -20 && (state.sanctionsOnMe || 0) < 10) { const c = need * NUKE_LEU_PRICE * 1.5; if (p.treasury >= c) { p.treasury -= c; L.fuelBought = need; L.fuelCost = c; need = 0; } } }
+        L.fuel = F.fuel - need;
+        // plants without fuel stop (largest shortfall first)
+        let gap = need; S.npp.forEach(x => { const off = gap > 0; x.s.unfueled = off; if (off) gap -= x.use; x.s.specs = x.s.specs || {}; x.s.specs['Fuel'] = off ? 'NO FUEL — offline (needs EU)' : `${x.use} EU/month — fuelled`; });
+        L.unfueled = S.npp.filter(x => x.s.unfueled).length;
+        if (L.unfueled) logEvent(`⚠ ${L.unfueled} nuclear power plant${L.unfueled > 1 ? 's are' : ' is'} offline for lack of fuel: no power savings or growth from ${L.unfueled > 1 ? 'them' : 'it'} until you have enriched uranium (or reactor fuel).`, 'bad');
+    }
+    // 3. upkeep of the weapons you built: 1 EU + $5M each
+    if (F.W > 0) {
+        L.upkeepCost = F.upkeepCost; p.treasury -= F.upkeepCost;
+        if (p.treasury < 0) { socOf(me).debt += -p.treasury; p.treasury = 0; }
+        const need = F.upkeepEU, got = Math.min(N.eu, need); N.eu -= got; L.upkeepEU = got; L.missing = need - got;
+        if (L.missing > 0) { const sf = L.missing / need; N.short++; N.readiness = clamp(N.readiness - 20 * sf - 5, 0, 100); }
+        else { N.short = 0; N.readiness = clamp(N.readiness + 5, 0, 100); }
+    } else { N.short = 0; N.readiness = clamp(N.readiness + 5, 0, 100); }
+    // the arsenal you inherited is kept up by the defence budget: deep cuts erode it
+    try { const s = socOf(me); if (N.legacyT + N.legacyI > 0 && s.b.def < 0.6 * s.b0.def) N.readiness = clamp(N.readiness - 4, 0, 100); } catch (e) { }
+    // 4. accidents and forced disarmament when weapons are neglected
+    const W = nukeWeapons(N);
+    if (W.total > 0 && (N.short > 0 || N.readiness < 50)) {
+        const pr = clamp(0.03 + 0.07 * N.short + (N.readiness < 50 ? 0.08 : 0) + (N.readiness < 25 ? 0.1 : 0), 0, 0.5);
+        if (Math.random() < pr) nukeLeak(N.short > 0 ? `warheads left without the enriched uranium they need for ${N.short} month${N.short > 1 ? 's' : ''}` : 'neglected weapons and falling readiness');
+        if (N.readiness < 25 && Math.random() < 0.35) {
+            const lose = Math.max(1, Math.ceil((N.tac + N.icbm) * 0.1 || W.total * 0.02));
+            let left = lose; const t = Math.min(N.tac, left); N.tac -= t; left -= t; const i = Math.min(N.icbm, left); N.icbm -= i; left -= i;
+            if (left > 0) { const lt = Math.min(N.legacyT, left); N.legacyT -= lt; left -= lt; N.legacyI = Math.max(0, N.legacyI - left); }
+            logEvent(`⚠ ${nukePl(lose, 'nuclear weapon')} had to be taken apart for safety: readiness has collapsed to ${Math.round(N.readiness)}%. Keep enough EU for upkeep (1 EU per weapon a month).`, 'bad');
+            const was = NUCLEAR.includes(me); nukeSyncStatus(); if (was && !NUCLEAR.includes(me)) try { nukeReact('disarm', {}); } catch (e) { }
+        }
+    }
+    if (N.npt === 'exiting' && N.nptExit !== null && state.dayIndex >= N.nptExit) { N.npt = 'withdrawn'; N.nptExit = null; logEvent(`☢ ${esc(state.player)}'s withdrawal from the Non-Proliferation Treaty takes effect.`, 'bad'); }
+    N.last = Object.assign(L, { eu: N.eu, readiness: N.readiness, month: nukeMonthKey() });
+    if (F.prod || F.fuel || F.W) logEvent(`⚙ Nuclear program: +${nukeNum(F.prod)} EU produced${L.fuel ? `, ${nukeNum(L.fuel)} used as reactor fuel${L.fuelBought ? ` (${nukeNum(L.fuelBought)} bought for ${formatVal(L.fuelCost)})` : ''}` : ''}${F.W ? `, upkeep of ${nukePl(F.W, 'weapon')} ${nukeNum(L.upkeepEU)} EU + ${formatVal(L.upkeepCost)}` : ''} · stock ${nukeNum(N.eu)} EU · readiness ${Math.round(N.readiness)}%.`, L.missing || L.unfueled ? 'bad' : 'neutral');
+}
+// ---- daily: production finishing, shipments arriving ----
+function nukeDaily() {
+    if (state.phase !== 'playing' || !state.playerIso || !state.nuke) return;
+    const N = nukeOf(), d = state.dayIndex;
+    const done = N.queue.filter(j => j.done <= d); if (done.length) { N.queue = N.queue.filter(j => j.done > d); done.forEach(nukeComplete); }
+    const arr = N.ship.filter(x => x.day <= d);
+    if (arr.length) {
+        N.ship = N.ship.filter(x => x.day > d);
+        arr.forEach(x => {
+            if (x.kind === 'leu') { N.leu += x.qty; logEvent(`📦 Reactor fuel delivered: ${nukeNum(x.qty)} EU-equivalent from ${esc(shortName(x.seller))}.`, 'neutral'); return; }
+            if (x.seized) { logEvent(`☢ A shipment of ${nukeNum(x.qty)} EU of enriched uranium bound for ${esc(state.player)} is seized at sea by Western navies; the money is lost.`, 'bad'); try { addRel(state.playerIso, 'USA', -4); } catch (e) { } return; }
+            N.eu += x.qty; logEvent(`📦 Black-market enriched uranium delivered: +${nukeNum(x.qty)} EU (stock ${nukeNum(N.eu)} EU).`, 'neutral');
+        });
+    }
+}
+
+// ---- command bar: "build 5 tactical nukes", "produce an ICBM", "buy 40 enriched uranium on the black market",
+//      "buy reactor fuel", "dismantle 10 warheads", "test a nuclear bomb", "withdraw from the NPT" ----
+const NUKE_WEAPON_RX = /\b(warheads?|nukes?|nuclear (bombs?|weapons?|warheads?|devices?)|atomic (bombs?|weapons?)|tactical nuclear|hydrogen bombs?|thermonuclear (bombs?|weapons?|warheads?))\b/;
+const NUKE_ICBM_RX = /\b(icbms?|intercontinental(?: ballistic)? missiles?|strategic (?:nuclear )?missiles?|nuclear missiles?)\b/;
+const NUKE_EU_RX = /\b(enriched uranium|weapons?.grade uranium|highly enriched uranium|heu|leu|low.enriched uranium|fissile material|\d+\s*eu|eu of (enriched )?uranium|uranium fuel|nuclear fuel|reactor fuel|fuel for (our|the) reactors?)\b/;
+const NUKE_NUMW = { a: 1, an: 1, one: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, dozen: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, hundred: 100 };
+function nukeQty(s, def) {
+    const m = s.match(/\b(\d+(?:,\d{3})*)\s*(?:x\s*)?(?:new |more |extra |additional |tactical |strategic |nuclear |units? of |kg of |eu of )*/);
+    if (m) return +m[1].replace(/,/g, '');
+    const w = s.match(/\b(a|an|one|single|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred)\b/);
+    return w ? NUKE_NUMW[w[1]] : def;
+}
+function nukeOrderOf(text) {
+    const s = ' ' + String(text || '').toLowerCase().replace(/[’']/g, "'") + ' ';
+    const base = { cat: 'military', kind: 'nuke', targets: [], scale: 1, covert: /\b(covert|secret|secretly|quietly|clandestine|undeclared)\b/.test(s), blocs: [], intel: null };
+    let foreign = []; try { foreign = detectCountries(text).filter(f => f.iso !== state.playerIso).map(f => f.iso); } catch (e) { }
+    if (/\b(npt|non.?proliferation treaty)\b/.test(s)) {
+        if (/\b(withdraw|leave|exit|quit|pull out|abandon|renounce)\b/.test(s)) return { ...base, cat: 'diplomacy', act: 'npt_exit', covert: false };
+        if (/\b(join|rejoin|re-join|sign|ratify|accede|return to|re-enter)\b/.test(s)) return { ...base, cat: 'diplomacy', act: 'npt_join', covert: false };
+    }
+    if (/\b(test|detonate|explode)\b/.test(s) && /\b(nuclear|atomic|hydrogen|thermonuclear|nuke|warhead)\b/.test(s) && !/\b(missile test|test.?launch|test.?fire)\b/.test(s) && !foreign.length) return { ...base, act: 'test', covert: false };
+    if (/\b(buy|purchase|acquire|smuggle|import|obtain|procure|order|source)\b/.test(s) && NUKE_EU_RX.test(s)) {
+        const legal = /\b(leu|low.enriched|reactor fuel|nuclear fuel|fuel for (our|the) reactors?|uranium fuel)\b/.test(s) && !/\b(black market|smuggl|illicit|weapons?.grade|heu|highly enriched)\b/.test(s);
+        let seller = legal ? 'leu' : 'smuggle';
+        if (!legal) { const f = foreign.find(i => NUKE_SELLERS[i]); if (f) seller = f; }
+        const qty = nukeQty(s.replace(/\b(a|an) (black|nuclear|smuggling)\b/g, ' '), legal ? 0 : 50);
+        return { ...base, cat: legal ? 'economy' : 'military', act: 'euBuy', seller, n: qty, covert: !legal };
+    }
+    if (/\b(dismantle|scrap|decommission|disarm|eliminate|retire|give up|get rid of|destroy (all )?(our|my|some of our|\d+ of our))\b/.test(s) && (NUKE_WEAPON_RX.test(s) || NUKE_ICBM_RX.test(s) || /\bnuclear arsenal\b/.test(s)) && !foreign.length && !/\b(their|enemy|enemy's)\b/.test(s)) {
+        const kind = NUKE_ICBM_RX.test(s) ? 'icbm' : 'tactical', W = nukeWeapons();
+        const n = /\b(all|entire|whole|every)\b/.test(s) ? (/\bnuclear arsenal\b|\ball (our |my )?nuclear weapons\b/.test(s) ? W.total : (kind === 'icbm' ? W.icbm : W.tac)) : nukeQty(s, 1);
+        return { ...base, act: 'dismantle', nk: /\ball (our |my )?nuclear weapons\b|nuclear arsenal/.test(s) ? 'all' : kind, n: Math.max(1, n), covert: false };
+    }
+    const build = /\b(build|produce|make|assemble|manufacture|construct|create|forge|churn out|add|deploy new|field)\b/.test(s);
+    const facility = /\b(facility|facilities|plant|factory|complex|site|program(me)?|laborator(y|ies)|lab|silos?|base|reactor|centrifuges?|enrichment|launch(er| pad| site)|bunker)\b/.test(s);
+    if (build && !facility && NUKE_ICBM_RX.test(s)) return { ...base, act: 'icbm', n: Math.round(clamp(nukeQty(s, 1), 1, 20)) };
+    if (build && !facility && NUKE_WEAPON_RX.test(s) && !/\b(missiles?)\b/.test(s.replace(NUKE_ICBM_RX, ''))) return { ...base, act: 'tactical', n: Math.round(clamp(nukeQty(s, 1), 1, 50)) };
+    return null;
+}
+function nukeOrderPrice(o) {
+    const N = nukeOf();
+    if (o.act === 'tactical' || o.act === 'icbm') { const K = NUKE_KIND[o.act]; return { cost: o.n * K.cost, eu: o.n * K.eu, days: 2 }; }
+    if (o.act === 'euBuy') {
+        if (o.seller === 'leu') { const F = nukeFlows(N); const q = o.n || Math.max(0, Math.ceil(12 * F.fuel - N.leu)); return { cost: Math.max(1e6, q * NUKE_LEU_PRICE), days: rint(2, 4), qty: q }; }
+        const S = nukeSellerList().find(x => x.k === o.seller) || nukeSellerList()[0]; const q = Math.min(o.n || 50, NUKE_BM_MONTH);
+        return { cost: Math.round(q * S.price), days: rint(3, 7), qty: q };
+    }
+    if (o.act === 'dismantle') return { cost: Math.max(1e6, o.n * NUKE_DISMANTLE_COST), days: rint(5, 10) };
+    if (o.act === 'test') return { cost: 1.5e8, days: rint(5, 12) };
+    return { cost: 0, days: rint(2, 5) };          // treaty moves are diplomacy: free
+}
+function nukeOrderNote(o) {
+    const N = nukeOf();
+    if (o.act === 'tactical' || o.act === 'icbm') {
+        const K = NUKE_KIND[o.act], c = nukeCan(o.act), need = o.n * K.eu;
+        const warn = !c.ok ? c.why : N.eu < need ? `needs ${nukeNum(need)} EU, you have ${nukeNum(N.eu)}` : (o.act === 'icbm' && o.n > c.free) ? `only ${c.free} silo slot(s) free` : '';
+        return { txt: `☢ ${nukeNum(need)} EU · ${nukePl(o.n, K.short)}`, warn };
+    }
+    if (o.act === 'euBuy') { const q = o.qty || o.n; return { txt: o.seller === 'leu' ? `☢ ${nukeNum(q)} EU reactor fuel (legal)` : `☢ ${nukeNum(q)} EU · ${o.seller === 'smuggle' ? 'smuggling network' : shortName(o.seller)} · ${Math.round(((NUKE_SELLERS[o.seller] || {}).risk || 0.3) * 100)}% exposure risk`, warn: '' }; }
+    if (o.act === 'dismantle') return { txt: `☢ dismantle ${o.nk === 'all' ? 'the whole arsenal' : nukePl(o.n, NUKE_KIND[o.nk].short)} (+50% EU back)`, warn: nukeWeapons(N).total ? '' : 'you have no nuclear weapons' };
+    if (o.act === 'test') return { txt: '☢ nuclear test (uses 1 weapon)', warn: nukeWeapons(N).total ? '' : 'you have no nuclear weapon to test' };
+    return { txt: '☢ ' + (o.act === 'npt_exit' ? 'NPT withdrawal (90 days)' : 'join the NPT'), warn: '' };
+}
+function nukeResolve(o) {
+    const p = nationIso(state.playerIso), effects = [], fx = (txt, good) => effects.push({ txt, good });
+    let r = { ok: false, msg: 'Nothing happened.' };
+    try {
+        if (o.act === 'tactical' || o.act === 'icbm') r = nukeStart(o.act, o.n, { paid: true, covert: o.covert });
+        else if (o.act === 'euBuy') r = nukeBuy(o.seller, o.qty || o.n, { paid: true });
+        else if (o.act === 'dismantle') {
+            if (o.nk === 'all') { const W = nukeWeapons(); const a = W.tac ? nukeDismantle('tactical', W.tac) : { ok: true, msg: '' }, b = W.icbm ? nukeDismantle('icbm', W.icbm) : { ok: true, msg: '' }; r = { ok: !!(W.tac || W.icbm), msg: [a.msg, b.msg].filter(Boolean).join(' ') || 'You have no nuclear weapons.' }; }
+            else r = nukeDismantle(o.nk, o.n);
+        }
+        else if (o.act === 'test') r = nukeTest();
+        else if (o.act === 'npt_exit') r = nukeNpt('exit');
+        else if (o.act === 'npt_join') r = nukeNpt('join');
+    } catch (e) { console.warn('nuke order', e); r = { ok: false, msg: 'The order could not be carried out.' }; }
+    o.outcome = r.ok ? 'Success' : 'Failure';
+    if (!r.ok && o.cost) { p.treasury += o.cost; fx(`${r.msg} The ${formatVal(o.cost)} was returned to the treasury.`, false); }
+    else fx(r.msg, r.ok);
+    if (r.ok && r.job) o.eta = r.when;
+    o.effects = effects; o.doneDay = state.dayIndex; o.worldNoticed = true;   // the nuclear reactions above already answered for the world
+    try { updateEconomyUI(); if (socTab === 'nuclear' && !document.getElementById('soc-modal').classList.contains('hidden')) renderSociety(); } catch (e) { }
+    return o;
+}
+
+// ---- the ☢ Nuclear tab (Government) ----
+function nukeBtn(label, call, tip, dis) { return `<button type="button" class="gs-btn${dis ? ' opacity-50' : ''}" style="padding:4px 9px" title="${esc(tip || '')}" onclick="${call}">${label}</button>`; }
+function nukeUI(fn, a, b) {
+    let r; try { r = fn === 'build' ? nukeStart(a, b) : fn === 'buy' ? nukeBuy(a, +b) : fn === 'fuel' ? nukeBuy('leu', 0) : null; } catch (e) { r = { ok: false, msg: String(e.message || e) }; }
+    if (fn === 'auto') { const N = nukeOf(); N.autoFuel = !N.autoFuel; r = { ok: true, msg: `Automatic reactor-fuel purchases ${N.autoFuel ? 'on' : 'off'}.` }; }
+    try { playClick(); } catch (e) { }
+    NUKE_UI_MSG = r ? [r.ok, r.msg] : null;
+    try { updateEconomyUI(); } catch (e) { }
+    renderSociety();
+}
+let NUKE_UI_MSG = null;
+function nukePanelHTML() {
+    const me = state.playerIso, N = nukeOf(), S = nukeSites(), F = nukeFlows(N, S), W = nukeWeapons(N), p = nationIso(me);
+    const tile = (l, v, sub, col) => `<div class="gs-stat" style="padding:8px 10px"><div class="gs-stat-lbl">${l}</div><div class="gs-stat-val" style="color:${col || '#ece2c4'}">${v}</div><div class="gs-stat-sub">${sub}</div></div>`;
+    const rc = N.readiness >= 75 ? '#93b25f' : N.readiness >= 50 ? '#d8b45a' : '#c4553c';
+    const inc = N.ship.reduce((a, x) => a + (x.kind === 'bm' && !x.seized ? x.qty : 0), 0);
+    let h = '';
+    if (NUKE_UI_MSG) { h += `<div class="mb-2 p-2 text-[11.5px] border" style="border-color:${NUKE_UI_MSG[0] ? '#93b25f' : '#c4553c'};color:${NUKE_UI_MSG[0] ? '#bccf7a' : '#e8a08a'}">${esc(NUKE_UI_MSG[1])}</div>`; NUKE_UI_MSG = null; }
+    h += `<div class="grid gap-2 mb-3" style="grid-template-columns:repeat(auto-fill,minmax(160px,1fr))">
+        ${tile('☢ Enriched uranium', nukeNum(N.eu) + ' EU', `${F.net >= 0 ? '+' : '−'}${nukeNum(Math.abs(F.net))} EU/month net${inc ? ` · ${nukeNum(inc)} incoming` : ''}`, '#e6c66e')}
+        ${tile('Warheads', nukeNum(W.tac), W.legacy ? `${nukeNum(N.tac)} built by you · ${nukeNum(N.legacyT)} inherited (est.)` : `built by you`)}
+        ${tile('Strategic ICBMs', nukeNum(W.icbm), `launch slots ${nukeNum(W.icbm)}/${nukeNum(NUKE_SILO_CAP * S.silos.length + (N.legacyCap || 0))}`)}
+        ${tile('Readiness', Math.round(N.readiness) + '%', N.short ? `EU upkeep unmet ${N.short} month${N.short > 1 ? 's' : ''} — leak risk` : W.total ? 'maintained' : 'no weapons', rc)}
+        ${tile('Reactor fuel', nukeNum(N.leu) + ' EU', F.fuel ? `${S.npp.length} reactor${S.npp.length > 1 ? 's' : ''} burn ${nukeNum(F.fuel)} EU/month` : 'no reactors of your own')}
+        ${tile('NPT', N.npt === 'nws' ? 'Nuclear state' : N.npt === 'member' ? 'Member' : N.npt === 'exiting' ? 'Leaving' : N.npt === 'nonparty' ? 'Non-party' : 'Withdrawn', esc(NPT_LABEL[N.npt] || ''))}</div>`;
+    // flows
+    h += `<div class="grid gap-3" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Enriched uranium per month</div>
+        ${N.labs ? `<div class="flex justify-between"><span class="text-slate-400">National fuel cycle (existing plants)</span><span style="color:#86efac">+${nukeNum(N.labs)}</span></div>` : ''}
+        ${S.prod.map(x => `<div class="flex justify-between"><span class="text-slate-400">⚛ ${esc(x.s.name)}</span><span style="color:#86efac">+${nukeNum(x.eu)}</span></div>`).join('')}
+        ${!N.labs && !S.prod.length ? `<div class="text-slate-500">No production — build a Uranium Enrichment Factory (10 EU a month).</div>` : ''}
+        ${S.npp.map(x => `<div class="flex justify-between"><span class="text-slate-400">☢ ${esc(x.s.name)}${x.s.unfueled ? ' <span style="color:#e8a08a">(offline: no fuel)</span>' : ''}</span><span style="color:#fca5a5">−${nukeNum(x.use)}</span></div>`).join('')}
+        ${F.W ? `<div class="flex justify-between"><span class="text-slate-400">Upkeep of ${nukePl(F.W, 'weapon')} you built (1 EU + $5M each)</span><span style="color:#fca5a5">−${nukeNum(F.upkeepEU)} · −${formatVal(F.upkeepCost)}</span></div>` : ''}
+        <div class="h-px bg-slate-700/60 my-1"></div><div class="flex justify-between"><b>Net</b><b style="color:${F.net >= 0 ? '#86efac' : '#fca5a5'}">${F.net >= 0 ? '+' : '−'}${nukeNum(Math.abs(F.net))} EU</b></div>
+        ${W.legacy ? `<div class="text-[10.5px] text-slate-500 mt-1">The ${nukeNum(W.legacy)} weapons you inherited (public estimates) are maintained from the defence budget; cutting defence below 60% of its baseline erodes their readiness.</div>` : ''}
+        ${S.npp.length ? `<label class="flex items-center gap-1 mt-2 cursor-pointer"><input type="checkbox" ${N.autoFuel ? 'checked' : ''} onchange="nukeUI('auto')"> Buy missing reactor fuel automatically ($${(NUKE_LEU_PRICE * 1.5 / 1e6).toFixed(0)}M per EU)</label>` : ''}</div>`;
+    // production
+    const cT = nukeCan('tactical'), cI = nukeCan('icbm'), q = N.queue.slice().sort((a, b) => a.done - b.done);
+    h += `<div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Build weapons</div>
+        <div class="mb-1">Tactical warhead: <b>50 EU + $500M</b>, about ${nukeBuildDays('tactical', 1, cT.lines || 1)} days. ${cT.ok ? (cT.slow ? '<span style="color:#d8b45a">Slow — no weapons facility.</span>' : '<span style="color:#86efac">Ready to build.</span>') : `<span style="color:#e8a08a">${esc(cT.why)}</span>`}</div>
+        <div class="flex flex-wrap gap-1 mb-2">${[1, 5, 10].map(n => nukeBtn(`Build ${n}`, `nukeUI('build','tactical',${n})`, `${n * 50} EU + ${formatVal(n * 5e8)}`, !cT.ok || N.eu < n * 50 || p.treasury < n * 5e8)).join('')}</div>
+        <div class="mb-1">Strategic ICBM: <b>150 EU + $2B</b>, about ${nukeBuildDays('icbm', 1, cI.lines || 1)} days; needs a free ICBM Launch Silo slot (${NUKE_SILO_CAP} per silo). ${cI.ok ? `<span style="color:#86efac">${cI.free} slot${cI.free > 1 ? 's' : ''} free.</span>` : `<span style="color:#e8a08a">${esc(cI.why)}</span>`}</div>
+        <div class="flex flex-wrap gap-1 mb-2">${[1, 3].map(n => nukeBtn(`Build ${n}`, `nukeUI('build','icbm',${n})`, `${n * 150} EU + ${formatVal(n * 2e9)}`, !cI.ok || N.eu < n * 150 || p.treasury < n * 2e9)).join('')}</div>
+        ${q.length ? `<div class="gs-stat-lbl mt-1 mb-1">In production</div>${q.map(j => `<div class="flex justify-between"><span>${nukePl(j.n, NUKE_KIND[j.kind].label)}</span><span class="text-slate-400">${j.start > state.dayIndex ? 'starts ' + fmtDate(dateIn(j.start - state.dayIndex)) + ', ' : ''}ready ${fmtDate(dateIn(j.done - state.dayIndex))}</span></div>`).join('')}` : ''}
+        <div class="text-[10.5px] text-slate-500 mt-1">Each weapon you build then costs 1 EU + $5M a month. Without the EU, readiness falls and accidents (radiation leaks) or forced dismantling follow.</div></div></div>`;
+    // buy EU
+    const sellers = nukeSellerList(), mk = nukeMonthKey(), room = NUKE_BM_MONTH - (N.bm.m === mk ? N.bm.q : 0);
+    h += `<div class="grid gap-3 mt-3" style="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"><div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Buy enriched uranium — black market (risky)</div>
+        <table class="w-full"><tbody>${sellers.map(x => `<tr class="border-t border-slate-800"><td class="py-1">${x.k === 'smuggle' ? '🕶 ' : flagHTML(nationIso(x.k), 10) + ' '}${esc(x.name)}</td><td class="text-right font-mono">${formatVal(x.price)}/EU</td><td class="text-right text-[10.5px]" style="color:#d8b45a">${Math.round(x.risk * 100)}% exposure</td>
+            <td class="text-right">${x.ok ? (room > 0 ? nukeBtn(`Buy ${Math.min(room, 25)}`, `nukeUI('buy','${x.k}',${Math.min(room, 25)})`, formatVal(Math.min(room, 25) * x.price)) : '<span class="text-slate-500">monthly limit</span>') : `<span class="text-slate-500 text-[10.5px]">needs relations ${x.need}+</span>`}</td></tr>`).join('')}</tbody></table>
+        <div class="text-[10.5px] text-slate-500 mt-1">Up to ${NUKE_BM_MONTH} EU a month (${Math.max(0, room)} left this month); delivery in 2–6 weeks. An exposed deal brings sanctions, IAEA scrutiny and angry Western governments, and 40% of exposed shipments are seized. Prices rise with the sanctions on you. Order it too: "Buy 40 enriched uranium on the black market".</div></div>
+        <div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Treaties, tests and disarmament</div>
+        <div class="mb-2">${esc(NPT_LABEL[N.npt] || '')}${N.npt === 'exiting' && N.nptExit ? ` — takes effect ${fmtDate(dateIn(N.nptExit - state.dayIndex))}` : ''}. ${N.npt === 'member' ? 'Building weapons while a member is a treaty breach: the world answers harder.' : ''}</div>
+        <div class="flex flex-wrap gap-1 mb-2">${S.npp.length ? nukeBtn('Buy 12 months of reactor fuel', `nukeUI('fuel')`, 'Legal low-enriched fuel from a reactor vendor, under IAEA safeguards') : ''}
+            ${N.npt === 'member' || N.npt === 'nws' ? nukeBtn('Withdraw from the NPT…', `quickAddOrder('Withdraw from the Non-Proliferation Treaty')`, 'Adds the order to the command bar') : N.npt !== 'exiting' ? nukeBtn('Join the NPT…', `quickAddOrder('Join the Non-Proliferation Treaty')`, 'Adds the order to the command bar') : ''}
+            ${W.total ? nukeBtn('Test a weapon…', `quickAddOrder('Test a nuclear weapon')`, 'Adds the order to the command bar') + nukeBtn('Dismantle 1 warhead…', `quickAddOrder('Dismantle 1 nuclear warhead')`, 'Adds the order to the command bar') : ''}</div>
+        <div class="text-[10.5px] text-slate-500">Orders that work: "Build 5 tactical nukes", "Produce an ICBM", "Secretly build 2 nuclear warheads", "Buy reactor fuel", "Dismantle 10 warheads", "Test a nuclear bomb", "Withdraw from the NPT". ${N.leaks ? `Radiation accidents so far: ${N.leaks}.` : ''}</div></div></div>`;
+    return h;
+}
+SOC_XTABS.push(['nuclear', '☢ Nuclear', () => nukePanelHTML()]);
+
+// ---- AI / advisor context ----
+function nukeSummaryText() {
+    const N = nukeOf(), W = nukeWeapons(N), F = nukeFlows(N);
+    return `${state.player} nuclear status: ${W.total ? `${nukeNum(W.tac)} warheads and ${nukeNum(W.icbm)} ICBMs (${nukeNum(W.built)} built in-game)` : 'no nuclear weapons'}; enriched uranium ${nukeNum(N.eu)} EU (${F.net >= 0 ? '+' : ''}${nukeNum(F.net)}/month); readiness ${Math.round(N.readiness)}%; ${NPT_LABEL[N.npt] || ''}.`;
+}
+
+{
+    // orders
+    const _co = classifyOrder;
+    classifyOrder = function (text) { try { if (state.playerIso) { const o = nukeOrderOf(text); if (o) return o; } } catch (e) { console.warn('nuke parse', e); } return _co.apply(this, arguments); };
+    const _plan = planOrder;
+    planOrder = function (text) {
+        const o = _plan.apply(this, arguments);
+        if (o && o.kind === 'nuke') {
+            try {
+                const P = nukeOrderPrice(o); o.cost = Math.round(P.cost); o.days = P.days; if (P.qty !== undefined) o.qty = P.qty; if (P.eu) o.eu = P.eu;
+                if (o.act === 'tactical' || o.act === 'icbm') { const sc = nukeSchedule(o.act, o.n); o.eta = fmtDate(dateIn(o.days + sc.done - state.dayIndex)); }
+            } catch (e) { console.warn('nuke plan', e); o.cost = 1e6; o.days = 3; }
+        }
+        return o;
+    };
+    const _res = resolveOrder;
+    resolveOrder = function (o) { if (o && o.kind === 'nuke') return nukeResolve(o); return _res.apply(this, arguments); };
+    const _rq = renderQueue;
+    renderQueue = function () {
+        _rq.apply(this, arguments);
+        try {
+            const list = document.getElementById('cc-queue'); if (!list) return;
+            state.orders.queue.forEach((o, i) => {
+                if (!o || o.kind !== 'nuke') return; const card = list.children[i], row = card && card.querySelector('.flex.flex-wrap'); if (!row) return;
+                const nt = nukeOrderNote(o);
+                row.insertAdjacentHTML('beforeend', `<span class="cc-pill" style="border-color:#e6c66e88;color:#e6c66e">${esc(nt.txt)}</span>${nt.warn ? `<span class="cc-pill" style="border-color:#ef444488;color:#fca5a5">⚠ ${esc(nt.warn)}</span>` : ''}`);
+            });
+        } catch (e) { console.warn('nuke queue', e); }
+    };
+    // monthly inside the economy (before the report and the autosave); daily for deliveries
+    const _sm = socMonthly;
+    socMonthly = function () { const r = _sm.apply(this, arguments); try { nukeMonthly(); } catch (e) { console.warn('nuke monthly', e); } return r; };
+    const _dt = dailyTick;
+    dailyTick = function () { const r = _dt.apply(this, arguments); try { nukeDaily(); } catch (e) { console.warn('nuke daily', e); } return r; };
+    const _iw = initWorld;
+    initWorld = function () { state.nuke = null; const r = _iw.apply(this, arguments); try { nukeOf(); nukeSyncStatus(); } catch (e) { console.warn('nuke init', e); } return r; };
+    const _as = applySave;
+    applySave = function (d) { const r = _as.apply(this, arguments); try { if (!d || !d.state || !d.state.nuke) state.nuke = null; nukeOf(); } catch (e) { console.warn('nuke load', e); } return r; };
+    // reactors without fuel lose their output: no gas/oil savings and no growth from them
+    const _pf = playerFlows;
+    playerFlows = function () {
+        const F = _pf.apply(this, arguments);
+        try {
+            const me = state.playerIso, mine = state.sites.filter(s => s.owner === me && s.fromGame && s.status === 'active'), cnt = t => mine.filter(s => s.type === t).length;
+            const off = mine.filter(s => s.type === 'nuclear' && s.unfueled).length;
+            if (off) {
+                const N0 = cnt('nuclear'), so = cnt('solar'), da = cnt('dam');
+                F.gas.C *= Math.max(0.5, 1 - 0.06 * (N0 - off) - 0.03 * so - 0.04 * da) / Math.max(0.5, 1 - 0.06 * N0 - 0.03 * so - 0.04 * da);
+                F.oil.C *= Math.max(0.7, 1 - 0.01 * (N0 - off) - 0.01 * so) / Math.max(0.7, 1 - 0.01 * N0 - 0.01 * so);
+            }
+        } catch (e) { }
+        return F;
+    };
+    const _gg = getGrowth;
+    getGrowth = function (iso) {
+        const G = _gg.apply(this, arguments);
+        try {
+            if (iso === state.playerIso) {
+                const off = (state.sites || []).filter(s => s.owner === iso && s.fromGame && s.status === 'active' && s.unfueled && SITE_TYPES[s.type] && SITE_TYPES[s.type].growth);
+                const loss = off.reduce((a, s) => a + SITE_TYPES[s.type].growth, 0);
+                if (loss > 0.005) { G.parts.push(['Reactors without fuel', -loss]); G.g = clamp(G.g - loss, -30, 30); }
+            }
+        } catch (e) { }
+        return G;
+    };
+    // the ☢ chip in the resource strip
+    const _rb = renderResourceBar;
+    renderResourceBar = function () {
+        _rb.apply(this, arguments);
+        try {
+            const bar = document.getElementById('gs-resbar'); if (!bar || state.phase !== 'playing' || !state.playerIso) return;
+            const N = nukeOf(), S = nukeSites(), F = nukeFlows(N, S), W = nukeWeapons(N);
+            if (!(N.eu > 0 || W.total || S.prod.length || S.npp.length || S.weapons.length || N.ship.length)) return;
+            const tip = `Enriched uranium (EU)\nStock: ${nukeNum(N.eu)} EU · net ${F.net >= 0 ? '+' : '−'}${nukeNum(Math.abs(F.net))} EU/month (produced ${nukeNum(F.prod)}, reactors ${nukeNum(F.fuel)}, weapons upkeep ${nukeNum(F.upkeepEU)})\nArsenal: ${nukeNum(W.tac)} warheads, ${nukeNum(W.icbm)} ICBMs · readiness ${Math.round(N.readiness)}%\nClick for the Nuclear program.`;
+            bar.insertAdjacentHTML('beforeend', `<div class="gs-rchip${N.short || S.npp.some(x => x.s.unfueled) ? ' gs-rshort' : ''}" title="${esc(tip)}" onclick="openSociety('nuclear')"><span class="gs-rico">☢</span><span class="gs-rval">${nukeNum(N.eu)}</span>
+                <span class="gs-rrate" style="color:${Math.abs(F.net) < 0.5 ? '#7c7259' : F.net > 0 ? '#9cbf5a' : '#e08a72'}">${Math.abs(F.net) < 0.5 ? '±0' : (F.net > 0 ? '+' : '−') + nukeNum(Math.abs(F.net))}</span></div>`);
+        } catch (e) { console.warn('eu chip', e); }
+    };
+    // a finished weapons facility does not by itself make you nuclear-armed: it lets you assemble warheads from EU
+    const _cs = completeSite;
+    completeSite = function (site) {
+        const me = state.playerIso, hold = site && site.type === 'nuke_weapon' && site.owner === me && !NUCLEAR.includes(me) && !nukeWeapons().total;
+        if (hold) NUCLEAR.push(me);                          // skips the old "first nuclear weapons" branch
+        try { return _cs.apply(this, arguments); }
+        finally {
+            if (hold) { const i = NUCLEAR.indexOf(me); if (i >= 0) NUCLEAR.splice(i, 1); try { const N = nukeOf(); logEvent(`⚙ Nuclear program: ${esc(site.name)} can now assemble warheads — each takes 50 EU + $500M (you have ${nukeNum(N.eu)} EU). Order "Build 1 tactical nuke" or use Government → Nuclear.`, 'neutral'); } catch (e) { } }
+        }
+    };
+    // the country file the AI reads: arsenal estimates
+    const _cd = countryDossier;
+    countryDossier = function (iso) {
+        let t = _cd.apply(this, arguments);
+        try {
+            if (iso === state.playerIso && state.nuke) t += '\n' + nukeSummaryText();
+            else if (NUKE_START[iso] && NUCLEAR.includes(iso)) { const S = NUKE_START[iso]; t += `\nNuclear arsenal (public estimate): about ${nukeNum(S[0] + S[1])} warheads${S[1] ? `, ${nukeNum(S[1])} strategic missiles` : ''}.`; }
+        } catch (e) { }
+        return t;
+    };
+}
+
+// =====================================================================
 //  INTERNATIONAL ORGANIZATIONS & ALLIANCES — real memberships on 1 January 2026
 //  Each one works: you can apply to join or leave, use its tools as a member (collective defence, common
 //  sanctions, development loans, mediation, summits…), it reacts when one of its members is attacked, and it
