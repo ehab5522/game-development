@@ -666,6 +666,18 @@
         #war-modal .wm-btn { font: 600 11.5px 'Roboto Condensed',Arial,sans-serif; padding: 4px 9px; border: 1px solid #5c5236; background: linear-gradient(180deg,#3d3b2b,#2a2a1e); color: #ecdcae; cursor: pointer; }
         #war-modal .wm-btn:hover { border-color: #c9a64e; color: #fff3c8; } #war-modal .wm-go { border-color: #4d7c0f; background: linear-gradient(180deg,#4b5e22,#2f3c14); color: #ecfccb; }
         #war-modal .wm-mini { border: 1px solid #2c2a1d; padding: 6px 8px; margin-bottom: 5px; font-size: 11.5px; color: #d6c79c; }
+        #coup-btn .coup-ins { margin-left: 4px; color: #fca5a5; font-weight: 700; } #war-btn .war-capit { margin-left: 4px; animation: coupPulse 1.2s infinite; }
+        #war-modal details.wm-world > summary { cursor: pointer; color: #8f846a; font-size: 11px; margin: 10px 0 5px; } #war-modal .wm-dot { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border: 1px solid #0006; vertical-align: -1px; }
+        #war-modal .wm-terms-btn { border-color: #b45309; color: #fed7aa; } #war-modal .wm-capit { border-color: #f6e08f; background: rgba(246,224,143,.07); }
+        #war-modal .wt-sec { margin: 10px 0 4px; font: 600 10.5px 'Oswald','Arial Narrow',Arial,sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #c9b77a; }
+        #war-modal .wt-opt { display: flex; align-items: flex-start; gap: 7px; padding: 4px 6px; margin: 2px 0; border: 1px solid #2c2a1d; font-size: 12px; color: #ecdcae; cursor: pointer; line-height: 1.3; } #war-modal .wt-opt:hover { border-color: #5c5236; }
+        #war-modal .wt-opt.on { border-color: #b45309; background: rgba(180,83,9,.1); } #war-modal .wt-opt.off { opacity: .45; cursor: not-allowed; } #war-modal .wt-opt input { margin-top: 2px; accent-color: #d97706; flex: none; }
+        #war-modal .wt-opt em { display: block; font-style: normal; font-size: 10.5px; color: #8f846a; } #war-modal .wt-opt .wt-cost { margin-left: auto; flex: none; font-size: 10.5px; color: #8f846a; white-space: nowrap; }
+        #war-modal .wt-in { background: #15150f; border: 1px solid #5c5236; color: #ecdcae; padding: 1px 5px; width: 86px; font-size: 12px; } #war-modal input[type=range].wt-in { width: 130px; padding: 0; vertical-align: middle; }
+        #war-modal .wt-prov { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px 22px; } #war-modal .wt-prov label { font-size: 11px; border: 1px solid #3b3726; padding: 1px 6px; cursor: pointer; color: #d6c79c; } #war-modal .wt-prov label.on { border-color: #d97706; color: #fed7aa; background: rgba(180,83,9,.12); }
+        #war-modal .wt-out { position: sticky; bottom: -14px; margin: 10px -16px -14px; padding: 9px 16px 12px; background: linear-gradient(180deg, #24251c, #1c1d16); border-top: 1px solid #5c5236; }
+        #war-modal .wt-meter { height: 8px; background: #15150f; border: 1px solid #3b3726; position: relative; margin: 4px 0; } #war-modal .wt-meter i { position: absolute; left: 0; top: 0; bottom: 0; }
+        #war-modal .wt-reply { border: 1px solid #5c5236; background: rgba(0,0,0,.25); padding: 9px 11px; margin: 8px 0; font-size: 12.5px; color: #ecdcae; line-height: 1.45; } #war-modal .wt-reply .wt-who { display: flex; gap: 8px; align-items: center; margin-bottom: 5px; color: #f6e7b4; font-weight: 600; }
         .chat-typing { color: #94a3b8 !important; font-style: italic; }
         .chat-typing .dots i { font-style: normal; animation: chatdot 1.2s infinite; opacity: .2; }
         .chat-typing .dots i:nth-child(2) { animation-delay: .2s; } .chat-typing .dots i:nth-child(3) { animation-delay: .4s; }
@@ -4164,7 +4176,7 @@
                 const st = FRONT.stat[o.iso] || CTL.stat[o.iso], pct = st && st.by ? (st.by[o.by] || 0) : (G && G.cells.length ? Math.round(100 * held / G.cells.length) : 0);
                 if (!pct && !held) return;
                 const c = o.conf && state.conflicts.find(k => k.id === o.conf);
-                out.push({ iso: o.iso, by: o.by, held, km2: held * CELL_KM2, pct, name: c ? c.name : 'Frozen line', live: !!(c && c.type === 'war'), state: c ? c.type : 'frozen' });
+                out.push({ iso: o.iso, by: o.by, held, km2: held * CELL_KM2, pct, name: c ? c.name : o.ceded ? 'Ceded by treaty' : 'Frozen line', live: !!(c && c.type === 'war'), state: c ? c.type : 'frozen', ceded: !!o.ceded });
             });
             return out;
         }
@@ -4475,7 +4487,7 @@
             C.active = { leader: juntaName(state.playerIso), day: state.dayIndex, speed: state.speed || 0 };
             if (state.speed > 0) setSpeed(0);
             logEvent(`🚨 <b>Coup attempt!</b> Army units under ${esc(C.active.leader)} are moving on the capital.`, 'bad');
-                        openWarPanel(); setTimeout(() => { const el = document.getElementById('wm-coup'); if (el) el.scrollIntoView({ block: 'start' }); }, 50);
+            openCoupPanel(); try { renderCoupBtn(); } catch (e) { }
         }
         function coupChance(kind) {
             const me = state.playerIso, n = nationIso(me), C = coupState(), s = state.soc && state.soc[me];
@@ -4538,11 +4550,13 @@
         function renderCoupBtn() {
             const b = document.getElementById('coup-btn'); if (!b || !state.playerIso) return;
             const C = coupState(), r = coupRisk(state.playerIso).risk;
-            b.innerHTML = C.active ? `🚨<span class="tb-lbl"> COUP!</span>` : `🪖<span class="tb-lbl"> Coup ${r}%</span>`;
+            let I = null; try { I = playerInternalState(); } catch (e) { }
+            const ins = I ? I.ins.length : 0;
+            b.innerHTML = C.active ? `🚨<span class="tb-lbl"> COUP!</span>` : `🪖<span class="tb-lbl"> Coup ${r}%</span>${ins ? `<span class="coup-ins" title="Fighting at home">⚔${ins > 1 ? ins : ''}</span>` : ''}`;
             b.style.color = C.active ? '#fff' : riskCol(r); b.style.borderColor = riskCol(r) + '99'; b.classList.toggle('coup-alarm', !!C.active);
-            b.title = `Coup risk: ${riskLabel(r)} (${r}% chance of an attempt in the next 12 months). Click for details and ways to secure the army.`;
+            b.title = `Internal security — coup risk: ${riskLabel(r)} (${r}% chance of an attempt in the next 12 months).${I && I.ins.length ? ' Fighting at home: ' + I.ins.map(c => c.name).join(', ') + '.' : ''}${I && I.groups.length ? ' Armed groups at home: ' + I.groups.map(p => p.short).join(', ') + '.' : ''} Click for coup risk, unrest, insurgencies and who controls your territory.`;
         }
-        function openCoupPanel() { openWarPanel(); setTimeout(() => { const el = document.getElementById('wm-coup'); if (el) el.scrollIntoView({ block: 'start' }); }, 50); }
+        function openCoupPanel() { openWarPanel('int'); }
         function coupSection() {
             const me = state.playerIso, C = coupState(), R = coupRisk(me);
             let h = `<div id="wm-coup"></div>`;
@@ -5272,22 +5286,38 @@
             const days = state.dayIndex - state.warSince[c.id];
             return days < 1 ? 'started today' : days < 60 ? `${days} days` : `${Math.round(days / 30)} months`;
         }
+        // The two top-bar buttons: ⚔ War & Peace = EXTERNAL (wars and disputes with other states, occupations and fronts abroad, allies);
+        // 🪖 Coup = INTERNAL (coup risk, insurgencies and civil war at home, armed groups on your soil, unrest, who controls your land)
+        const WAR_UI = { mode: 'ext', cid: null, draft: null, reply: null };
+        function isInternalConflict(c, me) {
+            me = me || state.playerIso; const loc = c.location || [];
+            if (c.sideA.includes(me) || c.sideB.includes(me)) return !warEnemies(c, me).length && (!loc.length || loc.includes(me));
+            return loc.includes(me) && ![...c.sideA, ...c.sideB].some(x => x !== me && WORLD[x]);
+        }
         function playerWarState() {
-            const me = state.playerIso; if (!me) return { k: 'peace', list: [] };
-            const list = partyConflicts(me);
-            const wars = list.filter(c => c.type === 'war'), cf = list.filter(c => c.type === 'ceasefire'), ins = list.filter(c => c.type === 'insurgency');
-            return { k: wars.length ? 'war' : ins.length ? 'insurgency' : cf.length ? 'ceasefire' : 'peace', list, wars, cf };
+            const me = state.playerIso; if (!me) return { k: 'peace', list: [], wars: [], cf: [], occ: [], tens: [] };
+            const list = partyConflicts(me).filter(c => c.type !== 'resolved' && !isInternalConflict(c, me));
+            const wars = list.filter(c => c.type === 'war'), cf = list.filter(c => c.type === 'ceasefire'), occ = list.filter(c => c.type === 'insurgency'), tens = list.filter(c => c.type === 'tension');
+            return { k: wars.length ? 'war' : occ.length ? 'occupation' : cf.length ? 'ceasefire' : tens.some(c => c.intensity >= 60) ? 'tension' : 'peace', list, wars, cf, occ, tens };
+        }
+        function playerInternalState() {
+            const me = state.playerIso; if (!me) return { k: 'stable', ins: [], tens: [], groups: [] };
+            const ins = state.conflicts.filter(c => c.type !== 'resolved' && (c.sideA.includes(me) || c.sideB.includes(me) || (c.location || []).includes(me)) && isInternalConflict(c, me));
+            let groups = []; try { groups = proxiesIn(me); } catch (e) { }
+            const n = nationIso(me), C = coupState(), fight = ins.filter(c => c.type !== 'tension');
+            const k = C.active || C.result ? 'coup' : fight.some(c => c.type === 'war') ? 'civilwar' : fight.length ? 'insurgency' : (n.stability || 50) < 35 || ((state.mods && state.mods.unrest) || 0) > 8 ? 'unrest' : 'stable';
+            return { k, ins: fight, tens: ins.filter(c => c.type === 'tension'), groups };
         }
         function renderWarButton() { try { renderCoupBtn(); } catch (e) { }
             const b = document.getElementById('war-btn'); if (!b || state.phase !== 'playing') return;
-            const W = playerWarState();
-            const look = { war: ['⚔', 'At war', 'war-on'], insurgency: ['⚔', 'Insurgency', 'war-on'], ceasefire: ['⚠', 'Ceasefire', 'war-cf'], peace: ['🕊', 'At peace', 'war-peace'] }[W.k];
+            const W = playerWarState(); let cap = []; try { cap = capitOffers(); } catch (e) { }
+            const look = { war: ['⚔', 'At war', 'war-on'], occupation: ['⚑', 'Occupation', 'war-cf'], ceasefire: ['⚠', 'Ceasefire', 'war-cf'], tension: ['⚠', 'Tension', 'war-cf'], peace: ['🕊', 'At peace', 'war-peace'] }[W.k];
             b.className = `gs-btn ${look[2]}`;
-            b.innerHTML = `${look[0]}<span class="tb-lbl"> ${look[1]}${W.wars && W.wars.length > 1 ? ' (' + W.wars.length + ')' : ''}</span>`;
-            b.title = W.k === 'peace' ? 'Your country is at peace — open the war & peace overview' : `${look[1]}: ${W.list.filter(c => c.type !== 'tension').map(c => c.name).join(', ')} — click to see the war and negotiate peace`;
-            const m = document.getElementById('war-modal'); if (m && !m.classList.contains('hidden')) renderWarPanel();
+            b.innerHTML = `${look[0]}<span class="tb-lbl"> ${look[1]}${W.wars.length > 1 ? ' (' + W.wars.length + ')' : ''}</span>${cap.length ? '<span class="war-capit" title="An enemy has capitulated">🏳</span>' : ''}`;
+            b.title = (W.k === 'peace' ? 'At peace with other states — click for disputes, allies and front lines abroad' : `${look[1]}: ${W.list.filter(c => c.type !== 'tension' || c.intensity >= 60).map(c => c.name).join(', ')} — click for the wars, disputes, allies and peace terms`) + (cap.length ? ` · ${cap.map(x => shortName(x)).join(', ')} has capitulated: dictate your terms` : '');
+            const m = document.getElementById('war-modal'); if (m && !m.classList.contains('hidden') && WAR_UI.mode !== 'terms') renderWarPanel();
         }
-        function openWarPanel() {
+        function openWarPanel(mode) {
             playClick();
             let m = document.getElementById('war-modal');
             if (!m) {
@@ -5296,32 +5326,119 @@
                 m.addEventListener('click', e => { if (e.target === m) closeWarPanel(); });
                 document.body.appendChild(m);
             }
+            WAR_UI.mode = mode === 'int' ? 'int' : 'ext'; WAR_UI.reply = null;
             m.classList.remove('hidden'); renderWarPanel();
+            const box = m.querySelector('.wm-box'); if (box) box.scrollTop = 0;
         }
-        function closeWarPanel() { const m = document.getElementById('war-modal'); if (m) m.classList.add('hidden'); }
+        function closeWarPanel() { const m = document.getElementById('war-modal'); if (m) m.classList.add('hidden'); if (WAR_UI.mode === 'terms' || WAR_UI.mode === 'reply') { WAR_UI.mode = 'ext'; WAR_UI.reply = null; } }
+        document.addEventListener('keydown', e => { if (e.key !== 'Escape') return; const m = document.getElementById('war-modal'); if (!m || m.classList.contains('hidden')) return; try { if (coupState().active) return; } catch (er) { } if (WAR_UI.mode === 'terms' || WAR_UI.mode === 'reply') { WAR_UI.mode = 'ext'; WAR_UI.reply = null; renderWarPanel(); } else closeWarPanel(); });   // Esc: back out of the terms composer, then close (an active coup must be answered)
         function flagList(list) { return list.map(i => `<span class="wm-c">${flagHTML(nationIso(i), 11)} ${esc(shortName(i))}</span>`).join(' '); }
         function renderWarPanel() {
             const body = document.getElementById('wm-body'); if (!body) return;
-            const me = state.playerIso, W = playerWarState();
-            const head = { war: ['⚔ AT WAR', '#ef4444'], insurgency: ['⚔ FIGHTING AN INSURGENCY', '#f97316'], ceasefire: ['⚠ CEASEFIRE IN FORCE', '#f59e0b'], peace: ['🕊 AT PEACE', '#9cbf5a'] }[W.k];
+            const t = document.getElementById('wm-title'), box = body.closest('.wm-box'), st = box ? box.scrollTop : 0;
+            try {
+                if (WAR_UI.mode === 'terms' || WAR_UI.mode === 'reply') { if (t) t.textContent = 'Peace terms'; body.innerHTML = termsPanelHTML(); }
+                else if (WAR_UI.mode === 'int') { if (t) t.textContent = 'Internal security'; body.innerHTML = renderInternalPanel(); }
+                else { if (t) t.innerHTML = 'War &amp; Peace'; body.innerHTML = renderExternalPanel(); }
+            } catch (e) { console.warn('war panel', e); body.innerHTML = `<div class="wm-note">This panel could not be drawn (${esc(e.message)}).</div>`; }
+            if (box) box.scrollTop = st;
+        }
+        // ---- ⚔ War & Peace: everything between you and other states ----
+        function renderExternalPanel() {
+            const me = state.playerIso, W = playerWarState(), C = coupState();
+            const head = { war: ['⚔ AT WAR', '#ef4444'], occupation: ['⚑ OCCUPYING FOREIGN LAND', '#f97316'], ceasefire: ['⚠ CEASEFIRE IN FORCE', '#f59e0b'], tension: ['⚠ HIGH TENSION', '#eab308'], peace: ['🕊 AT PEACE', '#9cbf5a'] }[W.k];
             let h = `<div class="wm-status" style="color:${head[1]};border-color:${head[1]}66">${head[0]}</div>`;
-            try { const cs = coupSection(); if (coupState().active || coupState().result) { body.innerHTML = cs; return; } var coupHTML = cs; } catch (e) { console.warn('coup', e); }
+            if (C.active || C.result) h += `<div class="wm-card" style="border-color:#ef4444"><b style="color:#fca5a5">🚨 ${C.active ? 'A coup attempt is under way at home' : 'The coup attempt at home needs your answer'}</b><div class="wm-btns"><button type="button" class="wm-btn wm-go" onclick="openCoupPanel()">🪖 Open internal security</button></div></div>`;
+            try { h += capitulationCards(); } catch (e) { console.warn('capit', e); }
             const mine = W.list.filter(c => c.type !== 'tension').sort((a, b) => (b.type === 'war') - (a.type === 'war') || b.intensity - a.intensity);
-            const tens = W.list.filter(c => c.type === 'tension');
-            if (!mine.length) h += `<div class="wm-note">${esc(state.player)} is not a party to any war. ${tens.length ? 'Open disputes are listed below.' : ''}</div>`;
+            if (!mine.length) h += `<div class="wm-note">${esc(state.player)} is not at war with any state.${W.tens.length ? ' Open disputes are listed below.' : ''} Insurgencies, armed groups and unrest at home are under the 🪖 Coup button.</div>`;
             mine.forEach(c => h += warCard(c, me));
-            if (tens.length) h += `<div class="wm-sec">Disputes (no fighting)</div>` + tens.map(c => warCard(c, me, true)).join('');
-            const inv = state.conflicts.filter(c => !c.sideA.includes(me) && !c.sideB.includes(me) && (roleIn(c, me) || (c.location || []).includes(me)));
+            if (W.tens.length) h += `<div class="wm-sec">Disputes (no fighting)</div>` + W.tens.map(c => warCard(c, me, true)).join('');
+            const inv = state.conflicts.filter(c => c.type !== 'resolved' && !c.sideA.includes(me) && !c.sideB.includes(me) && (roleIn(c, me) || (c.location || []).includes(me)) && !isInternalConflict(c, me));
             if (inv.length) h += `<div class="wm-sec">Wars you are involved in</div>` + inv.map(c => {
-                const r = roleIn(c, me), role = r === 'backA' || r === 'backB' ? `You back ${flagList(r === 'backA' ? c.sideA : c.sideB)}` : r === 'med' ? 'You are a mediator' : 'Fighting on your territory';
+                const r = roleIn(c, me), role = r === 'backA' || r === 'backB' ? `You back ${flagList(r === 'backA' ? c.sideA : c.sideB)}` : r === 'med' ? 'You are a mediator' : 'Foreign forces fighting on your territory';
                 const p = [...c.sideA, ...c.sideB].find(x => WORLD[x] && x !== me);
                 return `<div class="wm-mini"><b>${esc(c.name)}</b> <span class="wm-chip" style="color:${(WAR_STATUS[c.type] || ['', '#ab9f80'])[1]}">${(WAR_STATUS[c.type] || [c.type])[0]}</span><div>${role} · intensity ${Math.round(c.intensity)}</div>${p ? `<button type="button" class="wm-btn" onclick="warAction('mediate','${c.id}')">🤝 Offer to mediate</button>` : ''}</div>`;
             }).join('');
-            const near = state.conflicts.filter(c => !W.list.includes(c) && !inv.includes(c) && c.type !== 'tension' && [...c.sideA, ...c.sideB, ...(c.location || [])].some(i => WORLD[i] && i !== me && distKm(me, i) < 1800));
+            const near = state.conflicts.filter(c => c.type !== 'resolved' && !W.list.includes(c) && !inv.includes(c) && !isInternalConflict(c, me) && c.type !== 'tension' && [...c.sideA, ...c.sideB, ...(c.location || [])].some(i => WORLD[i] && i !== me && distKm(me, i) < 1800));
             if (near.length) h += `<div class="wm-sec">Wars near you</div>` + near.map(c => `<div class="wm-mini"><b>${esc(c.name)}</b> <span class="wm-chip" style="color:${(WAR_STATUS[c.type] || ['', '#ab9f80'])[1]}">${(WAR_STATUS[c.type] || [c.type])[0]}</span> · intensity ${Math.round(c.intensity)}</div>`).join('');
-            try { const oc = occSummary(); if (oc.length) h += `<div class="wm-sec">Occupied territory</div>` + oc.map(x => `<div class="wm-mini"><b>${esc(shortName(x.iso))}</b> — ${esc(ctlMeta(x.by)[0])} holds about <b>${x.pct}%</b> (≈${x.km2.toLocaleString()} km²) <span class="wm-chip" style="color:${x.live ? '#ef4444' : '#f59e0b'}">${x.live ? 'front is moving' : x.state === 'frozen' ? 'frozen' : 'front frozen'}</span><button type="button" class="wm-btn" onclick="frontGo('${x.iso}')">🗺 Show on map</button></div>`).join(''); } catch (e) { }
-            if (typeof coupHTML !== 'undefined' && coupHTML) h += coupHTML;
-            body.innerHTML = h;
+            try {
+                const oc = occSummary(), mineOc = oc.filter(x => x.by === me || (x.iso === me && WORLD[x.by])), rest = oc.filter(x => !mineOc.includes(x));
+                const row = x => `<div class="wm-mini"><b>${esc(shortName(x.iso))}</b> — ${x.by === me ? '<b style="color:#f6e08f">you hold</b>' : esc(ctlMeta(x.by)[0]) + ' holds'} about <b>${x.pct}%</b> (≈${x.km2.toLocaleString()} km²)${x.iso === me ? ' <b style="color:#fca5a5">of your land</b>' : ''} <span class="wm-chip" style="color:${x.live ? '#ef4444' : '#f59e0b'}">${x.live ? 'front is moving' : x.ceded ? 'ceded by treaty' : x.state === 'frozen' ? 'frozen' : 'front frozen'}</span><button type="button" class="wm-btn" onclick="frontGo('${x.iso}')">🗺 Show on map</button></div>`;
+                if (mineOc.length) h += `<div class="wm-sec">Front lines &amp; occupied land</div>` + mineOc.map(row).join('');
+                if (rest.length) h += `<details class="wm-world"><summary>World front lines (${rest.length})</summary>${rest.map(row).join('')}</details>`;
+            } catch (e) { }
+            try { h += warAlliesSection(); } catch (e) { console.warn('allies', e); }
+            try { h += annexedSection(); } catch (e) { }
+            return h;
+        }
+        function warAlliesSection() {
+            const me = state.playerIso, wars = state.conflicts.filter(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me)) && !isInternalConflict(c, me));
+            let tp = [], orgs = []; try { tp = treatyPartners(me, ['defense', 'alliance']); } catch (e) { } try { orgs = ORG_DEFS.filter(o => o.defence && inOrg(o.id, me)).map(o => o.short); } catch (e) { }
+            if (!wars.length && !tp.length && !orgs.length) return '';
+            let h = `<div class="wm-sec">Allies</div>`;
+            if (tp.length || orgs.length) h += `<div class="wm-mini">${orgs.length ? `<b>Collective defence:</b> ${orgs.map(esc).join(', ')}` : ''}${tp.length ? `${orgs.length ? '<br>' : ''}<b>Treaty allies:</b> ${flagList(tp.slice(0, 12))}${tp.length > 12 ? ' +' + (tp.length - 12) : ''}` : ''}</div>`;
+            if (wars.length) { try { h += `<div class="wm-mini wm-allies">${warsAlliesHTML()}</div>`; } catch (e) { } }
+            return h;
+        }
+        // ---- 🪖 Internal security: coup risk, insurgencies, armed groups, unrest, territorial control at home ----
+        function wmOrder(t) { closeWarPanel(); quickAddOrder(t); }
+        function wmOrd(t) { return `wmOrder(${JSON.stringify(t).replace(/"/g, '&quot;')})`; }
+        function renderInternalPanel() {
+            const me = state.playerIso, n = nationIso(me), C = coupState(), I = playerInternalState(), s = state.soc && state.soc[me];
+            const head = { coup: ['🚨 COUP ATTEMPT', '#ef4444'], civilwar: ['⚔ CIVIL WAR AT HOME', '#ef4444'], insurgency: ['⚔ INSURGENCY AT HOME', '#f97316'], unrest: ['✊ UNREST', '#f59e0b'], stable: ['🛡 INTERNAL SITUATION STABLE', '#9cbf5a'] }[I.k];
+            let h = `<div class="wm-status" style="color:${head[1]};border-color:${head[1]}66">${head[0]}</div>`;
+            if (C.active || C.result) return h + coupSection();
+            const appr = Math.round(n.stability || 0), stab = stabilityOf(me), sl = stabLabel(stab), R = coupRisk(me), ac = appr >= 55 ? '#93b25f' : appr >= 40 ? '#d8b45a' : '#c4553c';
+            h += `<div class="wm-card"><div class="wm-row"><span>Approval</span><div class="wm-bar"><i style="width:${appr}%;background:${ac}"></i></div><b style="color:${ac}">${appr}%</b></div>
+                <div class="wm-row"><span>Stability</span><div class="wm-bar"><i style="width:${stab}%;background:${sl[1]}"></i></div><b style="color:${sl[1]}">${stab}</b></div>
+                <div class="wm-row"><span>Coup risk</span><div class="wm-bar"><i style="width:${R.risk}%;background:${riskCol(R.risk)}"></i></div><b style="color:${riskCol(R.risk)}">${R.risk}%</b></div>
+                <div class="wm-eff">${sl[0]}. Wars and disputes with other states, front lines abroad and your allies are under the ⚔ War &amp; Peace button.</div></div>`;
+            h += `<div class="wm-sec">Insurgencies &amp; civil conflict</div>`;
+            h += I.ins.length ? I.ins.sort((a, b) => b.intensity - a.intensity).map(c => warCard(c, me)).join('') : `<div class="wm-note">No armed conflict is being fought on your soil.</div>`;
+            if (I.tens.length) h += I.tens.map(c => `<div class="wm-mini"><b>${esc(c.name)}</b> <span class="wm-chip" style="color:#eab308">Tension</span> · intensity ${Math.round(c.intensity)}${c.nonState ? ' · ' + esc(c.nonState) : ''}</div>`).join('');
+            try { h += internalControlHTML(me); } catch (e) { console.warn('control', e); }
+            try { h += homeGroupsHTML(me, I.groups); } catch (e) { console.warn('groups', e); }
+            try { h += unrestHTML(me, n, s); } catch (e) { console.warn('unrest', e); }
+            h += coupSection();
+            return h;
+        }
+        function internalControlHTML(me) {
+            const T = territoryOf(me), dom = T.others.filter(x => !WORLD[x.key] || x.key === me), rows = [];
+            if (!dom.length) rows.push(`<div class="wm-mini">The government controls <b>${T.others.length ? '≈' + T.govPct + '%' : 'all'}</b> of the national territory${T.others.length ? ' — the rest is held by foreign forces (see ⚔ War &amp; Peace)' : ''}.</div>`);
+            else {
+                rows.push(`<div class="wm-row"><span>Government</span><div class="wm-bar"><i style="width:${T.govPct}%;background:#9cbf5a"></i></div><b>≈${T.govPct}%</b></div>`);
+                dom.forEach(x => rows.push(`<div class="wm-mini"><i class="wm-dot" style="background:${x.col}"></i><b>${esc(x.name)}</b> holds ≈${x.pct}% (${x.km2.toLocaleString()} km²)${x.backer && WORLD[x.backer] ? ` · backed by ${esc(shortName(x.backer))}` : ''}${x.area || x.places.length ? `<div class="wm-eff" style="margin:2px 0 0">${esc(x.area || 'Around ' + x.places.join(', '))}</div>` : ''}</div>`));
+            }
+            if (T.lostSinceStart || T.regainedSinceStart) rows.push(`<div class="wm-eff">Since 1 Jan 2026: ${T.lostSinceStart ? `<span style="color:#fca5a5">−${T.lostSinceStart.toLocaleString()} km² lost</span>` : ''}${T.lostSinceStart && T.regainedSinceStart ? ' · ' : ''}${T.regainedSinceStart ? `<span style="color:#bef264">+${T.regainedSinceStart.toLocaleString()} km² retaken</span>` : ''}</div>`);
+            rows.push(`<div class="wm-btns"><button type="button" class="wm-btn" onclick="closeWarPanel();setMapView('control');frontGo('${me}', true)">🗺 Show internal control on the map</button></div>`);
+            return `<div class="wm-sec">Internal control</div>` + rows.join('');
+        }
+        function homeGroupsHTML(me, groups) {
+            const h = `<div class="wm-sec">Armed groups &amp; non-state actors at home</div>`;
+            if (!groups.length) return h + `<div class="wm-note">No armed group or breakaway authority operates on your territory.</div>`;
+            return h + groups.slice().sort((a, b) => b.S - a.S).map(p => {
+                let T = { share: 0, km2: 0 }; try { T = proxyTerritory(p); } catch (e) { }
+                const pats = (p.patrons || []).filter(x => (p.aid[x] || 0) > 0 && WORLD[x] && x !== me);
+                return `<div class="wm-card"><div class="wm-ctop"><b style="color:${pxText(p.color)}">${esc(p.name)}</b><span class="wm-chip" style="color:#f97316;border-color:#f9731666">${esc(p.kind || 'armed group')}</span><span class="wm-since">strength ${Math.round(p.S)} ${p.S >= p.S0 ? '▲' : '▼'}</span></div>
+                    <div class="wm-row"><span>Fighters</span><div class="wm-bar"><i style="width:${Math.round(p.S)}%;background:#f97316"></i></div><b>~${Math.round((p.fighters || 0) * p.S / Math.max(1, p.S0)).toLocaleString()}</b></div>
+                    ${T.share ? `<div class="wm-row"><span>Holds</span><div>≈${Math.round(T.share * 100)}% of the country (${(T.km2 || 0).toLocaleString()} km²)</div></div>` : ''}
+                    ${pats.length ? `<div class="wm-row"><span>Backers</span><div>${flagList(pats)}</div></div>` : ''}
+                    ${p.aims ? `<div class="wm-brief">${esc(p.aims)}</div>` : ''}
+                    <div class="wm-btns"><button type="button" class="wm-btn" onclick="${wmOrd('Open talks with the ' + p.short)}">🤝 Talks</button><button type="button" class="wm-btn" onclick="${wmOrd('Strike the ' + p.short)}">💥 Strike</button><button type="button" class="wm-btn" onclick="${wmOrd('Sanction the ' + p.short)}">⛔ Sanction</button><button type="button" class="wm-btn" onclick="${wmOrd('Offer an amnesty and reintegration programme to fighters of the ' + p.short)}">🕊 Amnesty</button></div></div>`;
+            }).join('');
+        }
+        function unrestHTML(me, n, s) {
+            const un = Math.round((state.mods && state.mods.unrest) || 0), appr = Math.round(n.stability || 0);
+            let h = `<div class="wm-sec">Unrest &amp; protests</div><div class="wm-card">`;
+            if (s) h += `<div class="wm-row"><span>Public safety</span><div class="wm-bar"><i style="width:${Math.round(s.safety)}%;background:${s.safety >= 55 ? '#93b25f' : s.safety >= 35 ? '#d8b45a' : '#c4553c'}"></i></div><b>${Math.round(s.safety)}</b></div>
+                <div class="wm-row"><span>Inflation</span><div>${s.infl.toFixed(1)}%</div></div><div class="wm-row"><span>Unemployment</span><div>${s.unemp.toFixed(1)}%</div></div>`;
+            const sf = s ? s.safety : 60, inf = s ? s.infl : 0, ue = s ? s.unemp : 0, mood = appr < 30 || un > 15 || inf > 40 ? ['Mass protests and strikes are likely.', '#ef4444'] : appr < 42 || un > 6 || inf > 15 || ue > 12 ? ['Discontent is spreading; protests break out regularly.', '#f59e0b'] : sf < 30 ? ['Protests are rare, but crime and violence weigh on daily life.', '#f59e0b'] : ['The streets are calm.', '#9cbf5a'];
+            h += `<div class="wm-eff" style="color:${mood[1]}">${mood[0]}${un ? ` Unrest index ${un}.` : ''}</div>`;
+            const cr = (state.crises || []).filter(x => state.dayIndex - x.day < 120).slice(-5).reverse();
+            if (cr.length) h += `<div class="wm-terms"><span>Recent domestic crises</span>${cr.map(x => `<div>${esc(x.t)} <span class="wm-since">${state.dayIndex - x.day} d ago</span> <button type="button" class="wm-btn" onclick="${wmOrd(x.fix)}">Respond</button></div>`).join('')}</div>`;
+            h += `<div class="wm-btns"><button type="button" class="wm-btn" onclick="${wmOrd('Address the nation and promise political reforms')}">📺 Address the nation</button><button type="button" class="wm-btn" onclick="${wmOrd('Launch a cost-of-living relief package with energy subsidies')}">💶 Relief package</button><button type="button" class="wm-btn" onclick="${wmOrd('Hire more police and improve public safety')}">🚔 More police</button><button type="button" class="wm-btn" onclick="${wmOrd('Open a national dialogue with protest leaders and the opposition')}">🗣 Dialogue</button></div></div>`;
+            return h;
         }
         function warCard(c, me, compact) {
             const en = warEnemies(c, me), al = warAllies(c, me), st = WAR_STATUS[c.type] || [c.type, '#ab9f80'];
@@ -5329,14 +5446,14 @@
             const share = Math.round(100 * ours / (ours + theirs));
             const enemyTxt = en.length ? flagList(en) : `<span class="wm-c">${c.type === 'insurgency' ? 'Armed groups' : 'Rebel / non-state forces'}</span>`;
             const weary = Math.round(c.intensity / 15);
-            const terms = en.length && c.type !== 'tension' ? termsFor(c, en[0]).slice(0, 3) : [];
+            const terms = en.length && c.type !== 'tension' && !c.capit ? termsFor(c, en[0]).slice(0, 3) : [];
             let btns = '';
             if (en.length) {
                 if (c.type === 'war') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('ceasefire','${c.id}')">🕊 Propose ceasefire</button>`;
                 if (c.type === 'ceasefire') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('treaty','${c.id}')">📜 Negotiate peace treaty</button>`;
                 if (c.type === 'tension') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('deescalate','${c.id}')">🤝 Propose de-escalation</button>`;
-                btns += `<button type="button" class="wm-btn" onclick="warAction('terms','${c.id}')">❓ Ask their terms</button><button type="button" class="wm-btn" onclick="warAction('talk','${c.id}')">💬 Talk to ${esc(shortName(en[0]))}</button>`;
-            } else btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('rebels','${c.id}')">🕊 Open peace talks</button>`;
+                btns += `<button type="button" class="wm-btn" onclick="warAction('terms','${c.id}')">❓ Ask their terms</button><button type="button" class="wm-btn wm-terms-btn" onclick="openTerms('${c.id}')">${(state.capit || {})[en[0]] ? '🏳 Dictate terms' : c.type === 'tension' ? '📝 Propose a settlement' : '📝 Propose terms'}</button><button type="button" class="wm-btn" onclick="warAction('talk','${c.id}')">💬 Talk to ${esc(shortName(en[0]))}</button>`;
+            } else btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('rebels','${c.id}')">🕊 Open peace talks</button>${!(c.location || []).length || (c.location || []).includes(me) ? `<button type="button" class="wm-btn" onclick="${wmOrd(`Launch a counter-insurgency operation against ${c.nonState || 'the armed groups'} in the ${c.name}`)}">⚔ Counter-insurgency</button>` : ''}`;
             return `<div class="wm-card">
                 <div class="wm-ctop"><b>${esc(c.name)}</b><span class="wm-chip" style="color:${st[1]};border-color:${st[1]}66">${st[0]}</span><span class="wm-since">${c.type === 'tension' ? '' : esc(warSinceText(c))}</span></div>
                 <div class="wm-row"><span>Enemy</span><div>${enemyTxt}</div></div>
@@ -5379,6 +5496,401 @@
             }
             const t = termsFor(c, iso)[0];
             return { ok: false, reply: `Not yet. ${t ? 'First this must happen: ' + t : 'Our core demands have not been met.'} When that is done, we will sign.` };
+        }
+        // =====================================================================
+        //  📝 PEACE TERMS YOU PUT ON THE TABLE — the composer next to "Ask their terms". The game decides (balance of power, war score,
+        //  land held on both sides, war weariness, relations, their regime); with an AI key the leader only voices the answer.
+        //  Accepted terms really apply: fronts freeze or the war ends, land changes hands, money moves, sanctions lift, regimes fall.
+        // =====================================================================
+        function termsFoe(c) { return warEnemies(c, state.playerIso)[0] || null; }
+        function capitOf(foe) { const k = (state.capit || {})[foe]; return k && k.by === state.playerIso ? k : null; }
+        function capitOffers() { const me = state.playerIso; return Object.keys(state.capit || {}).filter(f => state.capit[f].by === me && WORLD[f] && !(state.annexed || {})[f]); }
+        function landShare(iso, by) {            // grid share of `iso` held by `by` (the squares the fronts and cessions move)
+            const G = gridOf(iso); if (!G || !G.cells.length) return { pct: 0, frac: 0, cells: 0, km2: 0, total: 0, G: null };
+            let n = 0; G.cells.forEach(x => { if (cellOwnerG(iso, x) === by) n++; });
+            return { pct: Math.round(100 * n / G.cells.length), frac: n / G.cells.length, cells: n, km2: n * CELL_KM2, total: G.cells.length, G };
+        }
+        function termsProvinces(foe, me) {      // their provinces: the ones we occupy first, then the border provinces nearest to us
+            const G = gridOf(foe), R = (typeof REGIONS !== 'undefined') && REGIONS[foe]; if (!G || !R || !R.seeds || R.seeds.length < 2) return [];
+            const by = {};
+            G.cells.forEach(x => { const r = regionAt(foe, { lat: x.lat, lng: x.lng }); if (!r) return; const P = by[r.i] || (by[r.i] = { i: r.i, name: r.name || ('Province ' + (r.i + 1)), keys: [], mine: 0, lat: 0, lng: 0 }); P.keys.push(x.key); if (cellOwnerG(foe, x) === me) P.mine++; P.lat += x.lat; P.lng += x.lng; });
+            const c0 = countryCenter(me), L0 = Object.values(by);
+            L0.forEach(P => { P.lat /= P.keys.length; P.lng /= P.keys.length; P.pct = Math.max(1, Math.round(100 * P.keys.length / G.cells.length)); P.occ = Math.round(100 * P.mine / P.keys.length); P.d = c0 ? km(c0, P) : 0; });
+            const occ = L0.filter(P => P.mine > 0).sort((a, b) => b.occ - a.occ), rest = L0.filter(P => !P.mine).sort((a, b) => a.d - b.d).slice(0, Math.max(3, 8 - occ.length));
+            return occ.slice(0, 14).concat(rest);
+        }
+        function termsCtx(c) {
+            const me = state.playerIso, foe = termsFoe(c); if (!foe) return null;
+            const f = nationIso(foe), al = warAllies(c, me), ours = sidePower([me, ...al], backersFor(c, me)), theirs = sidePower(warEnemies(c, me), backersAgainst(c, me));
+            const since = (state.warSince || {})[c.id], months = c.months || (since !== undefined ? Math.max(0, (state.dayIndex - since) / 30) : (WAR_SINCE[c.id] ? 24 : 1));
+            let provs = []; try { provs = termsProvinces(foe, me); } catch (e) { }
+            const EU = (typeof BLOCS !== 'undefined' && BLOCS.EU) || [];
+            return { me, foe, f, held: landShare(foe, me), lost: landShare(me, foe), share: ours / Math.max(ours + theirs, 1e-6), ratio: ours / Math.max(theirs, 1e-6), months,
+                ws: c.playerMade && c.sideA.includes(me) ? (c.ws || 0) : 0, rel: getRel(me, foe), stab: f.stability || 50, capit: capitOf(foe), provs, reg: regimeOf(foe), nuke: NUCLEAR.includes(foe),
+                treas: Math.max(0, f.treasury || 0), gdp: Math.max(f.gdp || 0, 1e8), sanTheirs: (state.sanctionsOnMe || 0) > 0 && (SANCTIONERS.includes(foe) || EU.includes(foe)), sanOurs: ((state.sanctionsOn || {})[foe] || 0) > 0 };
+        }
+        // how strong our hand is (−1 … 1) and how willing they are to give ground
+        function termsLeverage(c, X) {
+            let L = (X.share - 0.5) * 1.3 + X.ws / 180 + 0.7 * X.held.frac - 0.7 * X.lost.frac + (50 - X.stab) / 220 + (D().prob || 0) * 0.5;
+            if (c.type === 'tension') L *= 0.6;
+            return clamp(L, -1, 1);
+        }
+        function termsWill(c, X, L) {
+            const wear = c.type === 'tension' ? 0 : clamp(c.intensity / 100 * Math.min(1, X.months / 18), 0, 1) * 12;      // tired armies settle
+            const pers = (['autocracy', 'junta', 'theocracy'].includes(X.reg) ? -6 : X.reg === 'democracy' ? 4 : 0) + (X.nuke ? -8 : 0);
+            return 18 + 70 * L + clamp(X.rel, -60, 40) / 4 + wear + pers + (c.type === 'war' && L > 0.25 ? 10 : 0);
+        }
+        const WT_KIND = { ceasefire: ['🕊 Ceasefire along the current lines', 'The guns fall silent; the fronts freeze where they are. A treaty can follow.'], peace: ['📜 Permanent peace treaty', 'The war is over for good.'],
+            capitulate: ['🏳 Unconditional surrender', 'Their government capitulates. You may then dictate any terms, including annexation.'], deesc: ['🤝 De-escalation', 'Both sides step back; the dispute cools down.'], settle: ['📜 Settle the dispute', 'A treaty that closes the dispute for good.'] };
+        // every demand and concession with its weight for them (points; negative = a sweetener for them)
+        function termsItems(c, X, d) {
+            const it = [], push = (k, cost, txt, hard) => it.push({ k, cost: Math.round(cost), txt, hard: hard || '' }), fn = shortName(X.foe), cap = !!X.capit;
+            const Lv = termsLeverage(c, X);
+            if (d.kind === 'ceasefire') push('kind', 0, `A ceasefire along the current lines of contact, in force within 72 hours.`);
+            if (d.kind === 'peace') push('kind', cap ? 0 : c.type === 'war' ? 6 : 2, `A permanent peace treaty that formally ends the ${c.name}.`);
+            if (d.kind === 'deesc') push('kind', 0, `Both sides pull forces back and de-escalate the ${c.name}.`);
+            if (d.kind === 'settle') push('kind', 8, `A treaty that settles the ${c.name} for good.`);
+            if (d.kind === 'capitulate') push('kind', 70, `${fn} surrenders unconditionally: its government capitulates and accepts the victor's terms.`,
+                cap ? '' : Lv < 0.55 || !(X.held.frac >= 0.4 || X.share >= 0.85 || X.stab < 25) ? `${fn} is not beaten: surrender needs a crushing advantage (most of their land held, an overwhelming balance of power or a collapsing state)` : '');
+            if (d.annex) push('annex', cap ? 0 : 250, `${fn} is annexed in full: its territory, people, economy and treasury join ${state.player}.`, cap ? '' : 'Annexation is only possible after they capitulate');
+            if (!d.annex) {
+                if (d.cedeHeld && X.held.cells) push('cedeHeld', cap ? 0 : 10 + 0.8 * X.held.pct, `${fn} cedes the territory we hold (≈${X.held.pct}% of its land, ${X.held.km2.toLocaleString()} km²) to ${state.player}.`);
+                (d.provs || []).forEach(i => { const P = X.provs.find(p => p.i === i); if (P) push('prov:' + i, cap ? 0 : P.occ >= 50 ? 3 + 0.5 * P.pct : 8 + 1.6 * P.pct, `${fn} cedes the province of ${P.name} (≈${P.pct}% of its land${P.mine ? ', ' + P.occ + '% already held by us' : ''}).`); });
+                if (d.extra > 0) push('extra', cap ? 0 : 15 + 1.6 * d.extra, `${fn} cedes a further ${d.extra}% of its territory along our border.`);
+            }
+            if (d.wdThem && X.lost.cells) push('wdThem', cap ? 0 : 6 + 0.5 * X.lost.pct, `${fn} withdraws all forces from our territory (≈${X.lost.pct}%, ${X.lost.km2.toLocaleString()} km²) within 30 days.`);
+            if (d.wdUs && X.held.cells) push('wdUs', -(6 + 0.6 * X.held.pct), `${state.player} withdraws its forces from ${fn}'s territory (≈${X.held.pct}%) within 30 days.`);
+            if (d.rep > 0) {
+                const A = d.rep, cap1 = X.treas + 0.05 * X.gdp;
+                if (d.repWe) push('rep', -Math.min(40, 12 * A / X.gdp * 100), `${state.player} pays ${fn} ${formatVal(A)} in reconstruction aid.`);
+                else push('rep', cap ? 0 : 4 + 45 * A / Math.max(X.treas + 0.03 * X.gdp, 1e8), `${fn} pays ${formatVal(A)} in war reparations${A > X.treas ? ' (the balance in 12 monthly instalments)' : ''}.`, A > cap1 ? `${fn} cannot pay ${formatVal(A)}: its treasury holds ${formatVal(X.treas)}` : '');
+            }
+            if (d.liftTheirs && X.sanTheirs) push('liftTheirs', cap ? 0 : 8, `${fn} lifts its sanctions on ${state.player}.`);
+            if (d.liftOurs && X.sanOurs) push('liftOurs', -10, `${state.player} lifts its sanctions on ${fn}.`);
+            if (d.dmz) push('dmz', cap ? 0 : 8, `A demilitarised zone along the line of contact, monitored by international observers.`);
+            if (d.pows) push('pows', -3, `An exchange of all prisoners of war within 30 days.`);
+            if (d.recog) push('recog', cap ? 0 : (X.held.cells || d.cedeHeld || (d.provs || []).length || d.extra) ? 18 : 6, `${fn} recognises ${state.player}'s sovereignty over ${X.held.cells || d.cedeHeld || (d.provs || []).length || d.extra ? 'all territory it gains under this agreement' : 'its territory and borders'}.`);
+            if (d.regime) push('regime', cap ? 0 : 55, `${(X.f.hog || 'Their leader')} steps down; a transitional government takes over.`, cap || Lv >= 0.5 ? '' : 'They will not discuss their own government while they can still fight');
+            if (d.disarm) push('disarm', cap ? 0 : 28, `${fn} cuts its armed forces by 40% and accepts inspections.`);
+            return it;
+        }
+        function termsLines(c, X, d) { return termsItems(c, X, d).map(i => i.txt); }
+        function termsScore(c, X, d) { const L = termsLeverage(c, X), W = termsWill(c, X, L), it = termsItems(c, X, d); return { L, W, it, sum: it.reduce((a, i) => a + i.cost, 0), hard: it.filter(i => i.hard) }; }
+        // the decision: accepted / counter-proposal / rejected (deterministic)
+        function evalPeaceTerms(c, X, d) {
+            const S = termsScore(c, X, d);
+            if (X.capit) return { verdict: 'accepted', forced: true, ...S, score: 999 };
+            const score = S.W - S.sum;
+            if (!S.hard.length && score >= 0) return { verdict: 'accepted', ...S, score };
+            if (S.W < -12) return { verdict: 'rejected', ...S, score, why: pick(['We are not losing this war.', 'Our forces can still win this.']) };
+            const cd = JSON.parse(JSON.stringify(d)), dropped = [];
+            const shrink = k => {
+                if (k === 'kind') { cd.kind = c.type === 'war' ? 'ceasefire' : c.type === 'tension' ? 'deesc' : 'peace'; return; }
+                if (k === 'rep') { cd.rep = cd.rep > 1e9 ? Math.round(cd.rep / 2 / 1e8) * 1e8 : 0; if (!cd.rep) dropped.push('rep'); return; }
+                if (k === 'extra') { cd.extra = cd.extra >= 10 ? Math.floor(cd.extra / 2 / 5) * 5 : 0; if (!cd.extra) dropped.push('extra'); return; }
+                if (k.startsWith('prov:')) { cd.provs = cd.provs.filter(i => i !== +k.slice(5)); dropped.push(k); return; }
+                cd[k] = false; dropped.push(k);
+            };
+            S.hard.forEach(h => { if (h.k === 'rep') cd.rep = Math.floor((X.treas + 0.05 * X.gdp) / 1e8) * 1e8 * 0.9; else shrink(h.k); });
+            for (let n = 0; n < 30; n++) {
+                const T = termsScore(c, X, cd);
+                if (!T.hard.length && T.W - T.sum >= 0) {
+                    const same = JSON.stringify(cd) === JSON.stringify(d);
+                    return same ? { verdict: 'accepted', ...T, score: T.W - T.sum } : { verdict: 'counter', ...S, score, counter: cd, cIt: T.it, dropped };
+                }
+                const worst = T.it.filter(i => i.cost > 0).sort((a, b) => b.cost - a.cost)[0];
+                if (!worst) break;
+                if (worst.k === 'kind' && cd.kind === (c.type === 'war' ? 'ceasefire' : c.type === 'tension' ? 'deesc' : 'peace')) break;
+                shrink(worst.k);
+            }
+            return { verdict: 'rejected', ...S, score, why: S.W < 0 ? 'Time is on our side.' : 'The gap between our positions is still too wide.' };
+        }
+        function termsDefault(c, X) {
+            return { kind: X.capit ? 'peace' : c.type === 'war' ? 'ceasefire' : c.type === 'ceasefire' ? 'peace' : 'deesc', cedeHeld: !!X.capit && X.held.cells > 0, provs: [], extra: 0,
+                wdThem: X.lost.cells > 0, wdUs: false, rep: 0, repWe: false, liftTheirs: false, liftOurs: false, dmz: false, pows: c.type !== 'tension', recog: false, regime: false, disarm: false, annex: false };
+        }
+        function openTerms(cid) {
+            const c = state.conflicts.find(k => k.id === cid); if (!c) return;
+            let X = null; try { X = termsCtx(c); } catch (e) { console.warn('terms', e); }
+            if (!X) { try { flashReply('⚠ There is no state on the other side to negotiate with.'); } catch (e) { } return; }
+            const m = document.getElementById('war-modal'); if (!m || m.classList.contains('hidden')) openWarPanel('ext'); else playClick();
+            WAR_UI.mode = 'terms'; WAR_UI.cid = cid; WAR_UI.ctx = X; WAR_UI.reply = null; WAR_UI.draft = termsDefault(c, X);
+            renderWarPanel(); const box = document.querySelector('#war-modal .wm-box'); if (box) box.scrollTop = 0;
+        }
+        function wtSet(k, v, soft) {
+            const d = WAR_UI.draft; if (!d) return;
+            if (k === 'kind') d.kind = v;
+            else if (k === 'rep') d.rep = Math.max(0, Math.round((+v || 0) * 10) / 10 * 1e9);
+            else if (k === 'extra') d.extra = clamp(Math.round(+v || 0), 0, 50);
+            else if (k.startsWith('prov:')) { const i = +k.slice(5); d.provs = v ? [...new Set([...(d.provs || []), i])] : (d.provs || []).filter(x => x !== i); }
+            else d[k] = !!v;
+            if (v && k === 'wdUs') { d.cedeHeld = false; d.provs = []; d.extra = 0; d.annex = false; }       // handing the land back excludes taking it
+            if (v && (k === 'cedeHeld' || k.startsWith('prov:') || k === 'extra' || k === 'annex')) d.wdUs = false;
+            if (v && k === 'annex') d.kind = 'peace';
+            if (soft) { const o = document.getElementById('wt-out'); if (o) o.innerHTML = termsOutlookHTML(); return; }
+            renderWarPanel();
+        }
+        function termsOutlookHTML() {
+            const c = state.conflicts.find(k => k.id === WAR_UI.cid), X = WAR_UI.ctx, d = WAR_UI.draft; if (!c || !X || !d) return '';
+            const S = termsScore(c, X, d), sc = S.W - S.sum, n = S.it.length;
+            let lab, col, pct;
+            if (X.capit) { lab = 'They have capitulated: they must accept whatever you dictate.'; col = '#9cbf5a'; pct = 100; }
+            else if (S.hard.length) { lab = `They will refuse: ${S.hard[0].hard}.`; col = '#ef4444'; pct = 6; }
+            else { pct = clamp(Math.round(50 + sc * 1.6), 3, 97); [lab, col] = sc >= 12 ? ['Likely to accept', '#9cbf5a'] : sc >= 0 ? ['Leaning towards yes', '#bccf7a'] : sc >= -12 ? ['Undecided — expect a counter-proposal', '#f59e0b'] : sc >= -30 ? ['Unlikely: they will cut your demands down', '#f97316'] : ['Very unlikely to accept', '#ef4444']; }
+            const btn = X.capit ? `<button type="button" class="wm-btn wm-go" onclick="sendTerms()" ${n ? '' : 'disabled'}>✍ Impose these terms</button>` : `<button type="button" class="wm-btn wm-go" onclick="sendTerms()" ${n ? '' : 'disabled'}>📨 Send proposal to ${esc(shortName(X.foe))}</button>`;
+            return `<div class="wm-row"><span>Outlook</span><div class="wt-meter" style="flex:1"><i style="width:${pct}%;background:${col}"></i></div><b style="color:${col}">${X.capit ? '✓' : pct + '%'}</b></div>
+                <div class="wm-eff" style="color:${col};margin:2px 0 6px">${esc(lab)} <span style="color:#8f846a">· ${n} point${n === 1 ? '' : 's'}</span></div>
+                <div class="wm-btns" style="margin-top:4px">${btn}<button type="button" class="wm-btn" onclick="termsBack()">← Back</button></div>`;
+        }
+        function termsBack() { WAR_UI.mode = 'ext'; WAR_UI.reply = null; renderWarPanel(); }
+        function termsPanelHTML() {
+            if (WAR_UI.mode === 'reply') return termsReplyHTML();
+            const c = state.conflicts.find(k => k.id === WAR_UI.cid), X = WAR_UI.ctx, d = WAR_UI.draft;
+            if (!c || !X || !d) { WAR_UI.mode = 'ext'; return renderExternalPanel(); }
+            const fn = esc(shortName(X.foe)), cap = !!X.capit, st = WAR_STATUS[c.type] || [c.type, '#ab9f80'], share = Math.round(100 * X.share);
+            const cost = k => { const t = termsItems(c, X, Object.assign(JSON.parse(JSON.stringify(d)), k)).find(i => i.k === Object.keys(k)[0] || (Object.keys(k)[0] === 'provs' && i.k === 'prov:' + k.provs[k.provs.length - 1])); if (!t || cap) return ''; return `<span class="wt-cost" title="How hard this is for them to accept">${t.hard ? '⛔' : t.cost >= 30 ? 'big ask' : t.cost >= 12 ? 'demand' : t.cost > 0 ? 'small ask' : t.cost < 0 ? '<b style="color:#93b25f">concession</b>' : ''}</span>`; };
+            const opt = (k, on, label, sub, cst, off, why, radio) => `<label class="wt-opt ${on ? 'on' : ''} ${off ? 'off' : ''}"${off && why ? ` title="${esc(why)}"` : ''}><input type="${radio ? 'radio' : 'checkbox'}" ${radio ? 'name="wt-kind"' : ''} ${on ? 'checked' : ''} ${off ? 'disabled' : ''} onchange="${radio ? `wtSet('kind','${k}')` : `wtSet('${k}',this.checked)`}"><span>${label}${sub ? `<em>${sub}</em>` : ''}</span>${cst || ''}</label>`;
+            let h = `<div class="wm-card${cap ? ' wm-capit' : ''}"><div class="wm-ctop"><b>${cap ? '🏳 Dictate terms to' : '📝 Your terms to'} ${flagHTML(nationIso(X.foe), 12)} ${fn}</b><span class="wm-chip" style="color:${st[1]};border-color:${st[1]}66">${st[0]}</span><span class="wm-since">${esc(c.name)}</span></div>
+                ${cap ? `<div class="wm-eff" style="color:#f6e08f">${fn} capitulated on ${esc(fmtDate(new Date(state.date.getTime() - (state.dayIndex - X.capit.day) * 864e5)))}. Its government will sign whatever you put in front of it — annexation included.</div>` : ''}
+                ${c.type !== 'tension' ? `<div class="wm-row"><span>Balance</span><div class="wm-bal"><i style="width:${share}%"></i></div><b>${share}%</b></div>` : ''}
+                <div class="wm-row"><span>Territory</span><div>${X.held.cells ? `You hold <b style="color:#f6e08f">≈${X.held.pct}%</b> of ${fn} (${X.held.km2.toLocaleString()} km²)` : `You hold none of ${fn}'s land`}${X.lost.cells ? ` · ${fn} holds <b style="color:#fca5a5">≈${X.lost.pct}%</b> of yours` : ''}${!X.held.G ? ' <span style="color:#8f846a">(no front line can be drawn in this country)</span>' : ''}</div></div>
+                <div class="wm-row"><span>Their side</span><div>Relations ${X.rel > 0 ? '+' : ''}${Math.round(X.rel)} · approval ${Math.round(X.stab)}% · ${esc((REGIME_INFO[X.reg] || {}).label || X.reg)}${X.nuke ? ' · ☢ nuclear power' : ''}${X.ws ? ` · war score ${X.ws > 0 ? '+' : ''}${Math.round(X.ws)}` : ''}${c.type !== 'tension' ? ` · ${Math.round(X.months)} month${Math.round(X.months) === 1 ? '' : 's'} of war` : ''}</div></div></div>`;
+            const kinds = cap ? ['peace'] : c.type === 'tension' ? ['deesc', 'settle'] : c.type === 'war' ? ['ceasefire', 'peace', 'capitulate'] : ['peace', 'capitulate'];
+            h += `<div class="wt-sec">1 · Settlement</div>` + kinds.map(k => opt(k, d.kind === k, WT_KIND[k][0], WT_KIND[k][1], cost({ kind: k }), false, '', true)).join('');
+            // territory
+            let ter = '';
+            if (cap) ter += opt('annex', d.annex, `🏴 Annex ${fn} in full`, `All its territory and internal borders join ${esc(state.player)}; 100% of its population becomes your taxpayers and manpower; its GDP and remaining treasury (${formatVal(X.treas)}) pass to you.`, '', false);
+            else ter += opt('annex', false, `🏴 Annex ${fn} in full`, 'Only after they capitulate (full occupation, a crushing war score, or an accepted unconditional surrender).', '', true, 'Annexation needs a capitulation first');
+            if (!d.annex && X.held.G) {
+                if (X.held.cells) ter += opt('cedeHeld', d.cedeHeld, `They cede the land we hold (≈${X.held.pct}%, ${X.held.km2.toLocaleString()} km²)`, 'It becomes your territory; its people and output join your economy.', cost({ cedeHeld: true }));
+                if (X.provs.length) ter += `<div class="wt-opt" style="cursor:default;display:block"><span>Cede specific provinces</span><em>Occupied provinces (✓ = held by you) first, then border provinces.</em><div class="wt-prov">${X.provs.map(P => { const on = (d.provs || []).includes(P.i); return `<label class="${on ? 'on' : ''}" title="≈${P.pct}% of ${fn}${P.mine ? ', ' + P.occ + '% held by you' : ''}"><input type="checkbox" style="display:none" ${on ? 'checked' : ''} onchange="wtSet('prov:${P.i}',this.checked)">${P.mine ? '✓ ' : ''}${esc(P.name)} <span style="color:#8f846a">${P.mine ? P.occ + '%' : '≈' + P.pct + '%'}</span></label>`; }).join('')}</div></div>`;
+                ter += `<div class="wt-opt${d.extra ? ' on' : ''}" style="cursor:default"><span>Border land beyond the front<em>A further share of their territory nearest to you.</em></span><span class="wt-cost"><input class="wt-in" type="range" min="0" max="50" step="5" value="${d.extra}" oninput="wtSet('extra',this.value,true);this.nextElementSibling.textContent=this.value+'%'" onchange="wtSet('extra',this.value)"> <b>${d.extra}%</b></span></div>`;
+            }
+            if (X.lost.cells) ter += opt('wdThem', d.wdThem, `${fn} withdraws from our land (≈${X.lost.pct}%, ${X.lost.km2.toLocaleString()} km²)`, 'Every square they hold returns to your government.', cost({ wdThem: true }));
+            if (X.held.cells && !cap) ter += opt('wdUs', d.wdUs, `We withdraw from their land (≈${X.held.pct}%)`, 'A concession: you hand back what you hold.', cost({ wdUs: true }));
+            h += `<div class="wt-sec">2 · Territory</div>` + ter;
+            // money & sanctions
+            h += `<div class="wt-sec">3 · Money &amp; sanctions</div><div class="wt-opt${d.rep ? ' on' : ''}" style="cursor:default"><span>${d.repWe ? 'Reconstruction aid we pay' : 'War reparations they pay'} <input class="wt-in" type="number" min="0" step="0.5" value="${d.rep ? +(d.rep / 1e9).toFixed(1) : ''}" placeholder="0" oninput="wtSet('rep',this.value,true)" onchange="wtSet('rep',this.value)"> $B<em>${d.repWe ? `A sweetener for them. Your treasury: ${formatVal(nationIso(X.me).treasury)}.` : `Their treasury holds ${formatVal(X.treas)} (GDP ${formatVal(X.gdp)}). More than the treasury is paid in 12 monthly instalments.`}</em></span>${d.rep ? cost({ rep: d.rep }) : ''}</div>`
+                + opt('repWe', d.repWe, 'We pay them instead', 'Turns the amount above into aid you pay — a concession.', '')
+                + (X.sanTheirs ? opt('liftTheirs', d.liftTheirs, `${fn} lifts its sanctions on us`, '', cost({ liftTheirs: true })) : '')
+                + (X.sanOurs ? opt('liftOurs', d.liftOurs, `We lift our sanctions on ${fn}`, `${state.sanctionsOn[X.foe]} package(s) in force.`, cost({ liftOurs: true })) : '');
+            // security & politics
+            h += `<div class="wt-sec">4 · Security &amp; politics</div>`
+                + opt('dmz', d.dmz, 'Demilitarised zone along the line', 'Observers patrol a buffer: the ceasefire is far less likely to collapse.', cost({ dmz: true }))
+                + (c.type !== 'tension' ? opt('pows', d.pows, 'Exchange of all prisoners of war', 'A goodwill gesture both sides like.', cost({ pows: true })) : '')
+                + opt('recog', d.recog, `${fn} recognises our sovereignty${X.held.cells || d.cedeHeld || (d.provs || []).length || d.extra ? ' over the land we gain' : ''}`, 'Recognised gains bring no occupation insurgency and less condemnation abroad.', cost({ recog: true }))
+                + opt('regime', d.regime, `${esc(X.f.hog || 'Their leader')} steps down`, 'Regime demand: a transitional government takes over and resets relations.', cost({ regime: true }))
+                + opt('disarm', d.disarm, `${fn} cuts its armed forces by 40%`, 'Their military strength falls for good.', cost({ disarm: true }));
+            h += `<div class="wt-out" id="wt-out">${termsOutlookHTML()}</div>`;
+            return h;
+        }
+        // ---- sending, the answer, signing ----
+        function sendTerms() {
+            const c = state.conflicts.find(k => k.id === WAR_UI.cid), d = WAR_UI.draft; if (!c || !d) { termsBack(); return; }
+            let X; try { X = termsCtx(c); } catch (e) { X = WAR_UI.ctx; } X.provs = WAR_UI.ctx.provs; WAR_UI.ctx = X;
+            const lines = termsLines(c, X, d); if (!lines.length) return;
+            const me = state.playerIso, T = state.peaceTalks || (state.peaceTalks = {}), past = (T[X.foe] || []).filter(day => state.dayIndex - day < 30);
+            let R;
+            if (!X.capit && past.length >= 3) R = { verdict: 'busy', why: `They will not look at another proposal before ${fmtDate(new Date(state.date.getTime() + (30 - (state.dayIndex - past[0])) * 864e5))}.` };
+            else { past.push(state.dayIndex); T[X.foe] = past; R = evalPeaceTerms(c, X, d); }
+            const text = termsReplyText(c, X, d, R);
+            playClick();
+            WAR_UI.mode = 'reply'; WAR_UI.reply = { ...R, text, lines, cid: c.id, foe: X.foe, draft: JSON.parse(JSON.stringify(d)), pending: false };
+            // the exchange is also kept in the Diplomacy chat; a counter-proposal can be accepted there ("We accept")
+            const nm = isoToName(X.foe), msgs = state.chatData[nm] || (state.chatData[nm] = []), dt = state.date.toLocaleDateString();
+            msgs.push({ sender: 'user', text: `Proposed peace terms for the ${c.name}: ${lines.map((t, i) => `${i + 1}. ${t}`).join(' ')}`, date: dt });
+            const fm = { sender: 'foreign', text: `${X.f.hog}: ${text}`, date: dt }; msgs.push(fm); msgs.lastAt = ++state.msgSeq;
+            if (R.verdict === 'accepted' || R.verdict === 'counter') {
+                const dd = R.verdict === 'counter' ? R.counter : d;
+                state.envoyDeals = state.envoyDeals || {};
+                state.envoyDeals[nm] = { topic: 'peace', iso: X.foe, conflictId: c.id, terms: dd, peace: termsLines(c, X, dd), clauses: [], asks: [], round: 0, byPlayer: true, day: state.dayIndex };
+            }
+            if (R.verdict === 'rejected') addRel(me, X.foe, -1);
+            try { renderDiplomacyMenu(); } catch (e) { }
+            if (!X.capit && R.verdict !== 'busy' && typeof aiVoiceAllowed === 'function' && aiVoiceAllowed()) {
+                const RR = WAR_UI.reply; RR.pending = true;
+                try { voiceMessage(X.foe, text, t => { RR.pending = false; if (t && t.length > 10) { RR.text = t; fm.text = `${X.f.hog}: ${t}`; } if (WAR_UI.reply === RR) renderWarPanel(); try { if (activeChat === nm) renderChatLog(); } catch (e) { } }); } catch (e) { RR.pending = false; }
+            }
+            renderWarPanel(); const box = document.querySelector('#war-modal .wm-box'); if (box) box.scrollTop = 0;
+        }
+        function termsReplyText(c, X, d, R) {
+            const fn = shortName(X.foe), list = a => '\n' + a.map((t, i) => `${i + 1}. ${t}`).join('\n');
+            if (R.verdict === 'busy') return `We have answered you already. ${R.why}`;
+            if (R.forced) return `${pick(['We have no choice. Our delegation will sign your terms.', 'The war is lost. We accept your conditions and will sign.', 'We are in no position to refuse. We sign.'])}${list(termsLines(c, X, d))}`;
+            if (R.verdict === 'accepted') return `${pick(['We have studied your proposal. We accept it as written.', 'Your terms are hard, but we accept them. Let us end this.', 'Agreed. Our delegation is ready to sign on these terms.'])}${list(termsLines(c, X, d))}`;
+            if (R.verdict === 'counter') {
+                const drop = (R.it || []).filter(i => !termsItems(c, X, R.counter).some(j => j.txt === i.txt)).map(i => i.txt.replace(/\.$/, ''));
+                return `${pick(['We cannot accept all of this.', 'Some of your demands go too far.', 'This is not a basis we can sign as it stands.'])} ${drop.length ? 'We reject: ' + drop.slice(0, 3).join('; ') + '. ' : ''}We are ready to sign the following instead:${list(termsLines(c, X, R.counter))}`;
+            }
+            const their = (() => { try { return termsFor(c, X.foe).slice(0, 3); } catch (e) { return []; } })();
+            return `${pick(['Your terms are unacceptable.', 'We reject this proposal.', 'No. These are the terms of a victor, and you have not won.'])} ${R.why || ''}${their.length ? ' Our conditions remain:' + list(their) : ''}`.trim();
+        }
+        function termsReplyHTML() {
+            const R = WAR_UI.reply; if (!R) { WAR_UI.mode = 'ext'; return renderExternalPanel(); }
+            const n = nationIso(R.foe), fn = esc(shortName(R.foe));
+            const col = { accepted: '#9cbf5a', counter: '#f59e0b', rejected: '#ef4444', busy: '#ab9f80' }[R.verdict], lab = { accepted: R.forced ? 'SIGNED UNDER CAPITULATION' : 'ACCEPTED', counter: 'COUNTER-PROPOSAL', rejected: 'REJECTED', busy: 'NO ANSWER' }[R.verdict];
+            const body = esc(R.text).replace(/\n(\d+)\. /g, '<br>$1. ').replace(/\n/g, '<br>');
+            let btns = '';
+            if (R.verdict === 'accepted') btns = `<button type="button" class="wm-btn wm-go" onclick="termsSign('draft')">✍ Sign the agreement</button><button type="button" class="wm-btn" onclick="termsRevise('draft')">✏ Change the terms</button>`;
+            else if (R.verdict === 'counter') btns = `<button type="button" class="wm-btn wm-go" onclick="termsSign('counter')">✅ Accept their counter-proposal</button><button type="button" class="wm-btn" onclick="termsRevise('counter')">✏ Revise from their version</button><button type="button" class="wm-btn" onclick="termsRevise('draft')">✏ Revise mine</button>`;
+            else btns = `<button type="button" class="wm-btn" onclick="termsRevise('draft')">✏ Revise the terms</button>`;
+            btns += `<button type="button" class="wm-btn" onclick="termsWalk()">✖ ${R.verdict === 'accepted' || R.verdict === 'counter' ? 'Walk away' : 'Close'}</button>`;
+            return `<div class="wm-status" style="color:${col};border-color:${col}66">${lab}</div>
+                <div class="wt-reply"><div class="wt-who">${flagHTML(n, 13)} ${esc(n.hog || fn)} <span class="wm-since">${fn} · ${esc(fmtDate(state.date))}</span></div>${R.pending ? '<div class="wm-eff">✍ The answer is being written…</div>' : ''}<div>${body}</div></div>
+                ${R.verdict === 'counter' ? `<div class="wm-eff">Their version is also in your Diplomacy chat — you can accept it there later ("We accept").</div>` : ''}
+                <div class="wm-btns">${btns}</div>`;
+        }
+        function termsRevise(which) {
+            const R = WAR_UI.reply; if (!R) return termsBack();
+            WAR_UI.draft = JSON.parse(JSON.stringify(which === 'counter' && R.counter ? R.counter : R.draft)); WAR_UI.cid = R.cid; WAR_UI.mode = 'terms'; WAR_UI.reply = null; renderWarPanel();
+        }
+        function termsWalk() { const R = WAR_UI.reply; if (R) { try { const nm = isoToName(R.foe); if (state.envoyDeals && state.envoyDeals[nm] && state.envoyDeals[nm].terms) delete state.envoyDeals[nm]; } catch (e) { } } termsBack(); }
+        function termsSign(which) {
+            const R = WAR_UI.reply; if (!R) return;
+            const d = which === 'counter' ? R.counter : R.draft, c = state.conflicts.find(k => k.id === R.cid);
+            let out = [];
+            try { out = signPeaceTerms(c, R.foe, d); } catch (e) { console.warn('peace terms', e); out = ['⚠ The agreement could not be applied: ' + e.message]; }
+            WAR_UI.mode = 'ext'; WAR_UI.reply = null; WAR_UI.done = { foe: R.foe, out, day: state.dayIndex };
+            renderWarPanel(); const box = document.querySelector('#war-modal .wm-box'); if (box) box.scrollTop = 0;
+        }
+        // signing from the panel or from the chat ("We accept")
+        function signPeaceTerms(c, foe, d) {
+            if (!c) return ['The conflict is already over.'];
+            const X = termsCtx(c); if (!X) return ['There is no government left to sign with.'];
+            try { const nm = isoToName(foe); if (state.envoyDeals && state.envoyDeals[nm] && state.envoyDeals[nm].terms) delete state.envoyDeals[nm]; } catch (e) { }
+            return applyPeaceTerms(c, X, d);
+        }
+        // ---- what an accepted agreement does ----
+        function cedeCells(foe, me, cells) {       // formal cession: the squares become yours, their people and output follow
+            ensureOccState(); const G = gridOf(foe); if (!G || !cells.length) return 0;
+            let o = state.occ.find(x => x.iso === foe && x.by === me && !x.conf) || state.occ.find(x => x.iso === foe && x.by === me);
+            const before = landShare(foe, me).frac;
+            if (!o) { o = { conf: null, iso: foe, by: me, bias: 0 }; state.occ.push(o); }
+            if (o.paidFrac === undefined) o.paidFrac = o.conf ? 0 : before;       // land won in an earlier victory (frontGrab) was already paid for
+            cells.forEach(x => setCell(foe, x, me));
+            state.occ = state.occ.filter(x => !(x.iso === foe && x.by === me && x !== o));
+            o.ceded = true;
+            const frac = landShare(foe, me).frac, delta = frac - (o.paidFrac || 0);
+            if (delta > 0.001) {
+                const F = nationIso(foe), P = nationIso(me), k = delta / Math.max(0.02, 1 - (o.paidFrac || 0)), dp = F.pop * k, dg = F.gdp * k;
+                F.pop -= dp; F.gdp -= dg; P.pop += dp; P.gdp += dg * 0.85; o.paidFrac = frac;
+                return { frac, dp, dg };
+            }
+            return { frac, dp: 0, dg: 0 };
+        }
+        function applyPeaceTerms(c, X, d) {
+            const me = state.playerIso, foe = X.foe, fn = shortName(foe), F = nationIso(foe), P = nationIso(me), out = [], it = termsItems(c, X, d);
+            let gained = null, annexed = false;
+            // territory
+            if (d.annex && X.capit) { annexCountry(foe, me, 'terms'); annexed = true; out.push(`🏴 ${fn} is annexed.`); }
+            else {
+                const G = gridOf(foe);
+                if (G && (d.cedeHeld || (d.provs || []).length || d.extra > 0)) {
+                    const take = new Set();
+                    if (d.cedeHeld) G.cells.forEach(x => { if (cellOwnerG(foe, x) === me) take.add(x.key); });
+                    (d.provs || []).forEach(i => { const Pv = (X.provs || []).find(p => p.i === i); if (Pv) Pv.keys.forEach(k => take.add(k)); });
+                    if (d.extra > 0) { const c0 = countryCenter(me); if (c0) G.cells.filter(x => cellOwnerG(foe, x) !== me && !take.has(x.key)).sort((a, b) => km(c0, a) - km(c0, b)).slice(0, Math.round(G.cells.length * d.extra / 100)).forEach(x => take.add(x.key)); }
+                    const cells = [...take].map(k => G.byKey[k]).filter(Boolean);
+                    gained = cedeCells(foe, me, cells);
+                    if (gained && gained.frac >= 0.98) { annexCountry(foe, me, 'cession'); annexed = true; out.push(`🏴 ${fn} has ceded all its territory and is annexed.`); }
+                    else if (gained) out.push(`🗺 ${fn} cedes ≈${Math.round(cells.length * 100 / G.cells.length)}% of its territory (${(cells.length * CELL_KM2).toLocaleString()} km²): +${formatPop(gained.dp)} people, +${formatVal(gained.dg * 0.85)} GDP.`);
+                }
+                if (d.wdUs && !annexed) {
+                    const Gf = gridOf(foe); let n = 0;
+                    if (Gf) Gf.cells.forEach(x => { if (cellOwnerG(foe, x) === me) { setCell(foe, x, 'GOV'); n++; } });
+                    const o = state.occ.find(x => x.iso === foe && x.by === me && x.paidFrac > 0);
+                    if (o && o.paidFrac > 0) { const k = o.paidFrac, dp = P.pop > 0 ? Math.min(P.pop * 0.5, F.pop * k / Math.max(0.02, 1 - k)) : 0; P.pop -= dp; F.pop += dp; }
+                    state.occ = state.occ.filter(x => !(x.iso === foe && x.by === me));
+                    state.conflicts.forEach(k => { if (/^occ_/.test(k.id) && (k.location || []).includes(foe) && k.sideA.includes(me)) k.type = 'resolved'; });
+                    if (n) out.push(`↩ Your forces leave ${fn} (${(n * CELL_KM2).toLocaleString()} km² handed back).`);
+                }
+            }
+            if (d.wdThem) {
+                const Gm = gridOf(me); let n = 0;
+                if (Gm) Gm.cells.forEach(x => { if (cellOwnerG(me, x) === foe) { setCell(me, x, 'GOV'); n++; } });
+                state.occ = state.occ.filter(x => !(x.iso === me && x.by === foe));
+                if (n) out.push(`↩ ${fn} withdraws from your land: ${(n * CELL_KM2).toLocaleString()} km² return to your government.`);
+            }
+            // money
+            if (d.rep > 0) {
+                const payer = d.repWe ? P : F, A = d.rep, now = Math.min(A, Math.max(0, payer.treasury || 0)), rest = A - now;
+                payer.treasury -= now; (d.repWe ? F : P).treasury += now;
+                if (rest > 1e6) (state.reparations = state.reparations || []).push({ from: d.repWe ? me : foe, to: d.repWe ? foe : me, left: rest, per: rest / 12, cid: c.id });
+                out.push(d.repWe ? `💸 You pay ${fn} ${formatVal(A)} in reconstruction aid${rest > 1e6 ? ` (${formatVal(now)} now, the rest monthly)` : ''}.` : `💰 ${fn} pays ${formatVal(A)} in reparations${rest > 1e6 ? ` (${formatVal(now)} now, ${formatVal(rest / 12)} a month for a year)` : ''}.`);
+            }
+            if (d.liftTheirs && X.sanTheirs) { state.sanctionsOnMe = Math.max(0, (state.sanctionsOnMe || 0) - 2); out.push(`🔓 ${fn} lifts its sanctions on you.`); }
+            if (d.liftOurs && X.sanOurs) { delete state.sanctionsOn[foe]; out.push(`🔓 You lift your sanctions on ${fn}.`); }
+            // security & politics
+            if (!annexed) {
+                if (d.dmz) { c.dmz = true; out.push('🛡 A demilitarised zone separates the two armies.'); }
+                if (d.regime) { const t = `Transitional government of ${fn}`; F.hos = t; F.hog = t; try { LEADERS[foe] = [t, t]; } catch (e) { } F.stability = clamp((F.stability || 50) - 10, 5, 100); const r0 = getRel(me, foe); if (r0 < 15) addRel(me, foe, 15 - r0); out.push(`🏛 ${X.f.hog && X.f.hog !== t ? esc(X.f.hog) : 'Their leader'} steps down; a transitional government takes over in ${fn}.`); }
+                if (d.disarm) { MILF[foe] = (MILF[foe] || 1) * 0.6; try { delete _milBaseCache[foe]; } catch (e) { } out.push(`⚔ ${fn} cuts its armed forces by 40%.`); }
+            }
+            if (d.pows) { addRel(me, foe, 3); P.stability = clamp(P.stability + 1, 0, 100); out.push('🤝 Prisoners of war go home.'); }
+            if (d.recog) c.recognised = true;
+            // the war itself
+            if (!annexed) {
+                if (d.kind === 'capitulate') { capitulationOffer(foe, c, 'terms'); out.push(`🏳 ${fn} surrenders unconditionally. Dictate your terms — annexation is now possible.`); }
+                else if (d.kind === 'ceasefire' || d.kind === 'deesc') {
+                    if (c.type === 'war') { c.type = 'ceasefire'; c.intensity = Math.min(c.intensity - 25, 30); }
+                    else c.intensity = clamp(c.intensity - rint(15, 25), 0, 100);
+                    c.ceasefireByPlayer = true; c.ceasefireDay = state.dayIndex; c.intensity = clamp(c.intensity, 9, 100);
+                    out.push(d.kind === 'deesc' ? `🤝 Both sides step back in the ${c.name}.` : `🕊 A ceasefire is in force in the ${c.name}; the front lines freeze.`);
+                } else {
+                    const side = c.sideA.includes(foe) ? 'sideA' : 'sideB', rest = c[side].filter(x => x !== foe && WORLD[x]);
+                    try { delete (state.capit || {})[foe]; } catch (e) { } try { delete reactState().war[foe]; } catch (e) { }
+                    if (rest.length) { c[side] = c[side].filter(x => x !== foe); out.push(`📜 ${fn} signs a separate peace and leaves the ${c.name}; ${rest.map(shortName).join(', ')} fight${rest.length > 1 ? '' : 's'} on.`); }
+                    else { c.type = 'resolved'; c.intensity = 0; out.push(`📜 The ${c.name} is over: peace treaty signed.`); }
+                }
+            }
+            // reactions: the other side, your people, the world
+            const land = !!(gained && gained.dp) || annexed;
+            addRel(me, foe, annexed ? 0 : d.kind === 'peace' || d.kind === 'settle' ? 10 : 5);
+            P.stability = clamp(P.stability + (d.kind === 'peace' || d.kind === 'settle' || annexed ? 4 : 2) + (land ? 2 : 0), 0, 100);
+            if (land && !annexed && !c.recognised) {
+                Object.keys(WORLD).filter(i => i !== me && i !== foe && socEligible(i) && (regimeOf(i) === 'democracy' || getRel(foe, i) > 30) && WORLD[i][3] > 2).slice(0, 40).forEach(i => addRel(me, i, -rint(2, 5)));
+                if (gained.dp > 2e5) state.conflicts.push({ id: 'occ_' + foe + '_' + state.dayIndex, name: `Resistance in the land ceded by ${fn}`, type: 'insurgency', intensity: 22, sideA: [me], sideB: [], nonState: 'Local partisans', backA: [], backB: [], mediators: [], location: [me], playerMade: true,
+                    brief: `Partisans in the territory ${fn} ceded to ${state.player} refuse the new border.`, flavor: [`Partisans sabotage a rail line in the newly annexed districts.`, `Protests against ${state.player}'s rule in the ceded territory.`] });
+            }
+            if (!annexed) logEvent(`📜 <b>${esc(state.player)} and ${esc(fn)} sign terms</b> on the ${esc(c.name)}: ${out.map(t => esc(t.replace(/^\S+\s/, ''))).join(' ')}`, 'good');
+            state.conflicts = state.conflicts.filter(k => k.type !== 'resolved');
+            try { refreshMapView(); } catch (e) { } try { updateEconomyUI(); } catch (e) { } setTimeout(() => { try { renderWarButton(); } catch (e) { } }, 30);
+            return out;
+        }
+        // ---- capitulations, annexations and the result of the last agreement (top of the War & Peace panel) ----
+        function capitulationCards() {
+            let h = '';
+            const D0 = WAR_UI.done;
+            if (D0 && state.dayIndex - D0.day <= 1 && D0.out && D0.out.length) h += `<div class="wm-card" style="border-color:#4d7c0f"><div class="wm-ctop"><b>${D0.annex ? '🏴 Annexation of' : '📜 Agreement with'} ${esc((state.annexed || {})[D0.foe] ? state.annexed[D0.foe].name : shortName(D0.foe))}</b><span class="wm-since">${D0.annex ? 'done' : 'signed'}</span></div>${D0.out.map(t => `<div class="wm-eff" style="color:#d6c79c;margin:2px 0">${esc(t)}</div>`).join('')}</div>`;
+            capitOffers().forEach(foe => {
+                const K = state.capit[foe], c = capitConflict(foe), fn = esc(shortName(foe)), n = nationIso(foe);
+                const why = { occupied: 'Your forces occupy the whole country.', warscore: 'Its army has collapsed.', terms: 'It accepted unconditional surrender.' }[K.why] || '';
+                h += `<div class="wm-card wm-capit"><div class="wm-ctop"><b>🏳 ${flagHTML(n, 12)} ${fn} has capitulated</b><span class="wm-since">${state.dayIndex - K.day} d ago</span></div>
+                    <div class="wm-eff">${why} Its government accepts any terms you dictate. Annexing it adds ${formatPop(n.pop)} people, ${formatVal(n.gdp)} of GDP and its treasury (${formatVal(Math.max(0, n.treasury || 0))}) to ${esc(state.player)}.</div>
+                    ${WAR_UI.annexAsk === foe ? `<div class="wm-terms"><span>Annex ${fn}?</span>Its whole territory, people, economy and treasury join ${esc(state.player)}. Most of the world will condemn it.<div class="wm-btns"><button type="button" class="wm-btn wm-go" onclick="annexConfirm('${foe}', true)">🏴 Yes — annex ${fn}</button><button type="button" class="wm-btn" onclick="WAR_UI.annexAsk=null;renderWarPanel()">Cancel</button></div></div>` : ''}
+                    <div class="wm-btns"><button type="button" class="wm-btn wm-go" onclick="annexConfirm('${foe}')">🏴 Annex ${fn}</button>${c ? `<button type="button" class="wm-btn wm-terms-btn" onclick="openTerms('${c.id}')">🏳 Dictate terms</button>` : ''}<button type="button" class="wm-btn" onclick="capitRelease('${foe}')">🕊 Grant an honourable peace</button></div></div>`;
+            });
+            return h;
+        }
+        function annexConfirm(foe, sure) {
+            if (!capitOf(foe)) return;
+            if (!sure) { WAR_UI.annexAsk = foe; playClick(); renderWarPanel(); return; }         // second click confirms (no browser dialog)
+            WAR_UI.annexAsk = null;
+            let out = []; try { out = annexCountry(foe, state.playerIso, 'capitulation') || []; } catch (e) { console.warn('annex', e); }
+            WAR_UI.mode = 'ext'; WAR_UI.done = { foe, out, day: state.dayIndex, annex: true }; renderWarPanel();
+        }
+        function capitRelease(foe) {
+            const K = capitOf(foe); if (!K) return;
+            const c = state.conflicts.find(k => k.id === K.cid); if (c) { c.type = 'resolved'; c.intensity = 0; }
+            delete state.capit[foe]; addRel(state.playerIso, foe, 20); nationIso(state.playerIso).stability = clamp(nationIso(state.playerIso).stability + 3, 0, 100);
+            state.conflicts = state.conflicts.filter(k => k.type !== 'resolved');
+            logEvent(`🕊 ${esc(state.player)} grants ${esc(shortName(foe))} an honourable peace after its capitulation. The war is over.`, 'good');
+            renderWarPanel(); renderWarButton();
+        }
+        function annexedSection() {
+            const me = state.playerIso, A = state.annexed || {}, L0 = Object.keys(A).filter(i => A[i].by === me);
+            if (!L0.length) return '';
+            return `<div class="wm-sec">Annexed territories</div>` + L0.map(i => { const a = A[i]; return `<div class="wm-mini"><b>${esc(a.name || shortName(i))}</b> — annexed ${esc(a.date || '')} · +${formatPop(a.pop)} people · +${formatVal(a.gdp)} GDP · +${formatVal(a.treasury)} treasury${a.mp ? ` · +${a.mp.toLocaleString()} troops` : ''}</div>`; }).join('');
         }
         // ---- Rankings that move: military capacity trends monthly (wars, spending, economy) ----
         function monthlyRankTick() {
@@ -6698,7 +7210,7 @@
             state.conflicts.forEach(c => {
                 const base = CONFLICTS_2026.find(k => k.id === c.id);
                 const target = c.ceasefireByPlayer && c.type === 'ceasefire' ? 22 : base ? base.intensity : c.intensity;
-                if (c.ceasefireByPlayer && c.type === 'ceasefire' && Math.random() < 0.0012 * D().retal) {
+                if (c.ceasefireByPlayer && c.type === 'ceasefire' && !c.capit && Math.random() < 0.0012 * D().retal * (c.dmz ? 0.3 : 1)) {
                     c.type = 'war'; c.intensity = 60; c.ceasefireByPlayer = false;
                     logEvent(`💥 The ceasefire in the ${esc(c.name)} has collapsed — fighting resumes.`, 'bad');
                 }
@@ -12180,6 +12692,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (c.money) p.treasury -= p.gdp * c.money * sev;
             if (c.growth) state.mods.growth += c.growth * sev;
             logEvent(`🚨 <b>Domestic crisis:</b> ${esc(c.t)} Approval ${Math.round(c.appr * sev)}%. Suggested response: <a href="#" onclick='document.getElementById("command-center").classList.remove("hidden");document.getElementById("cc-input").value=${JSON.stringify(c.fix)};document.getElementById("cc-input").focus();return false' class="underline">${esc(c.fix)}</a>`, 'bad');
+            try { (state.crises = state.crises || []).push({ t: c.t, fix: c.fix, day: state.dayIndex }); if (state.crises.length > 12) state.crises.shift(); } catch (e) { }   // kept for the 🪖 internal-security panel
             updateEconomyUI();
         }
 
@@ -13362,6 +13875,215 @@ function socWarProgress() {
         }
     });
     state.conflicts = state.conflicts.filter(c => c.type !== 'resolved');
+}
+
+// =====================================================================
+//  CAPITULATION & ANNEXATION — a beaten state capitulates (whole country occupied, its army broken, or unconditional surrender
+//  accepted in your terms). You may then annex it: its territory and internal borders merge into yours on the map, 100% of its
+//  people join your taxpayers and manpower, its GDP and remaining treasury join your books. Rewards and state-merging only.
+// =====================================================================
+function capitulationOffer(foe, c, why) {
+    const me = state.playerIso; if (!foe || foe === me || !WORLD[foe] || (state.annexed || {})[foe]) return;
+    state.capit = state.capit || {}; if (state.capit[foe]) return;
+    state.capit[foe] = { by: me, day: state.dayIndex, cid: c ? c.id : null, why };
+    if (!c) c = capitConflict(foe);
+    if (c && c.type !== 'resolved') { if (c.type === 'war') c.type = 'ceasefire'; c.intensity = Math.min(c.intensity, 14); c.ceasefireByPlayer = true; c.ceasefireDay = state.dayIndex; c.capit = true; }
+    logEvent(`🏳 <b>${esc(shortName(foe))} capitulates.</b> ${why === 'occupied' ? 'With the whole country occupied, its government' : why === 'warscore' ? 'Its army broken, its government' : 'Its government'} will sign any terms ${esc(state.player)} dictates. <a href="#" onclick="openWarPanel();return false" class="underline">Dictate terms or annex</a>`, 'good');
+    try { deliverMessage(foe, `We capitulate. Our forces are laying down their arms. Put your terms in front of us and we will sign them.`, { noVoice: true }); } catch (e) { }
+    try { renderWarButton(); } catch (e) { }
+}
+// the war record a capitulated enemy signs under (recreated if the ceasefire already wound the old one down)
+function capitConflict(foe) {
+    const me = state.playerIso, K = (state.capit || {})[foe];
+    let c = (K && state.conflicts.find(k => k.id === K.cid)) || state.conflicts.find(k => k.type !== 'resolved' && warEnemies(k, me).includes(foe));
+    if (!c && K) { c = { id: 'cap_' + foe, name: `War with ${shortName(foe)}`, type: 'ceasefire', intensity: 12, sideA: [me], sideB: [foe], backA: [], backB: [], mediators: [], location: [foe], playerMade: true, ceasefireByPlayer: true, ceasefireDay: state.dayIndex, capit: true,
+        brief: `${shortName(foe)} has capitulated and waits for ${state.player}'s terms.`, flavor: [`Delegations from ${shortName(foe)} wait for ${state.player}'s terms.`] }; state.conflicts.push(c); K.cid = c.id; }
+    return c;
+}
+// the whole country occupied → capitulation (after the weekly front moves and after cessions)
+function capitCheck() {
+    const me = state.playerIso; if (!me || !state.occ) return;
+    [...new Set(state.occ.filter(o => o.by === me).map(o => o.iso))].forEach(foe => {
+        if (!WORLD[foe] || (state.capit || {})[foe] || (state.annexed || {})[foe]) return;
+        const S = landShare(foe, me); if (S.total < 4 || S.frac < 0.98) return;
+        capitulationOffer(foe, state.conflicts.find(k => k.type !== 'resolved' && warEnemies(k, me).includes(foe)), 'occupied');
+    });
+}
+// before the monthly war-score verdict: a crushing position ends in capitulation instead of a border grab
+function capitWarScore() {
+    const me = state.playerIso;
+    state.conflicts.forEach(c => {
+        if (!c.playerMade || c.type !== 'war' || !c.sideA.includes(me) || !c.sideB.length || (c.ws || 0) < 70) return;
+        const foe = c.sideB[0]; if (!WORLD[foe] || (state.capit || {})[foe]) return;
+        if (landShare(foe, me).frac >= 0.5 || power(me) >= 3 * power(foe) || (nationIso(foe).stability || 50) < 20) capitulationOffer(foe, c, 'warscore');
+    });
+}
+// war reparations paid in monthly instalments
+function reparationsTick() {
+    const L0 = state.reparations; if (!L0 || !L0.length) return;
+    L0.forEach(r => {
+        if (r.left <= 0) return;
+        const A = nationIso(r.from), B = nationIso(r.to), amt = Math.min(r.per, r.left);
+        if ((state.annexed || {})[r.from] || (state.annexed || {})[r.to]) { r.left = 0; return; }
+        const paid = r.from === state.playerIso ? amt : Math.min(amt, Math.max(0, A.treasury));
+        A.treasury -= paid; B.treasury += paid; r.left -= paid; if (paid < amt) r.left -= (amt - paid) * 0.5;      // a broke payer defaults on half of the shortfall
+        if (r.to === state.playerIso || r.from === state.playerIso) logEvent(`💰 Reparations: ${esc(shortName(r.from))} pays ${esc(shortName(r.to))} ${formatVal(paid)}${r.left > 1e6 ? ` (${formatVal(r.left)} still owed)` : ' — the last instalment'}.`, r.to === state.playerIso ? 'good' : 'neutral');
+    });
+    state.reparations = L0.filter(r => r.left > 1e6);
+}
+
+// ---- the static tables (re-applied from state.annexed on load; restored first so a save never inherits another save's annexations) ----
+const ANNEX_SNAP = { rows: {}, ns: new Set(), cities: [] };
+function annexFinal(iso) { const A = state.annexed || {}; let v = iso, n = 0; while (A[v] && n++ < 20) v = A[v].by; return v; }
+function annexStatic(loser, victor) {
+    if (!WORLD[loser] || !WORLD[victor]) return;
+    [loser, victor].forEach(i => { if (!ANNEX_SNAP.rows[i]) ANNEX_SNAP.rows[i] = WORLD[i].slice(); });
+    WORLD[victor][2] = +(WORLD[victor][2] + WORLD[loser][2]).toFixed(2); WORLD[victor][3] = +(WORLD[victor][3] + WORLD[loser][3]).toFixed(3);
+    WORLD[loser][2] = 0; WORLD[loser][3] = 0;
+    if (!NON_SOVEREIGN.has(loser)) { NON_SOVEREIGN.add(loser); ANNEX_SNAP.ns.add(loser); }
+    CITIES.forEach((c, i) => { if (c[1] === loser) { ANNEX_SNAP.cities.push([i, c[1], c[5]]); c[1] = victor; if (c[5]) c[5] = 0; } });
+    try { Object.keys(_milBaseCache).forEach(k => { if (k === loser || k === victor) delete _milBaseCache[k]; }); } catch (e) { }
+    try { rankCache.key = null; } catch (e) { }
+}
+function annexStaticReset() {
+    Object.keys(ANNEX_SNAP.rows).forEach(i => { WORLD[i] = ANNEX_SNAP.rows[i].slice(); }); ANNEX_SNAP.rows = {};
+    ANNEX_SNAP.ns.forEach(i => NON_SOVEREIGN.delete(i)); ANNEX_SNAP.ns.clear();
+    ANNEX_SNAP.cities.slice().reverse().forEach(([i, iso, cap]) => { if (CITIES[i]) { CITIES[i][1] = iso; if (cap) CITIES[i][5] = cap; } }); ANNEX_SNAP.cities = [];
+    try { Object.keys(_milBaseCache).forEach(k => delete _milBaseCache[k]); } catch (e) { }
+}
+function annexStaticApply() { const A = state.annexed || {}; Object.keys(A).sort((a, b) => (A[a].day || 0) - (A[b].day || 0)).forEach(l => { try { annexStatic(l, A[l].by); } catch (e) { console.warn('annex static', l, e); } }); }
+
+// ---- the map: the loser's polygons join the victor's feature (shared borders dissolved), its old border stays as an internal line ----
+const ANNEX_GEO = { orig: {}, geom: {}, applied: '', line: null, lines: [], timer: null };
+function annexFeatIso(f) { const n = featName(f); return featIso(f) || nameToIso[n] || (typeof resolveIso === 'function' ? resolveIso(n) : null); }
+function annexRingArea(r) { let t = 0; for (let i = 1; i < r.length; i++) t += r[i - 1][0] * r[i][1] - r[i][0] * r[i - 1][1]; return t / 2; }
+function annexMergeFeat(vf, lfs) {
+    const polys = g => !g ? [] : g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : [];
+    const out = polys(vf.geometry).map(p => p.map(r => r.slice())), lines = [], vkeys = new Set();
+    out.forEach(p => p.forEach(r => r.forEach(q => vkeys.add(q[0] + ',' + q[1]))));
+    lfs.forEach(lf => polys(lf.geometry).forEach(lp => {
+        if (!lp || !lp[0] || lp[0].length < 4) return;
+        lp.forEach(r => { let run = []; r.forEach(q => { if (vkeys.has(q[0] + ',' + q[1])) run.push([q[1], q[0]]); else { if (run.length > 1) lines.push(run); run = []; } }); if (run.length > 1) lines.push(run); });
+        let done = false;
+        for (let i = 0; i < out.length && !done; i++) {
+            let m = null; try { m = mergeRings(out[i][0], lp[0]); } catch (e) { }
+            if (!m) continue;
+            const s = Math.abs(annexRingArea(out[i][0])) + Math.abs(annexRingArea(lp[0]));
+            if (Math.abs(Math.abs(annexRingArea(m)) - s) <= 0.003 * s) { out[i] = [m, ...out[i].slice(1), ...lp.slice(1)]; done = true; }
+        }
+        if (!done) out.push(lp.map(r => r.slice()));
+    }));
+    return { f: { ...vf, properties: { ...(vf.properties || {}) }, geometry: { type: 'MultiPolygon', coordinates: out } }, lines };
+}
+function annexMapSync() {
+    if (typeof RAW_GEO === 'undefined' || !RAW_GEO || !RAW_GEO.features || typeof geojsonLayer === 'undefined' || !geojsonLayer || !COUNTRY_OPTS || typeof map === 'undefined') return false;
+    const A = state.annexed || {}, keys = Object.keys(A).filter(l => WORLD[A[l].by]).sort((a, b) => (A[a].day || 0) - (A[b].day || 0));
+    const want = keys.map(l => l + '>' + annexFinal(l)).join(',');
+    if (want === ANNEX_GEO.applied) return true;
+    // 1. back to the borders of 1 January 2026
+    const O = ANNEX_GEO.orig;
+    if (Object.keys(O).length) RAW_GEO.features = RAW_GEO.features.filter(f => !O[featName(f)]).concat(Object.values(O));
+    // 2. merge every annexed state into its (final) victor
+    const lines = [];
+    keys.forEach(l => {
+        const v = annexFinal(l), byIso = i => RAW_GEO.features.filter(f => annexFeatIso(f) === i);
+        const lf = byIso(l), vf = byIso(v)[0]; if (!lf.length || !vf) return;
+        [l, v].forEach(i => { if (!ANNEX_GEO.geom[i]) { try { ANNEX_GEO.geom[i] = _annexGeomFor(i); } catch (e) { } } });     // fronts and control keep each country's own grid
+        [vf, ...lf].forEach(f => { const n = featName(f); if (!O[n]) O[n] = f; });
+        const M = annexMergeFeat(vf, lf);
+        RAW_GEO.features = RAW_GEO.features.filter(f => f !== vf && !lf.includes(f)); RAW_GEO.features.push(M.f);
+        M.lines.forEach(x => lines.push(x));
+    });
+    ANNEX_GEO.applied = want; ANNEX_GEO.lines = lines;
+    // 3. redraw (the same recipe as a graphics change) in both map engines
+    try {
+        try { map.removeLayer(geojsonLayer); } catch (e) { }
+        playerFeature = null; targetFeature = null;
+        geojsonLayer = L.geoJSON(simplifyGeo(RAW_GEO), COUNTRY_OPTS).addTo(map);
+        annexAlias();
+        if (state.phase === 'playing') highlightPlayerCountry();
+        if (state.target && nameLayer[state.target] && nameLayer[state.target] !== playerFeature) { targetFeature = nameLayer[state.target]; try { targetFeature.setStyle(getHighlightStyle('target')); } catch (e) { } }
+        GEO_INDEX = null;
+        if (ANNEX_GEO.line) { try { map.removeLayer(ANNEX_GEO.line); } catch (e) { } ANNEX_GEO.line = null; }
+        if (lines.length) ANNEX_GEO.line = L.polyline(lines, { renderer: regionRenderer, interactive: false, color: '#f3e3b0', weight: 1.6, opacity: 0.75, dashArray: '7 4', lineCap: 'butt' }).addTo(map);
+        try { buildHalo(RAW_GEO); } catch (e) { }
+        try { buildLabels(RAW_GEO); } catch (e) { }
+        try { applyMapStyle(); } catch (e) { }
+        try { refreshMapView(); } catch (e) { }
+    } catch (e) { console.warn('annex map', e); }
+    return true;
+}
+function annexAlias() {          // the annexed state's map names lead to its new owner's layer (clicks, chat, "show on map")
+    const A = state.annexed || {};
+    Object.keys(A).forEach(l => { if (!WORLD[A[l].by]) return; const vn = isoToName(annexFinal(l)), lay = nameLayer[vn]; [A[l].mapName, isoToName(l)].forEach(n => { if (n && lay && n !== vn) nameLayer[n] = lay; }); });
+}
+function _annexGeomFor(iso) { let g = null; try { geojsonLayer.eachLayer(l => { if (!g && l.feature && annexFeatIso(l.feature) === iso) g = l.feature.geometry; }); } catch (e) { } return g; }
+function annexMapSoon() {       // the borders may still be loading (a save opened from the start screen): retry until they are drawn
+    if (annexMapSync()) return;
+    clearInterval(ANNEX_GEO.timer); let n = 0;
+    ANNEX_GEO.timer = setInterval(() => { if (annexMapSync() || ++n > 120) clearInterval(ANNEX_GEO.timer); }, 1000);
+}
+
+// ---- annexation: the state merge ----
+function annexCountry(loser, victor, why) {
+    const me = state.playerIso;
+    if (!loser || !victor || loser === victor || !WORLD[loser] || !WORLD[victor] || loser === me) return [];
+    state.annexed = state.annexed || {}; if (state.annexed[loser]) return [];
+    const X = nationIso(loser), V = nationIso(victor), fn = shortName(loser), out = [];
+    let mp = 0; try { mp = Math.round(((milInventory(loser).troops || 0) * 0.5 + (X.pop || 0) * 0.004) / 100) * 100; } catch (e) { }
+    const rec = { by: victor, day: state.dayIndex, date: fmtDate(state.date), name: fn, mapName: isoToName(loser), pop: Math.round(X.pop || 0), gdp: Math.round(X.gdp || 0), treasury: Math.round(Math.max(0, X.treasury || 0)), mp, why: why || '' };
+    // 1. people, output and money: 100% of the population joins the taxpayers (revenue follows GDP), the treasury is seized
+    V.pop += X.pop || 0; V.gdp += X.gdp || 0; V.treasury += Math.max(0, X.treasury || 0);
+    X.pop = 0; X.gdp = 0; X.treasury = 0;
+    state.annexed[loser] = rec;
+    annexStatic(loser, victor);
+    // 2. wars: the war with the victor ends; the loser's internal wars pass to the victor; elsewhere it simply drops out
+    state.conflicts.forEach(c => {
+        const inA = c.sideA.includes(loser), inB = c.sideB.includes(loser);
+        ['backA', 'backB', 'mediators'].forEach(k => { if (c[k]) c[k] = c[k].filter(i => i !== loser); });
+        if (c.location) c.location = [...new Set(c.location.map(i => i === loser ? victor : i))];
+        if (!inA && !inB) return;
+        const opp = inA ? c.sideB : c.sideA, own = inA ? 'sideA' : 'sideB';
+        if (opp.includes(victor)) { c.type = 'resolved'; c.intensity = 0; return; }
+        if (!opp.some(i => WORLD[i] && i !== loser)) { c[own] = [...new Set(c[own].map(i => i === loser ? victor : i))]; c.intensity = Math.max(5, c.intensity * 0.8); return; }
+        c[own] = c[own].filter(i => i !== loser); if (!c[own].length) { c.type = 'resolved'; c.intensity = 0; }
+    });
+    state.conflicts = state.conflicts.filter(c => c.type !== 'resolved');
+    // 3. fronts: the victor's own land the loser held returns; the loser's holdings abroad pass to the victor
+    try {
+        ensureOccState();
+        const Gv = gridOf(victor); if (Gv && state.control[victor]) Gv.cells.forEach(x => { if (cellOwnerG(victor, x) === loser) setCell(victor, x, 'GOV'); });
+        state.occ = state.occ.filter(o => o.iso !== loser && !(o.iso === victor && o.by === loser));
+        state.occ.forEach(o => { if (o.by === loser) o.by = victor; });
+        delete state.control[loser];
+        Object.keys(state.control).forEach(iso => { const ov = state.control[iso]; Object.keys(ov).forEach(k => { if (ov[k] === loser) ov[k] = victor; }); });
+    } catch (e) { console.warn('annex fronts', e); }
+    // 4. treaties, organisations, deals, sanctions, envoys, capitulation, sites
+    try { (state.treaties || []).forEach(t => { if (t.parties && t.parties.includes(loser)) { t.parties = t.parties.filter(i => i !== loser); if (t.parties.length < 2 && t.status === 'active') t.status = 'lapsed'; } }); } catch (e) { }
+    try { const O = orgState(); Object.keys(O).forEach(id => { O[id].members = O[id].members.filter(i => i !== loser); O[id].suspended = (O[id].suspended || []).filter(i => i !== loser); }); } catch (e) { }
+    try { (state.agreements || []).forEach(a => { if (a.partner === loser && a.status === 'active') a.status = 'terminated'; }); } catch (e) { }
+    try { if (state.sanctionsOn) delete state.sanctionsOn[loser]; delete (state.envoyDeals || {})[isoToName(loser)]; delete state.capit[loser]; } catch (e) { }
+    try { const R = reactState(); ['g', 'f', 'w', 'cd', 'war'].forEach(k => { if (R[k]) delete R[k][loser]; }); } catch (e) { }
+    try { state.pendingOffers = (state.pendingOffers || []).filter(o => o.iso !== loser && o.partner !== loser && o.from !== loser); } catch (e) { }
+    try { (state.sites || []).forEach(s => { let ch = false; if (s.owner === loser) { s.owner = victor; ch = true; } if (s.host === loser) { s.host = victor; ch = true; } if (ch) { try { updateSiteMarker(s); } catch (e) { } } }); } catch (e) { }
+    try { (state.reparations || []).forEach(r => { if (r.from === loser || r.to === loser) r.left = 0; }); } catch (e) { }
+    if (state.target && resolveIso(state.target) === loser) state.target = isoToName(victor);
+    // 5. the world reacts (a recognised capitulation still shocks most governments)
+    if (victor === me) {
+        Object.keys(WORLD).filter(i => i !== me && socEligible(i) && WORLD[i][3] > 1).forEach(i => {
+            const ally = getRel(loser, i) > 30 || (typeof treatyPartners === 'function' && treatyPartners(loser).includes(i));
+            const d = (ally ? 12 : 0) + (regimeOf(i) === 'democracy' ? 8 : 3); if (d && getRel(me, i) > -90) addRel(me, i, -rint(Math.max(1, d - 3), d + 3));
+        });
+        nationIso(me).stability = clamp(nationIso(me).stability + 6, 0, 100);
+    }
+    out.push(`🏴 ${fn} is annexed: +${formatPop(rec.pop)} people (taxpayers and manpower), +${formatVal(rec.gdp)} GDP, +${formatVal(rec.treasury)} from its treasury${mp ? `, +${mp.toLocaleString()} troops` : ''}.`);
+    logEvent(`🏴 <b>Annexation:</b> ${esc(shortName(victor))} annexes ${esc(fn)}. Its territory, ${formatPop(rec.pop)} people, ${formatVal(rec.gdp)} of output and ${formatVal(rec.treasury)} of reserves join ${esc(shortName(victor))}. Most governments condemn the move.`, victor === me ? 'good' : 'bad');
+    // 6. the map and the screens
+    annexMapSoon();
+    try { updateEconomyUI(); } catch (e) { } try { updateTopbarNation(); } catch (e) { } try { renderDiplomacyMenu(); } catch (e) { }
+    try { grpRefresh(true); } catch (e) { } try { renderCoupBtn(); } catch (e) { }
+    setTimeout(() => { try { renderWarButton(); } catch (e) { } }, 30);
+    return out;
 }
 
 // ---- events: consequences of neglect (player) ----
@@ -15969,7 +16691,8 @@ function gaVote(kind, target, proposer) {
 }
 
 // ---------- calling allies to war (they answer after a few days) ----------
-function warEnemies(c) { const me = state.playerIso; return (c.sideA.includes(me) ? c.sideB : c.sideA).concat(c.sideA.includes(me) ? (c.backB || []) : (c.backA || [])).filter(i => WORLD[i]); }
+function warEnemies(c, iso) { if (iso !== undefined) return (c.sideA.includes(iso) ? c.sideB : c.sideA).filter(x => WORLD[x]);   // (c, iso): the states on the other side; (c): the player's foes incl. their backers (ally calls)
+    const me = state.playerIso; return (c.sideA.includes(me) ? c.sideB : c.sideA).concat(c.sideA.includes(me) ? (c.backB || []) : (c.backA || [])).filter(i => WORLD[i]); }
 function warIsDefender(c) { return !c.playerMade; }   // wars you started are flagged playerMade
 function allyCandidates(c, via) {
     const me = state.playerIso, mySide = c.sideA.includes(me) ? 'A' : 'B', foes = warEnemies(c), have = new Set(c.sideA.concat(c.sideB, c.backA || [], c.backB || []));
@@ -16371,7 +17094,7 @@ function openHelp() {
         <li><b>🏛 Government</b> — budget, economy, war &amp; casualties, world rankings, <b>Politics</b> (elections, projected vote, political capital), <b>Treaties &amp; UN</b> (propose pacts, call on your allies in a war, answer their calls, Security Council votes), <b>Organizations</b> (UN, NATO, EU, BRICS, African Union, Arab League, ASEAN, GCC, SCO, CSTO, G7, G20, OPEC+ and more, plus the informal Axis of Resistance: join, leave, use their tools) and <b>Non-state actors</b>.</li>
         <li><b>🗺 Map view</b> — political map, front lines, or internal control (militias, autonomous regions, breakaway states). <b>Click inside a group's area</b> to see who rules it, like a country.</li>
         <li><b>🔍</b> (under the zoom buttons, or press <b>F</b>) — find any country, city or armed group.</li>
-        <li><b>🪖 Coup</b> — coup risk at home and abroad. <b>📑 Report</b> — your advisor's situation report.</li>
+        <li><b>🪖 Coup</b> — internal security: coup risk, insurgencies, armed groups at home, unrest and who controls your land. <b>⚔ War &amp; peace</b> — wars, disputes, fronts and allies abroad; propose or dictate peace terms. <b>📑 Report</b> — your advisor's situation report.</li>
         <li><b>👁</b> (next to ?) or <b>V</b> — view-only mode: hides every panel so you can look at the map; press V or Esc to bring the interface back.</li>
         <li><b>Space</b> pauses, <b>Esc</b> closes windows, <b>?</b> opens this screen.</li></ul>
         <div class="gs-stat-lbl mt-4 mb-1">What drives the world</div><div class="text-slate-300" style="line-height:1.6">Every country has education, health, safety, corruption, inflation, unemployment and debt that respond to spending. Wars move front lines. Armed groups hold their own ground and answer to their patrons. Treaties bind allies to defend each other, and breaking your word costs credibility. Elections can remove you from office.</div></div></div>`;
@@ -16464,6 +17187,53 @@ function systemsEnsure() {
 }
 
 // =====================================================================
+//  WAR & PEACE WIRING — peace terms, capitulations and annexations: saved fields, loading, new games, ticks, redirects
+// =====================================================================
+['annexed', 'capit', 'reparations', 'peaceTalks', 'occV', 'crises'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+{
+    const _gf = geomFor;            // fronts and control keep each country's own 2026 grid after a merge
+    geomFor = function (iso) { return ANNEX_GEO.geom[iso] || _gf.apply(this, arguments); };
+    const _iw = initWorld;
+    initWorld = function () { _iw.apply(this, arguments); state.annexed = {}; state.capit = {}; state.reparations = []; state.peaceTalks = {}; state.crises = []; };
+    const _as = applySave;
+    applySave = function (d) {
+        try { annexStaticReset(); if (d && d.state && d.state.occ && d.state.occV === undefined) d.state.occV = 4; } catch (e) { console.warn('annex load', e); }   // older saves kept their fronts
+        _as.apply(this, arguments);
+        try {
+            ['annexed', 'capit', 'reparations', 'peaceTalks', 'crises'].forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; });
+            state.annexed = state.annexed || {}; state.capit = state.capit || {}; state.reparations = state.reparations || []; state.peaceTalks = state.peaceTalks || {};
+            annexStaticApply(); annexMapSoon(); try { rankCache.key = null; updateEconomyUI(); } catch (e) { }
+            WAR_UI.mode = 'ext'; WAR_UI.reply = null; WAR_UI.done = null; WAR_UI.annexAsk = null; closeWarPanel(); renderWarButton();
+        } catch (e) { console.warn('annex load', e); }
+    };
+    const _dt = dailyTick;
+    dailyTick = function (catchUp) { _dt.apply(this, arguments); if (state.phase !== 'playing') return; try { if (state.date.getDate() === 6) reparationsTick(); } catch (e) { console.warn('reparations', e); } };
+    const _ft = frontTick;
+    frontTick = function () { _ft.apply(this, arguments); try { capitCheck(); } catch (e) { console.warn('capitulation', e); } };
+    const _sw = socWarProgress;
+    socWarProgress = function () { try { capitWarScore(); } catch (e) { console.warn('capitulation', e); } _sw.apply(this, arguments); try { capitCheck(); } catch (e) { } };
+    const _her = handleEnvoyReply;          // "We accept" in the chat signs a peace proposal or counter-proposal from the terms composer
+    handleEnvoyReply = function (name, text) {
+        const D0 = (state.envoyDeals || {})[name];
+        if (D0 && D0.terms && D0.topic === 'peace' && /^(we )?(accept|agree|agreed|deal|yes|confirm|ok|okay)\b|let us proceed|we sign/.test(String(text || '').trim().toLowerCase())) {
+            const c = state.conflicts.find(k => k.id === D0.conflictId);
+            if (!c || state.dayIndex - (D0.day || 0) > 30) { delete state.envoyDeals[name]; return 'That offer has lapsed. Send us new terms if you want to talk.'; }
+            let out = []; try { out = signPeaceTerms(c, D0.iso, D0.terms); } catch (e) { console.warn('peace terms', e); }
+            return `Then it is agreed. ${out.join(' ')}`.trim();
+        }
+        return _her.apply(this, arguments);
+    };
+    const _ut = updateTargetUI;             // an annexed country's intel opens its new owner
+    updateTargetUI = function (cName) { const a = [...arguments]; try { const i = resolveIso(cName), A = (state.annexed || {})[i]; if (A && WORLD[A.by]) a[0] = isoToName(annexFinal(i)); } catch (e) { } return _ut.apply(this, a); };
+    const _mi = milInventory;               // the annexed state's army and reservists join the victor's manpower
+    milInventory = function (iso) { const r = _mi.apply(this, arguments); try { const A = state.annexed || {}; Object.keys(A).forEach(l => { if (A[l].by === iso && r) r.troops += A[l].mp || 0; }); } catch (e) { } return r; };
+    const _sg = setGraphics;                // a graphics change rebuilds the country layer from the merged borders: re-point the annexed names
+    setGraphics = function () { _sg.apply(this, arguments); try { annexAlias(); } catch (e) { } };
+    const _pi = proxiesIn;                  // armed groups in annexed land now operate inside the victor
+    proxiesIn = function (iso) { const r = _pi.apply(this, arguments); try { const A = state.annexed || {}; Object.keys(A).forEach(l => { if (A[l].by === iso) _pi(l).forEach(p => { if (!r.includes(p)) r.push(p); }); }); } catch (e) { } return r; };
+}
+
+// =====================================================================
 //  TOOLTIPS — hover anything in the top bar, the resource strip or the zoom buttons to see what it is
 // =====================================================================
 const TIPS = {
@@ -16477,8 +17247,8 @@ const TIPS = {
     'res:Sites': 'Sites\nYour strategic sites (power plants, bases, factories…) and the projects being built.',
     'ai-ind': 'AI engine\nConnect an AI (built-in, Claude, ChatGPT or Gemini) to write diplomacy, reports and treaty texts. Off means the offline staff engine.',
     'front-btn': 'Map view\nSwitch between the political map, front lines (wars) and internal control (militias, autonomous regions, breakaway states).',
-    'coup-btn': 'Coup risk\nThe chance the army moves against your government. Click for the coup panel and loyalty measures.',
-    'war-btn': 'War & peace\nThe wars you are fighting and how they are going. Click for the war panel.',
+    'coup-btn': 'Internal security\nCoup risk, insurgencies and civil war at home, armed groups on your soil, unrest and protests, and who controls your territory. Click for the internal panel.',
+    'war-btn': 'War & peace\nWars and disputes with other states, front lines and occupied land abroad, your allies, peace terms and capitulations. Click for the war panel.',
     'report-btn': 'Situation report\nYour advisor\'s summary of the economy, the military, diplomacy and threats.',
     'act:toggleCommandCenter': 'Orders (Command Center)\nType orders in plain English, then press Execute.',
     'act:openSociety': 'Government\nBudget, economy, war & casualties, non-state actors, politics, treaties & UN and world rankings.',
