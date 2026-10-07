@@ -7207,6 +7207,7 @@
             }
             state.conflicts = JSON.parse(JSON.stringify(CONFLICTS_2026));
             state.coup = null;
+            customTypesRestore({}); state.econ = null; state.rebel0 = undefined; state.buildPick = null;     // buildings: a new campaign starts with the catalogue only
             state.control = {}; state.occ = null; state.occV = 0; ensureOccState(); setTimeout(() => { try { refreshFront(); refreshControl(); updateMapViewBtn(); renderCoupBtn(); } catch (e) { } }, 400);
             state.relDelta = {}; state.orders = { queue: [], history: [] }; state.orderSeq = 0;
             state.scheduled = []; state.unread = {}; state.msgSeq = 0; state.usedIdeas = new Set(); state.sanctionsOnMe = 0;
@@ -7412,7 +7413,7 @@
                 return;
             }
             state.orders.queue.push(o);
-            if (o.cat === 'construction' && o.kind === 'build') { showProposedSite(o); flashReply(`🏗 <b>${esc(o.siteName || siteT(o.siteType).name)}</b> (${esc(siteT(o.siteType).name)}) proposed at <b>${esc(o.loc.place)}</b> — ${formatVal(o.cost)}, ${fmtBuildTime(o.buildDays)}. The pin is on the map: drag it, or use <b>📍 Choose on map</b>. Press <b>Execute</b> and work starts at once.`); }
+            if (o.cat === 'construction' && o.kind === 'build') { showProposedSite(o); try { aiInterpretOrder(o); } catch (e) { } flashReply(`🏗 <b>${esc(o.siteName || siteT(o.siteType).name)}</b> (${esc(siteT(o.siteType).name)}) proposed at <b>${esc(o.loc.place)}</b> — ${formatVal(o.cost)}, ${fmtBuildTime(o.buildDays)}. The pin is on the map: drag it, or use <b>📍 Choose on map</b>. Press <b>Execute</b> and work starts at once.`); }
             if (o.cat === 'construction' && o.kind === 'joint') flashReply(`🤝 Joint ${esc(siteT(o.siteType).name.toLowerCase())} talks with ${o.targets.map(t => esc(shortName(t.iso))).join(', ')} queued. Each country will answer in Diplomacy; the route is drawn once partners agree.`);
             if (state.pin && (o.cat === 'construction' || o.kind === 'move')) clearPin();
             renderQueue(); updateCapacity();
@@ -7774,8 +7775,8 @@
             railway:     { rx:/(\brail|high.speed|\bmetro\b|train line|subway|tram(way)?s?\b)/, prio:8, name:'Rail Line', icon:'🚄', days:[1100,2500], cost:8e9, growth:0.25, approval:1, cat:'transport', y:.07, u:.02, mw:-60, desc:'Moves people and freight; long-term growth.' },
             dam:         { rx:/(\bdam\b|hydroelectric|hydro ?power|hydro (plant|station))/, prio:12, name:'Hydroelectric Dam', icon:'🌊', days:[1825,2920], cost:2e9, fixed:true, growth:0.15, sens:'water', cat:'energy', y:.11, u:.01, mw:1800, desc:'Massive long-term utility revenue with near-zero fuel import costs.' },
             solar:       { rx:/(solar|wind (farm|park|power|turbines?)|renewable|wind turbines)/, prio:10, name:'Renewable Energy Park', icon:'☀', days:[270,540], cost:1e9, growth:0.1, approval:1, cat:'energy', y:.08, u:.02, mw:500, desc:'Clean power; cuts gas and oil imports.' },
-            desal:       { rx:/(desalination|desalinat|water (purification|treatment) plant)/, prio:20, name:'Desalination Plant', icon:'💧', days:[540,900], cost:0.3e9, fixed:true, growth:0.05, approval:2, cat:'health', coastal:true, popGrowth:0.15, y:.08, u:.05, mw:-40, fx:{ health:.6 }, desc:'Fresh water for arid coasts: faster population growth, a bigger taxpayer base, better health.' },
-            hospital:    { rx:/(hospital(?! ship)|medical (cent|complex|city)|clinics?\b)/, prio:10, name:'National Hospital', icon:'🏥', days:[700,1100], cost:0.4e9, approval:3, cat:'health', y:.02, u:.1, mw:-10, fx:{ health:1 }, desc:'Raises the health index and approval.' },
+            desal:       { rx:/(desalination|desalinat|seawater (plant|treatment))/, prio:20, name:'Desalination Plant', icon:'💧', days:[540,900], cost:0.3e9, fixed:true, growth:0.05, approval:2, cat:'health', coastal:true, popGrowth:0.15, y:.08, u:.05, mw:-40, fx:{ health:.6 }, desc:'Fresh water for arid coasts: faster population growth, a bigger taxpayer base, better health.' },
+            hospital:    { rx:/(hospital(?! ship)|medical (cent|complex|city))/, prio:10, name:'National Hospital', icon:'🏥', days:[700,1100], cost:0.4e9, approval:3, cat:'health', y:.02, u:.1, mw:-10, fx:{ health:1 }, desc:'Raises the health index and approval.' },
             university:  { rx:/(university|academy|college campus|research (cent|lab|institute|park|campus)|laborator|institute of technology|polytechnic)/, prio:0, name:'Research University', icon:'🎓', days:[730,1095], cost:0.5e9, fixed:true, growth:0.08, approval:2, cat:'education', y:.14, u:.06, mw:-10, fx:{ edu:1.5 }, desc:'Raises the national education index; a higher-skilled workforce pays more tax.' },
             sez:         { rx:/(special economic zone|free (trade )?zone|industrial (park|zone|estate)|\bsez\b|smart city|new city)/, prio:12, name:'Special Economic Zone', icon:'🏙', days:[1100,2200], cost:3e9, growth:0.35, cat:'finance', y:.14, u:.02, mw:-80, desc:'Attracts investors and factories; strong growth.' },
             mine:        { rx:/(\bmines?\b|mining|copper|gold|iron ore|nickel|bauxite|uranium mine|quarry)/, prio:6, name:'Mining Complex', icon:'⛏', days:[700,1100], cost:1.5e9, growth:0.15, cat:'industry', y:.15, u:.05, mw:-50, desc:'Metal ore for industry and export.' },
@@ -7803,7 +7804,7 @@
             plane_factory:{ rx:/((planes?|aircraft|fighters?|fighter jets?|jets?|bombers?|helicopters?|warplanes?) (factory|factories|plant|assembly|production|manufactur\w*|works|line)|aircraft industry)/, prio:30, name:'Plane Factory', icon:'✈', days:[1095,1460], cost:6e9, fixed:true, growth:0.08, defense:1.5, cat:'military', homeOnly:true, y:0, u:.03, mw:-120, produces:{ aircraft:10, perDays:30 }, desc:'Builds 10 aircraft every 30 days: multirole jets, stealth fighters or strategic bombers at domestic prices.' },
             shipyard:    { rx:/(ship ?yards?|naval (shipyard|dockyard)|dockyards?|shipbuilding|warship (factory|yard|plant)|dry ?docks?|ship (factory|plant))/, prio:30, name:'Naval Shipyard', icon:'🚢', days:[1460,2190], cost:12e9, fixed:true, growth:0.1, defense:1.5, cat:'military', homeOnly:true, coastal:true, y:0, u:.025, mw:-150, produces:{ perDays:365, carriers:1, destroyers:4, frigates:8, capacity:{ carrier:.5, destroyer:.125, frigate:.125 } }, desc:'Builds warships: a carrier in 1 year (50% of capacity), a destroyer every 3 months, a frigate every ~50 days.' },
             auto_plant:  { rx:/((auto(mobile|motive)?|cars?|vehicles?|trucks?|evs?|electric vehicles?|bus(es)?) (factory|factories|plant|assembly|manufactur\w*|production|works|industry)|gigafactory|car ?maker)/, prio:26, name:'Automobile Manufacturing Plant', icon:'🚗', days:[540,900], cost:0.9e9, fixed:true, growth:0.08, cat:'industry', homeOnly:true, y:.16, u:.05, mw:-50, desc:'Cars and trucks sold at home and abroad; high corporate tax revenue.' },
-            farm:        { rx:/(\bfarms?\b|(grain|wheat|corn|feed) silos?|farmland|agri.?business|agricultur\w* (complex|project|zone|park|hub)|plantations?|ranch|greenhouses?|irrigation (project|scheme|network)|food (security )?(hub|park)|orchards?|vineyards?|fish farm|aquaculture)/, prio:8, name:'Commercial Farm', icon:'🌾', days:[90,180], cost:0.05e9, fixed:true, cat:'agriculture', homeOnly:true, y:.2, u:.06, mw:-2, fx:{ food:1 }, desc:'Cuts expensive food imports and earns agricultural export revenue; prevents food-shortage crashes.' },
+            farm:        { rx:/(\bfarms?\b|farmland|agri.?business|agricultur\w* (complex|project|zone|park|hub)|plantations?|ranch|greenhouses?|food (security )?(hub|park)|orchards?|vineyards?|fish farm|aquaculture)/, prio:8, name:'Commercial Farm', icon:'🌾', days:[90,180], cost:0.05e9, fixed:true, cat:'agriculture', homeOnly:true, y:.2, u:.06, mw:-2, fx:{ food:1 }, desc:'Cuts expensive food imports and earns agricultural export revenue; prevents food-shortage crashes.' },
             steel_mill:  { rx:/(steel ?(mill|works|plant|factory|complex)|steelworks|smelter|blast furnace|alumin(i)?um (plant|smelter))/, prio:30, name:'Steel Mill', icon:'🔩', days:[730,1095], cost:1.1e9, fixed:true, growth:0.08, cat:'industry', homeOnly:true, y:.13, u:.045, mw:-200, fx:{ steel:.03 }, desc:'Exports raw materials and makes every other domestic building 3% cheaper (up to 15%).' },
             cyber_hub:   { rx:/(cyber ?(security|intelligence|defen[cs]e|command|operations?|warfare)? ?(hub|cent(er|re)|command|agency|headquarters|hq|unit|academy|facility)|cyber hub|cyber ?security|signals intelligence (cent|base|hub)|intelligence (hub|cent(er|re)|headquarters))/, prio:28, name:'Cyber Security & Intelligence Hub', icon:'🛡', days:[365,545], cost:0.6e9, fixed:true, cat:'security', homeOnly:true, y:.14, u:.05, mw:-20, fx:{ cyber:.35, tech:.3 }, desc:'Steals industrial secrets to boost tech revenue and blocks losses from enemy hackers (−35% damage per hub).' },
             factory:     { rx:/(factory|factories|\bplant\b|manufactur|assembly|\bworks\b|industrial complex|processing plant)/, prio:-6, name:'Industrial Plant', icon:'🏭', days:[365,730], cost:1.5e9, growth:0.15, cat:'industry', y:.14, u:.05, mw:-80, desc:'General manufacturing; growth and corporate tax.' },
@@ -7879,6 +7880,208 @@
         function buildCatalogBrief(max = 60) {
             const keys = Object.keys(SITE_TYPES).filter(k => !SITE_TYPES[k].gen && !SITE_TYPES[k].custom);
             return keys.slice(0, max).map(k => { const T = SITE_TYPES[k]; return `${k}: ${T.name} ${formatVal(T.cost)}${T.fixed ? '' : ' (scaled by local prices)'}, ${typeTimeText(T)}${T.homeOnly ? ', own territory only' : ''}${T.coastal ? ', coast' : ''} — ${T.desc || ''}`; }).join('\n');
+        }
+
+        // ---- PROCEDURAL BUILDABLES ENGINE: archetypes × 4 tiers → 220 more structures (with the hand-made catalogue, 270+) ----
+        //  [id, cat, insignia, 'Small|Standard|Large|National names', list price of the standard tier ($B), build days of the standard tier,
+        //   y (yearly revenue share), u (yearly upkeep share), mw (power, standard tier), extra fields, words that name it, what it does]
+        //  Price at order time = tier price × local price level × difficulty × steel discount; revenue and upkeep follow the price paid, and the monthly
+        //  ledger scales revenue with the country's own conditions (stability, sanctions, war, market access) — balanced on the country's baseline.
+        const BUILD_TIERS = [['s', 0.3, 0.6, /\b(small|pilot|mini|local|community|modest|starter|test)\b/], ['m', 1, 1, null], ['l', 2.5, 1.4, /\b(large|big|major|regional|expanded|second)\b/], ['x', 6, 2, /\b(national|mega|giant|huge|massive|flagship|world.class|enormous|country.?wide)\b/]];
+        const BUILD_ARCH = [
+            ['wind', 'energy', 'sun', 'Wind Turbine Cluster|Onshore Wind Farm|Offshore Wind Farm|National Wind Corridor', 0.9, 450, .09, .025, 350, {}, /(wind (farm|park|turbines?|power|energy)|offshore wind)/, 'Clean wind power for the grid; cuts gas imports.'],
+            ['geothermal', 'energy', 'bolt', 'Geothermal Well Field|Geothermal Power Plant|Geothermal Complex|National Geothermal Network', 1.2, 700, .1, .03, 300, {}, /(geothermal)/, 'Steady renewable baseload power.'],
+            ['storage', 'energy', 'bolt', 'Battery Storage Site|Grid Battery Plant|Grid-Scale Storage Park|National Storage Network', 0.6, 300, .08, .03, 150, {}, /(battery storage|grid (battery|storage)|energy storage|pumped storage|storage (park|plant) for (power|electricity))/, 'Stores power for the evening peak; steadier grid.'],
+            ['grid', 'infrastructure', 'route', 'Substation Upgrade|High-Voltage Transmission Line|HVDC Interconnector|National Smart Grid', 0.8, 540, .05, .015, 200, { fx: { infra: .3 } }, /(power (grid|lines?)|transmission lines?|substations?|interconnector|smart grid|electric(al|ity)? grid|\bhvdc\b)/, 'Moves power where it is needed; raises the infrastructure index.'],
+            ['lng', 'energy', 'flame', 'LNG Bunkering Station|LNG Import Terminal|LNG Export Terminal|LNG Mega-Hub', 2, 1000, .14, .04, -20, { coastal: true, fx: { tariffs: .5 } }, /(\blng\b|liquefied natural gas|gas terminal|regasification)/, 'Ships gas to and from world markets.'],
+            ['oilfield', 'energy', 'barrel', 'Oil Well Cluster|Oilfield Development|Offshore Oil Platform|Giant Oilfield Program', 1.5, 900, .18, .06, -30, { fx: { oil: 1 } }, /(oil ?(field|wells?|rigs?|platforms?|drilling|exploration)|offshore platform|drilling (program|project|rig))/, 'Pumps crude for export; revenue follows the oil price.'],
+            ['hydrogen', 'energy', 'drop', 'Hydrogen Pilot Plant|Green Hydrogen Plant|Hydrogen Hub|National Hydrogen Valley', 1.5, 720, .1, .04, -200, { fx: { tech: .3 } }, /(hydrogen|electroly[sz]er|ammonia plant)/, 'Clean fuel for industry and export.'],
+            ['biomass', 'energy', 'flame', 'Biogas Digester Network|Biomass Power Plant|Waste-to-Energy Plant|National Bioenergy Program', 0.5, 450, .1, .05, 150, { fx: { clean: .2 } }, /(biomass|biogas|waste.to.energy|bio.?fuels?|incinerator)/, 'Power from farm and city waste.'],
+            ['fusion', 'science', 'atom', 'Fusion Test Rig|Fusion Research Reactor|Fusion Demonstration Plant|National Fusion Program', 4, 2000, .02, .04, -50, { fx: { tech: .5 }, approval: 1 }, /(fusion|tokamak|stellarator)/, 'Frontier energy research; prestige and tech spin-offs.'],
+            ['petrochem', 'industry', 'factory', 'Chemical Works|Petrochemical Plant|Petrochemical Complex|Petrochemical City', 2, 900, .16, .05, -150, { fx: { oil: .5 } }, /(petro.?chemical|chemical (plant|works|complex|factory)|fertili[sz]er (plant|factory)|plastics? (plant|factory))/, 'Turns oil and gas into plastics, fertiliser and chemicals for export.'],
+            ['cement', 'industry', 'factory', 'Cement Kiln|Cement Plant|Building Materials Complex|National Cement Group', 0.4, 450, .15, .05, -60, { fx: { steel: .01 } }, /(cement|concrete plant|building materials)/, 'Cement and building materials; slightly cheaper construction.'],
+            ['textile', 'industry', 'factory', 'Garment Workshop|Textile Mill|Textile & Apparel Cluster|National Textile Zone', 0.25, 300, .18, .06, -20, { growth: .03 }, /(textile|garment|apparel|clothing (factory|plant)|cotton mill)/, 'Jobs and clothing exports.'],
+            ['electronics', 'industry', 'chip', 'Electronics Assembly Line|Electronics Factory|Consumer Electronics Campus|National Electronics Cluster', 1.2, 600, .17, .05, -80, { fx: { tech: .5 } }, /(electronics|smartphones?|phone factory|computer (factory|plant)|laptops?)/, 'Phones, computers and components for export.'],
+            ['pharma', 'health', 'medical', 'Pharmacy Lab|Pharmaceutical Plant|Pharmaceutical Complex|National Pharma Cluster', 0.8, 640, .17, .05, -40, { fx: { health: .3, tech: .3 } }, /(pharma\w*|drug (factory|plant)|medicine (factory|plant)|vaccine (plant|factory|cent(er|re)))/, 'Medicines at home and for export; better health.'],
+            ['batteries', 'industry', 'bolt', 'Battery Assembly Line|Battery Cell Factory|Battery Gigafactory|National Battery Valley', 2, 700, .16, .05, -150, { fx: { tech: .3 } }, /(battery (factory|plant|gigafactory|cells?)|lithium.ion|cell factory)/, 'Batteries for cars and the grid.'],
+            ['foodproc', 'agriculture', 'wheat', 'Food Packing Plant|Food Processing Plant|Agro-Industrial Complex|National Food Industry Zone', 0.3, 365, .17, .05, -20, { fx: { food: .5 } }, /(food (processing|packing|factory)|meat (plant|processing)|dairy|flour mill|sugar (mill|refinery)|cannery|bakery)/, 'Adds value to farm output; food for home and export.'],
+            ['timber', 'industry', 'factory', 'Sawmill|Timber & Paper Mill|Forest Products Complex|National Forestry Industry', 0.3, 365, .15, .05, -30, {}, /(sawmill|timber|paper mill|pulp|lumber|wood processing)/, 'Timber and paper for building and export.'],
+            ['ammo', 'military', 'blast', 'Ammunition Workshop|Ammunition Plant|Munitions Complex|National Arsenal', 0.6, 365, .1, .05, -40, { defense: .5, fx: { arms: .5 } }, /(ammunition|munitions?( (plant|factory|complex))?|artillery shells|shells? (factory|plant)|gunpowder|explosives (factory|plant)|arsenal)/, 'Shells and ammunition for your forces; some exports.'],
+            ['smallarms', 'military', 'target', 'Small Arms Workshop|Rifle Factory|Small Arms Plant|National Small Arms Industry', 0.3, 300, .14, .05, -15, { defense: .3, fx: { arms: .4 } }, /(rifles?|small arms|gun (factory|plant)|weapons? (factory|plant)|firearms?)/, 'Rifles and light weapons; exports to partners.'],
+            ['radar', 'military', 'radar', 'Radar Post|Early-Warning Radar|Over-the-Horizon Radar|National Air Surveillance Network', 0.4, 365, 0, .04, -10, { defense: .8, fx: { airShield: .03 } }, /(radar|early.warning|surveillance station|listening post)/, 'Sees raids coming: better air defence.'],
+            ['training', 'military', 'helmet', 'Training Range|Military Training Centre|Combined Arms Training Area|National Defence University', 0.3, 365, 0, .05, -10, { defense: .5, fx: { edu: .1 } }, /(training (cent(er|re)|range|ground|area|facility)|military (academy|college|school|university)|boot camp|firing range)/, 'Better-trained troops.'],
+            ['depot', 'military', 'crate', 'Supply Dump|Logistics Depot|Strategic Logistics Hub|National Strategic Reserve Depot', 0.3, 300, 0, .04, -10, { defense: .4 }, /((logistics|supply|military|fuel|ammunition) (depot|dump|hub|base)|strategic reserves? depot|military warehouse)/, 'Fuel, food and spare parts close to the front.'],
+            ['coastdef', 'military', 'anchor', 'Coastal Gun Battery|Coastal Defence Site|Anti-Ship Missile Base|Coastal Fortress Line', 0.5, 365, 0, .04, -10, { defense: 1, coastal: true }, /(coastal (defen[cs]e|battery|fort|artillery)|anti.ship (missile )?(base|battery|site))/, 'Guards your coast against landings and blockades.'],
+            ['milhosp', 'health', 'medical', 'Field Hospital|Military Hospital|Military Medical Centre|National Military Medical City', 0.25, 365, 0, .08, -10, { defense: .2, approval: 1, fx: { health: .3 } }, /(military hospital|field hospital|veterans?.? hospital)/, 'Care for soldiers and veterans.'],
+            ['dronebase', 'military', 'drone', 'Drone Strip|Drone Base|UAV Operations Wing|National Drone Command', 0.3, 300, 0, .05, -10, { defense: .8, fx: { airShield: .03 } }, /((drone|uav) (base|strip|airfield|wing|command|hangar))/, 'Operates armed and surveillance drones.'],
+            ['borderpost', 'security', 'shield', 'Border Checkpoint|Border Post|Border Security Complex|National Border Guard Network', 0.08, 180, 0, .06, -5, { fx: { safety: .2, rebel: .05 } }, /(border (post|checkpoint|crossing|station|guard)|checkpoints?|customs post)/, 'Controls smuggling and infiltration.'],
+            ['logistics', 'transport', 'crate', 'Truck Terminal|Logistics Park|Dry Port|National Logistics Corridor', 0.6, 540, .13, .03, -10, { fx: { tariffs: .4 } }, /(logistics (park|cent(er|re)|corridor)|dry port|freight (terminal|hub)|distribution cent(er|re)|warehouse complex|truck terminal)/, 'Faster freight; trade and customs revenue.'],
+            ['tunnel', 'transport', 'route', 'Road Tunnel|Mountain Tunnel|Undersea Tunnel|Trans-National Tunnel', 2, 1500, .03, .01, -5, { fx: { infra: .4 } }, /(tunnel)/, 'Cuts travel times; raises the infrastructure index.'],
+            ['transit', 'transport', 'train', 'Bus Depot|Bus Rapid Transit Line|City Transit System|National Public Transport Program', 0.4, 540, .03, .04, -20, { approval: 1, fx: { infra: .2 } }, /(bus (rapid transit|depot|network|station|lines?)|\bbrt\b|public transport|tram network|cable car)/, 'Commuters get to work faster; approval.'],
+            ['water', 'health', 'drop', 'Water Tower|Water Treatment Plant|Regional Water Supply System|National Water Grid', 0.4, 540, .04, .04, -20, { fx: { health: .4, clean: .3 } }, /(water (treatment|supply|tower|pipelines?|network|grid|works|system|purification)|aqueduct|sewage|wastewater|sanitation)/, 'Clean water and sanitation: better health.'],
+            ['irrigation', 'agriculture', 'wheat', 'Irrigation Canal|Irrigation Scheme|Regional Irrigation Network|National Irrigation Program', 0.3, 365, .1, .03, -5, { fx: { food: .6 } }, /(irrigation)/, 'More harvests from the same land.'],
+            ['telecom', 'infrastructure', 'satellite', 'Cell Tower Network|5G Network|Fibre-Optic Backbone|National Digital Network', 0.8, 540, .12, .04, -30, { fx: { infra: .3, tech: .3 } }, /(\b5g\b|\b6g\b|fib(re|er).?optic|broadband|telecom\w*|cell(ular)? towers?|internet (backbone|cables?|network)|subsea cables?)/, 'Fast internet and phone networks.'],
+            ['groundstation', 'space', 'satellite', 'Ground Station|Satellite Control Centre|Satellite Constellation|National Space Network', 0.5, 540, .08, .05, -10, { defense: .3, fx: { tech: .4 } }, /(ground station|satellite (control|network|constellation|tracking|dish|system|internet)|space surveillance|gps system|navigation satellites?)/, 'Runs satellites for communications and navigation.'],
+            ['observatory', 'science', 'eye', 'Observatory|Space Observatory|Radio Telescope Array|National Astronomy Centre', 0.2, 540, .01, .05, -5, { approval: 1, fx: { edu: .2, tech: .1 } }, /(observatory|telescopes?|planetarium)/, 'Science and national prestige.'],
+            ['lab', 'science', 'bulb', 'Research Lab|National Laboratory|Science Park|National Science City', 0.5, 540, .06, .05, -20, { fx: { tech: .4, edu: .3 } }, /(research (lab|laborator\w*|park|campus|reactor)|science (park|city|cent(er|re)|labs?)|national lab(orator(y|ies))?|innovation (hub|park|district|cent(er|re))|tech(nology)? park|r ?& ?d (cent(er|re)|campus))/, 'Research that feeds your industry; tech revenue.'],
+            ['biotech', 'science', 'medical', 'Biotech Lab|Biotechnology Institute|Biotech Cluster|National Genomics Programme', 1, 720, .13, .05, -30, { fx: { health: .3, tech: .4 } }, /(biotech\w*|genomic\w*|gene (lab|research)|bio.?labs?|life sciences)/, 'Medicines and biotech exports.'],
+            ['ai', 'science', 'ai', 'AI Lab|AI Research Institute|AI Supercomputing Centre|National AI Programme', 1.5, 540, .12, .05, -150, { fx: { tech: .6 } }, /(ai (lab|research|institute|university|program(me)?|cent(er|re)|academy)|artificial intelligence|machine learning|quantum (computers?|computing|lab|cent(er|re)))/, 'Frontier AI and quantum research; tech revenue.'],
+            ['vocational', 'education', 'cap', 'Vocational Workshop|Technical College|Vocational Training Network|National Skills Program', 0.15, 365, .06, .06, -5, { fx: { edu: .5 } }, /(vocational|technical (college|school|institute)|trade school|apprenticeship|skills (cent(er|re)|program))/, 'Skilled workers for your factories.'],
+            ['clinics', 'health', 'medical', 'Rural Clinic|Primary Care Clinic Network|Regional Health Network|National Primary Care Program', 0.15, 270, 0, .1, -5, { approval: 2, fx: { health: .5 } }, /(clinics?|health (cent(er|re)s?|posts?|network)|primary care)/, 'Doctors close to every village: health and approval.'],
+            ['resort', 'culture', 'star', 'Eco-Lodge|Tourist Resort|Resort City|National Tourism Megaproject', 0.6, 720, .14, .04, -15, { fx: { tourism: 1 } }, /(resorts?|tourism (zone|project|complex)|tourist (cent|complex|resort|area)|hotels?|beach (resort|development)|casino|theme park|amusement park|water park)/, 'Tourist spending and hotel taxes.'],
+            ['culture', 'culture', 'columns', 'Cultural Centre|National Theatre|Arts District|National Cultural Complex', 0.2, 540, .03, .04, -5, { approval: 2, fx: { tourism: .3 } }, /(theat(re|er)|concert hall|opera house|arts? (cent(er|re)|district|complex|gallery)|cultural (cent(er|re)|complex|district)|cinemas?)/, 'Culture, pride and some tourism.'],
+            ['sports', 'culture', 'stadium', 'Sports Hall|Sports Complex|Olympic Training Centre|National Sports City', 0.2, 450, .03, .04, -5, { approval: 2 }, /(sports? (hall|complex|cent(er|re)|academy|facilities?|city)|gymnasium|swimming pools?)/, 'Sport for the young; approval.'],
+            ['finance', 'finance', 'coins', 'Trading Floor|Financial District|International Financial Centre|Global Financial Hub', 1.2, 900, .16, .03, -20, {}, /(financial (cent(er|re)|district|hub)|stock exchange|banking (cent|district|hub)|fintech|business district|bourse|offshore (banking|financial))/, 'Banks and investors: tax revenue.'],
+            ['mall', 'finance', 'coins', 'Shopping Centre|Shopping Mall|Mega Mall|National Trade Fair Grounds', 0.4, 540, .12, .03, -15, { approval: 1 }, /(shopping (malls?|cent(er|re)s?)|\bmalls?\b|trade fair|exhibition hall|convention cent(er|re)|bazaar|market hall)/, 'Retail jobs and sales taxes.'],
+            ['green', 'environment', 'sun', 'Tree Nursery|Reforestation Program|National Park|Great Green Wall', 0.1, 365, .01, .03, 0, { approval: 2, fx: { clean: .5 } }, /(reforestation|plant(ing)? (trees|forests?)|forest(ry)? (program|project)|national park|nature reserve|wildlife (park|reserve|sanctuary)|green wall|wetlands?)/, 'Cleaner air and land; approval.'],
+            ['recycling', 'environment', 'crate', 'Recycling Centre|Recycling Plant|Waste Management Complex|National Circular Economy Program', 0.15, 365, .06, .05, -10, { fx: { clean: .6 } }, /(recycl\w*|waste management|landfill|garbage|trash (plant|processing)|composting)/, 'Clean streets and recovered materials.'],
+            ['flood', 'environment', 'wave', 'Flood Barrier|Flood Defence System|Coastal Sea Wall|National Flood Protection', 0.4, 720, 0, .02, 0, { approval: 1, fx: { infra: .2 } }, /(flood (barrier|defen[cs]es?|walls?|protection|control)|sea ?wall|levees?|dykes?|storm surge)/, 'Protects cities and farms from floods.'],
+            ['police', 'security', 'shield', 'Police Station|Police Academy|Regional Police Headquarters|National Police Command', 0.08, 270, 0, .1, -5, { approval: 1, fx: { safety: .6 } }, /(police (stations?|academy|headquarters|hq|base|posts?)|gendarmerie|riot police (base|cent(er|re)))/, 'Safer streets.'],
+            ['emergency', 'security', 'siren', 'Fire Station|Emergency Response Centre|Disaster Response Hub|National Emergency Management Centre', 0.06, 270, 0, .1, -5, { approval: 1, fx: { safety: .3 } }, /(fire (stations?|brigade)|emergency (response|management|services) (cent(er|re)|hub|base)|disaster (response|relief) (cent(er|re)|hub|base)|civil defen[cs]e (cent(er|re)|base))/, 'Faster response to fires and disasters.'],
+            ['govt', 'government', 'columns', 'Ministry Building|Government Complex|New Administrative District|New Administrative Capital', 1, 900, 0, .03, -20, { approval: 1, fx: { infra: .1 } }, /(ministry (building|headquarters)|government (complex|district|quarter|buildings?|offices)|administrative (capital|district|cent(er|re))|new capital|presidential (palace|complex))/, 'A seat of government; prestige.'],
+            ['space', 'space', 'rocket', 'CubeSat Program|Space Research Station|Lunar Probe Program|National Crewed Space Program', 2, 1460, .02, .04, -20, { approval: 3, fx: { tech: .5 } }, /(space station|lunar|moon (mission|base|program(me)?)|mars (mission|program(me)?)|astronauts?|crewed space|space probe|rocket program(me)?)/, 'Prestige and technology from space missions.'],
+            ['community', 'social', 'people', 'Community Centre|Elderly Care Home Network|Social Services Campus|National Welfare Centres Program', 0.1, 365, 0, .08, -5, { approval: 2 }, /(community cent(er|re)|elderly care|nursing homes?|orphanages?|care homes?|retirement homes?|youth cent(er|re)|homeless shelters?)/, 'Care for the vulnerable; approval.'],
+            ['fishing', 'agriculture', 'anchor', 'Fishing Harbour|Fishing Port|Fish Processing Complex|National Fisheries Program', 0.15, 365, .15, .05, -10, { coastal: true, fx: { food: .6 } }, /(fishing (port|harbou?r|fleet|village)|fisheries|fish (processing|market|port))/, 'Fish for the table and for export.'],
+            ['grain', 'agriculture', 'wheat', 'Grain Silo|Grain Storage Terminal|Strategic Grain Reserve|National Food Reserve', 0.1, 270, .03, .04, 0, { fx: { food: .4 } }, /(grain (silos?|storage|reserves?|terminal|elevator)|food reserves?|strategic (food|grain) reserves?)/, 'Food stocks that soften shortages.'],
+            ['hangar', 'military', 'plane', 'Maintenance Hangar|Aircraft Maintenance Depot|Aviation Repair Plant|National Aviation Overhaul Centre', 0.4, 450, 0, .05, -20, { defense: .4 }, /(hangars?|maintenance (depot|base|hangar)|repair (yard|plant|depot)|overhaul (cent(er|re)|plant))/, 'Keeps aircraft and vehicles flying.']
+        ];
+        function genBuildables() {
+            BUILD_ARCH.forEach(([id, cat, ico, names, b, days, y, u, mw, ex, rx, desc]) => {
+                const N = names.split('|');
+                BUILD_TIERS.forEach(([t, k, dk], i) => {
+                    const sk = Math.sqrt(k), fx = {};
+                    Object.entries((ex && ex.fx) || {}).forEach(([f, v]) => fx[f] = Math.round(v * sk * 100) / 100);
+                    SITE_TYPES[`g_${id}_${t}`] = { gen: true, arch: id, tier: t, cat, ico, icon: '🏗', name: N[i] || N[1], cost: Math.round(b * k * 1e9 / 1e6) * 1e6, days: [Math.round(days * dk * 0.75), Math.round(days * dk * 1.25)],
+                        y, u, mw: Math.round(mw * k), fx, defense: ex.defense ? Math.round(ex.defense * sk * 10) / 10 : undefined, approval: ex.approval ? Math.round(ex.approval * sk) : undefined,
+                        growth: ex.growth ? Math.round(ex.growth * sk * 100) / 100 : (y >= 0.1 ? Math.round(y * 0.4 * sk * 100) / 100 : undefined), coastal: !!ex.coastal, prio: 12, desc };
+                });
+            });
+        }
+        genBuildables();
+        // archetype matches for the order classifier; the size words pick the tier ("a large wind farm" → Offshore Wind Farm)
+        function buildArchMatches(s) {
+            const out = [];
+            BUILD_ARCH.forEach(a => { const m = s.match(a[10]); if (!m || !m[0].trim()) return;
+                let tier = 'm'; BUILD_TIERS.forEach(([t, , , trx]) => { if (trx && trx.test(s)) tier = t; });
+                // the tier's own name ("geothermal well field", "fibre-optic backbone") picks that tier
+                a[3].split('|').forEach((nm, i) => { if (s.includes(nm.toLowerCase())) tier = BUILD_TIERS[i][0]; });
+                out.push({ key: `g_${a[0]}_${tier}`, score: m[0].trim().length + 12, words: m[0].trim() }); });
+            return out;
+        }
+
+        // ---- CUSTOM BUILDABLES: anything the catalogue does not know becomes a new type (saved with the campaign) ----
+        //  Without AI a deterministic estimator prices it from its category, scale words and real-world reference costs;
+        //  with AI the order is interpreted before Execute (aiInterpretOrder) and the AI's real-world estimate replaces the guess.
+        const CUSTOM_CAT = {   // category: [reference price $B, build days, y, u, mw, extra, insignia]
+            military: [1.2, 540, 0, .04, -40, { defense: 1 }, 'shield'], energy: [1.5, 900, .1, .03, 300, {}, 'bolt'], industry: [1, 540, .15, .05, -80, { growth: .05 }, 'factory'],
+            infrastructure: [1, 900, .05, .02, -10, { fx: { infra: .3 } }, 'crane'], transport: [2, 1100, .07, .02, -20, { fx: { infra: .3 } }, 'route'], science: [0.8, 730, .06, .05, -40, { fx: { tech: .4, edu: .2 } }, 'bulb'],
+            space: [3, 1460, .04, .04, -40, { approval: 2, fx: { tech: .5 } }, 'rocket'], health: [0.4, 640, .02, .08, -10, { approval: 2, fx: { health: .5 } }, 'medical'], education: [0.4, 640, .05, .06, -10, { approval: 1, fx: { edu: .6 } }, 'cap'],
+            agriculture: [0.15, 270, .15, .05, -5, { fx: { food: .5 } }, 'wheat'], culture: [0.5, 720, .07, .03, -10, { approval: 2, fx: { tourism: .5 } }, 'columns'], finance: [1, 900, .14, .03, -20, {}, 'coins'],
+            environment: [0.3, 540, .02, .03, 0, { approval: 2, fx: { clean: .5 } }, 'sun'], security: [0.4, 400, 0, .06, -10, { fx: { safety: .5 } }, 'shield'], government: [0.6, 730, 0, .03, -10, { approval: 1 }, 'columns'],
+            social: [0.3, 540, .02, .05, -10, { approval: 2 }, 'people'], nuclear: [3, 1100, 0, .04, -100, { sens: 'nuclear' }, 'atom']
+        };
+        const CUSTOM_CAT_RX = [['space', /\b(space|orbit\w*|rocket|satellite|lunar|moon|mars|asteroid)\b/], ['nuclear', /\b(nuclear|uranium|plutonium|atomic)\b/], ['military', /\b(military|army|navy|naval|air force|missiles?|weapons?|defen[cs]e|bunker|fort\w*|barracks|tanks?|warships?|fighters?|bombers?|troops)\b/],
+            ['energy', /\b(power|energy|electric\w*|solar|wind|turbine|grid|oil|gas|fuel|hydro\w*|reactor)\b/], ['transport', /\b(rail\w*|train|metro|road|highway|bridge|airport|port|harbou?r|tunnel|canal|hyperloop|maglev|elevator|cable car|ferry)\b/],
+            ['industry', /\b(factory|plant|mill|works|manufactur\w*|assembly|forge|refinery|smelter|industrial)\b/], ['science', /\b(research|lab\w*|science|institute|observatory|accelerator|collider|ai|quantum|innovation)\b/],
+            ['health', /\b(hospital|clinic|medical|health|water|sanitation)\b/], ['education', /\b(school|universit\w*|college|academy|library|education)\b/], ['agriculture', /\b(farm\w*|crops?|grain|livestock|fish\w*|food|agri\w*|vineyard|orchard)\b/],
+            ['culture', /\b(museum|monument|statue|theat\w*|stadium|arena|park|tourism|tourist|resort|hotel|casino|temple|mosque|church|cathedral|memorial|tower|sculpture|art)\b/],
+            ['finance', /\b(bank|financ\w*|exchange|market|mall|business|trade cent\w*|office)\b/], ['environment', /\b(forest|trees?|green|recycl\w*|clean|climate|carbon|nature)\b/],
+            ['security', /\b(police|prison|surveillance|security|border|intelligence|spy)\b/], ['government', /\b(ministry|parliament|government|palace|capital|embassy|court)\b/], ['social', /\b(housing|homes?|shelter|community|welfare|orphanage)\b/]];
+        // real-world reference scale for exotic projects (× the category price)
+        const CUSTOM_SCALE_RX = [[/\bspace elevator\b/, 60], [/\b(hyperloop|maglev)\b/, 8], [/\b(particle accelerator|collider|synchrotron)\b/, 6], [/\b(artificial island|man.made island)\b/, 5], [/\b(megacity|new city|smart city|floating city)\b/, 15], [/\bcity\b/, 8],
+            [/\b(dome|arcology|mega.?structure|megaproject)\b/, 6], [/\b(skyscraper|tallest|tower)\b/, 1.5], [/\b(statue|monument|memorial|sculpture)\b/, 0.3], [/\b(kiosk|booth|shed|hut|garden|playground)\b/, 0.05], [/\b(cathedral|grand mosque|temple complex)\b/, 1]];
+        function customSlug(name) { return 'x_' + String(name).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40); }
+        function customRx(name) {
+            const w = String(name).toLowerCase().replace(/[^a-z0-9 &-]+/g, ' ').split(/\s+/).filter(x => x && !NAME_STOP.has(x) && !/^\d/.test(x));
+            if (!w.length) return /(?!)/;
+            return new RegExp('(' + w.map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + (x.length > 3 ? '\\w*' : '')).join('[\\s-]+') + ')');
+        }
+        // build a SITE_TYPES entry from a plain definition (estimator, AI, or a saved campaign) — numbers are clamped so no estimate can mint money
+        function registerCustomSiteType(def) {
+            if (!def || !def.name) return null;
+            const key = def.key || customSlug(def.name), c = CUSTOM_CAT[def.cat] ? def.cat : 'infrastructure', ref = CUSTOM_CAT[c];
+            const cost = clamp(+def.cost || ref[0] * 1e9, 1e6, 3e11), d0 = clamp(Math.round(+def.days || ref[1]), 30, 3650);
+            const T = { custom: true, fixed: true, cat: c, name: String(def.name).slice(0, 60), ico: ICONS[def.ico] ? def.ico : ref[6], icon: '🏗', cost, days: [Math.max(30, Math.round(d0 * 0.85)), Math.round(d0 * 1.15)],
+                y: clamp(+def.y || 0, 0, 0.22), u: clamp(+def.u || ref[3], 0.005, 0.1), mw: clamp(Math.round(+def.mw || 0), -2000, 3000), fx: {}, desc: String(def.desc || `${(BUILD_CATS.find(x => x[0] === c) || ['', c])[1]} project priced from comparable real-world projects.`).slice(0, 220),
+                growth: def.growth ? clamp(+def.growth, 0, 0.5) : undefined, approval: def.approval ? clamp(Math.round(+def.approval), -3, 5) : undefined, defense: def.defense ? clamp(+def.defense, 0, 4) : undefined,
+                sens: ['military', 'weapons', 'enrich', 'nuclear', 'water', 'prestige'].includes(def.sens) ? def.sens : (c === 'military' ? 'military' : undefined), coastal: !!def.coastal, homeOnly: def.homeOnly !== false, prio: 14, rx: customRx(def.name), ai: !!def.ai };
+            Object.entries(def.fx || {}).forEach(([k, v]) => { const n = +v; if (isFinite(n) && n) T.fx[k] = clamp(n, -2, 2); });
+            if (typeof ic === 'function' && ICONS[T.ico]) { T.emoji = '🏗'; T.icon = ic(T.ico); }
+            SITE_TYPES[key] = T;
+            state.customSiteTypes = state.customSiteTypes || {};
+            state.customSiteTypes[key] = { ...def, key, cat: c, cost, days: d0 };
+            return key;
+        }
+        // a new campaign or a loaded save: exactly that campaign's custom types
+        function customTypesRestore(defs) {
+            Object.keys(SITE_TYPES).forEach(k => { if (SITE_TYPES[k].custom) delete SITE_TYPES[k]; });
+            state.customSiteTypes = {};
+            Object.values(defs || {}).forEach(d => { try { registerCustomSiteType(d); } catch (e) { console.warn('custom type', e); } });
+        }
+        // deterministic estimate for an unknown building (no AI needed): category from its words, size and real-world reference scale
+        function estimateCustomType(text) {
+            const ph = buildPhraseOf(text); if (!ph) return null;
+            const s = ' ' + String(text).toLowerCase() + ' ', pl = ' ' + ph.toLowerCase() + ' ';
+            const cat = (CUSTOM_CAT_RX.find(([, rx]) => rx.test(pl)) || CUSTOM_CAT_RX.find(([, rx]) => rx.test(s)) || ['infrastructure'])[0], ref = CUSTOM_CAT[cat];
+            let k = 1; CUSTOM_SCALE_RX.forEach(([rx, m]) => { if (rx.test(pl)) k = m; });
+            if (/\b(small|pilot|mini|local|modest)\b/.test(s)) k *= 0.4; else if (/\b(large|big|major)\b/.test(s)) k *= 1.8; else if (/\b(national|mega|giant|huge|massive|world.class)\b/.test(s)) k *= 3;
+            const ex = ref[5] || {};
+            return { name: ph.replace(/\s+/g, ' '), cat, cost: Math.round(ref[0] * k * regionalIndex(state.playerIso) * 1e9 / 1e6) * 1e6, days: Math.round(ref[1] * clamp(Math.sqrt(k), 0.5, 3.5)), y: ref[2], u: ref[3], mw: Math.round(ref[4] * Math.sqrt(k)),
+                fx: ex.fx || {}, defense: ex.defense, approval: ex.approval, growth: ex.growth, sens: ex.sens, ico: ref[6], est: true };
+        }
+        function customTypeFor(text) {
+            const est = estimateCustomType(text); if (!est) return null;
+            const key = customSlug(est.name);
+            return SITE_TYPES[key] ? key : registerCustomSiteType({ ...est, key });
+        }
+
+        // ---- AI: interprets a build order before Execute (type, price, time, name, effects) — never blocks the order; the estimate stays if it fails ----
+        async function aiInterpretOrder(o) {
+            if (!o || o.cat !== 'construction' || o.kind !== 'build' || o.fromMenu || typeof aiReady !== 'function' || !aiReady()) return;
+            o.aiPending = true; try { renderQueue(); } catch (e) { }
+            const me = state.playerIso, p = nationIso(me), small = AI.provider === 'builtin';
+            const cats = BUILD_CATS.map(c => c[0]).filter(c => c !== 'custom').join('|');
+            const sys = `You are the construction ministry in a realistic geopolitical strategy game set in ${fmtDate(state.date)}. You map the player's build order onto the game's building system. ` +
+                `Pick an existing catalogue type when it is really the same thing; otherwise define a new building with a realistic real-world cost (USD), build time and running costs for ${shortName(me)}. Keep the player's own words in the name. Answer with JSON only.`;
+            const user = `ORDER: "${o.text}"\nThe game's first reading: ${siteT(o.siteType).name} (${o.siteType}), ${formatVal(o.cost)}, ${o.buildDays} days, at ${o.loc ? o.loc.place : '?'}.\n` +
+                `${shortName(me)}: GDP ${formatVal(p.gdp)}, GDP per head $${Math.round(p.gdp / Math.max(p.pop, 1)).toLocaleString()}, treasury ${formatVal(p.treasury)}.\n` +
+                `${aiGameRules()}\nCATALOGUE (key: name, price, build time):\n${buildCatalogBrief(small ? 30 : 60)}\n\n` +
+                `Return JSON: {"is_build":true|false,"match":"catalogue key or null","name":"short building name in the player's words, no place name","category":"${cats}",` +
+                `"cost_usd":number,"build_days":number,"revenue_usd_month":number,"upkeep_usd_month":number,"power_mw":number (+ supplies / - uses),` +
+                `"effects":{"growth":0..0.5,"approval":-3..5,"defense":0..4,"education":0..2,"health":0..2,"tourism":0..1,"tech":0..1},"coastal":bool,"home_only":bool,` +
+                `"icon":"${['factory', 'bolt', 'rocket', 'satellite', 'shield', 'medical', 'cap', 'wheat', 'columns', 'coins', 'route', 'crane', 'bulb', 'atom', 'plane', 'ship', 'tank', 'drone'].join('|')}",` +
+                `"description":"one line: what it does for the country","note":"one sentence telling the player how the game understood the order"}`;
+            let r = null;
+            try { r = await callAI(sys, user, true, { maxTokens: small ? 450 : 800, quiet: true }); } catch (e) { console.warn('ai build', e); }
+            o.aiPending = false;
+            if (!state.orders.queue.includes(o)) return;                        // already executed with the game's own estimate (or removed)
+            try {
+                if (!r || typeof r !== 'object') { renderQueue(); return; }
+                if (r.is_build === false && o.unknownBuild) { o.aiBuildNote = String(r.note || 'This does not look like a building — treated as a project anyway; rephrase it if you meant something else.').slice(0, 200); renderQueue(); return; }
+                const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+                const prev = o.siteType;
+                if (r.match && SITE_TYPES[r.match] && !SITE_TYPES[r.match].custom) {
+                    o.siteType = r.match;
+                    if (prev !== r.match) { o.baseCost = catalogBase(r.match, me); o.unknownBuild = false; }
+                } else if (num(r.cost_usd) > 0) {
+                    const E = r.effects || {}, cost = clamp(num(r.cost_usd), 1e6, Math.min(3e11, Math.max(p.gdp * 0.25, 5e8)));
+                    const key = registerCustomSiteType({ name: String(r.name || buildPhraseOf(o.text) || 'Project').replace(/,.*$/, '').slice(0, 60), cat: String(r.category || '').toLowerCase(), cost, days: num(r.build_days),
+                        y: clamp(num(r.revenue_usd_month) * 12 / cost, 0, 0.22), u: clamp(num(r.upkeep_usd_month) * 12 / cost, 0.005, 0.1), mw: num(r.power_mw),
+                        growth: num(E.growth), approval: num(E.approval), defense: num(E.defense), fx: { edu: num(E.education), health: num(E.health), tourism: num(E.tourism), tech: num(E.tech) },
+                        coastal: !!r.coastal, homeOnly: r.home_only !== false, ico: String(r.icon || ''), desc: String(r.description || ''), ai: true });
+                    o.siteType = key; o.baseCost = cost; o.unknownBuild = true;
+                }
+                if (r.name && String(r.name).length > 2) { o.aiName = true; o.siteName = `${String(r.name).replace(/,.*$/, '').slice(0, 60)}, ${o.loc ? o.loc.place : shortName(me)}`; }
+                o.aiBuildNote = String(r.note || `Understood as ${siteT(o.siteType).name}.`).slice(0, 220);
+                if (o.siteType !== prev) {
+                    o.specs = genSpecs(o.siteType, o, o.loc.host);
+                    if (o.loc && !canBuildAt(o.siteType, o.loc.lat, o.loc.lng).ok) { const sp = findBuildSpot(o.siteType, me); o.loc = { host: me, lat: sp.lat, lng: sp.lng, place: sp.place || buildPlaceName(me, sp.lat, sp.lng) }; }
+                    refreshBuildOrder(o, true);
+                    if (o.aiName) o.siteName = `${String(r.name).replace(/,.*$/, '').slice(0, 60)}, ${o.loc.place}`;
+                    showProposedSite(o);
+                }
+                renderQueue();
+            } catch (e) { console.warn('ai build apply', e); try { renderQueue(); } catch (e2) { } }
         }
 
         // Known facilities as of January 2026 (positions approximate)
@@ -9900,6 +10103,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (d.plr) WORLD.PLR = d.plr;
             if (d.leaders && d.leaders.VEN) LEADERS.VEN = d.leaders.VEN;
             state.markers = {};
+            try { customTypesRestore(d.state.customSiteTypes); state.econ = d.state.econ || null; state.rebel0 = d.state.rebel0; } catch (e) { console.warn('custom types', e); }   // before the sites draw
             state.sites = d.sites || [];
             state.sites.forEach(updateSiteMarker);
             state.moves = (d.moves || []).map(m => ({ ...m, line: null, marker: null }));
@@ -9926,6 +10130,8 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             startGameLoop();
             logEvent(`💾 Campaign loaded: ${esc(d.meta.player)}, ${d.meta.date}. Game paused — press Space to resume.`, 'good');
         }
+        // buildings: the campaign's custom building types, last month's building ledger, rebel-held share at the start
+        ['customSiteTypes', 'econ', 'rebel0'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 
         function highlightPlayerCountry() {
             if (typeof geojsonLayer === 'undefined' || !geojsonLayer) return;
@@ -11690,14 +11896,15 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         function aiGameRules() {
             if (aiGameRules._c) return aiGameRules._c;
             const builds = [];
-            try { Object.keys(SITE_TYPES).slice(0, 26).forEach(k => { const T = SITE_TYPES[k]; builds.push(`${T.name} ${formatVal(T.cost)}`); }); } catch (e) { }
+            try { Object.keys(SITE_TYPES).filter(k => !SITE_TYPES[k].gen && !SITE_TYPES[k].custom && k !== 'project').forEach(k => { const T = SITE_TYPES[k]; builds.push(`${T.name} ${formatVal(T.cost)}`); }); } catch (e) { }
             const L = [
                 `GAME RULES (geopolitics simulation, started 1 Jan 2026):`,
                 `- Orders are issued in plain English in the command bar; the game parses a category (military, diplomacy, economy, domestic, intelligence, humanitarian, construction), a kind, targets, a cost and a duration in realistic days.`,
                 `- The player issues up to ${typeof ORDERS_PER_WEEK !== 'undefined' ? ORDERS_PER_WEEK : 5} orders per week. Difficulty: ${typeof D === 'function' ? D().label : 'Normal'}.`,
                 `- Talks, agreements, treaties, messages and diplomacy are FREE; only real projects and purchases cost money (construction, procurement, aid actually paid).`,
                 `- Intelligence/covert operations (espionage, cyber, sabotage, disinformation, subversion, assassination, counter-intelligence) do NOT start wars by themselves — they are answered with expulsions, counter-intelligence, cyber retaliation, sanctions or protests, and can be exposed.`,
-                `- Buildable projects you can order (cost): ${builds.slice(0, 20).join('; ')}. A buildable not in this list is priced by the AI from its real-world cost.`,
+                `- Buildable projects you can order (cost): ${builds.join('; ')}; plus ${Object.keys(SITE_TYPES).filter(k => SITE_TYPES[k].gen).length} generated variants (wind farms, labs, clinics, depots, resorts…). A buildable not in this list becomes a new type priced from its real-world cost.`,
+                `- Building rules: on the player's own government-held land work starts at once (no approval) with a realistic build time; abroad the host must consent; coastal types need a coast; the player can pay ~4-10% of the price to rush; demolition is instant and refunds 50%. Operating buildings earn revenue and cost upkeep every month, use or supply power, and have effects (education, health, approval, defence, arms/tech exports, tourism, tariffs…).`,
                 `- Example orders the parser understands: "Build an air base in <city>", "Sign a trade deal with <country>", "Impose sanctions on <country>", "Launch airstrikes on <country>", "Spy on <country>", "Send humanitarian aid to <country>", "Raise the education budget".`
             ];
             return aiGameRules._c = L.join('\n');
@@ -13287,7 +13494,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             { let bad = null; try { bad = (typeof socValidateOrder === 'function') ? socValidateOrder(o) : null; } catch (e) { } if (bad) { state.orderSeq--; flashReply(bad); return; } }   // same checks as the command bar (B22)
             if (window.FORCE_DIRECTIVES && typeof needsDirective === 'function' && needsDirective(o)) { state.orderSeq--; openDirective(text); return; }
             state.orders.queue.push(o);
-            if (o.cat === 'construction' && o.kind === 'build') showProposedSite(o);
+            if (o.cat === 'construction' && o.kind === 'build') { showProposedSite(o); try { aiInterpretOrder(o); } catch (e) { } }
             state.usedIdeas.add(text);
             const cc = document.getElementById('command-center'); cc.classList.remove('hidden'); cc.classList.add('cc-open'); ccTab('orders');
             renderQueue(); updateCapacity(); renderIdeasUI();
@@ -17908,7 +18115,7 @@ async function aiOrderJudge(o) {
         `Each country answers in line with its [foreign-policy style] (hawk/firm/pragmatic/dove) shown below. ` +
         `CRITICAL: intelligence and covert operations (espionage, cyber, sabotage, disinformation, subversion, assassination) NEVER start a war or military retaliation by themselves — realistic answers are expulsions, counter-intelligence, cyber retaliation, sanctions, summoning or protests, scaled by whether the operation was exposed. Use military_alert/mobilize/retaliatory_strike ONLY for overt military orders (strikes, invasions, blockades, troop moves). ` +
         `Only include countries that would really react (0-5). Use ISO3 codes. Messages are what that country's real decision-maker or foreign ministry says to ${state.player}, in their own voice, 1-2 sentences.`;
-    const user = `ORDER: "${o.text}"\nGame parse: category ${o.cat}, kind ${o.kind || '-'}, targets ${(o.targets || []).map(t => t.iso + '(' + t.stance + ')').join(', ') || 'none'}, cost ${formatVal(o.cost || 0)}, duration ${o.days} days${o.specs ? ', specs ' + JSON.stringify(o.specs) : ''}${o.move && o.move.strength ? ', force ' + o.move.strength.label : ''}${o.covert ? ', covert' : ''}.\n` +
+    const user = `ORDER: "${o.text}"\nGame parse: category ${o.cat}, kind ${o.kind || '-'}, targets ${(o.targets || []).map(t => t.iso + '(' + t.stance + ')').join(', ') || 'none'}, cost ${formatVal(o.cost || 0)}, ${o.buildDays ? `build time ${o.buildDays} days (work starts at once), building ${siteT(o.siteType).name}${o.siteName ? ' "' + o.siteName + '"' : ''}` : `duration ${o.days} days`}${o.specs ? ', specs ' + JSON.stringify(o.specs) : ''}${o.move && o.move.strength ? ', force ' + o.move.strength.label : ''}${o.covert ? ', covert' : ''}.\n` +
         `Countries:\n${cast.map(aioBrief).join('\n')}\n` +
         `${aiGameRules()}\n${aiWorldContext()}\n\n` +
         `Return JSON: {"understood":"one sentence restating exactly what was ordered, with the player's numbers","success_odds":0-100,` +
@@ -18286,7 +18493,7 @@ function newsOrderIssued(o) {
     try { const st = n.stability, wars = playerAtWar(); body.push(`At home, the government's approval stands at ${st}%${wars.length ? `, with the country at war in the ${wars[0].name}` : ''}.${o.cost > (n.treasury || 0) * 0.25 && o.cost > 1e9 ? ' Opposition figures questioned the cost.' : ''}`); } catch (e) { }
     const pool = NEWS_ORDER_QUOTES[o.cat] || NEWS_ORDER_QUOTES.general;
     const it = newsPost({ kind: 'order', oid: o.id, iso: me, isos: [me].concat(T.map(t => t.iso)).slice(0, 4), kicker: `${P} · ${({ military: 'Defence', diplomacy: 'Foreign policy', economy: 'Economy', domestic: 'Home affairs', construction: 'Infrastructure', humanitarian: 'Aid' })[o.cat] || 'Government'}`,
-        headline: newsOrderHeadline(o), dek: `${({ military: 'Defence', diplomacy: 'Diplomacy', economy: 'Economy', domestic: 'Domestic policy', construction: 'Construction', humanitarian: 'Humanitarian' })[o.cat] || 'Government'} · expected to take about ${o.days} day${o.days === 1 ? '' : 's'}`,
+        headline: newsOrderHeadline(o), dek: `${({ military: 'Defence', diplomacy: 'Diplomacy', economy: 'Economy', domestic: 'Domestic policy', construction: 'Construction', humanitarian: 'Humanitarian' })[o.cat] || 'Government'} · expected to take about ${o.kind === 'build' && o.buildDays ? fmtBuildTime(o.buildDays) : o.days + ' day' + (o.days === 1 ? '' : 's')}`,
         body, quotes: [{ iso: me, who: n.hog && n.hog !== 'Commander' ? `${n.hog}, leader of ${P}` : `A government spokesperson in ${cap}`, text: pool[newsHash(o.id) % pool.length] }], tone: T.some(t => t.stance === 'hostile') ? 'bad' : 'neutral', key: 'order ' + o.id });
     o.newsId = it.id;
     newsAIOrder(it.id, o);
@@ -18458,7 +18665,7 @@ async function newsAIOrder(id, o) {
         const me = state.playerIso, n = newsNation(me) || {}, small = AI.provider === 'builtin';
         const T = (o.targets || []).filter(t => t.iso && WORLD[t.iso] && t.iso !== me);
         const facts = `Country: ${state.player} (capital ${newsDateline(me)}), leader ${n.hog || 'unknown'}, approval ${n.stability}%, treasury ${formatVal(n.treasury || 0)}.\n` +
-            `Decision announced today: "${o.text}"\nType: ${o.cat}${o.kind ? ' / ' + o.kind : ''}; budget ${formatVal(o.cost || 0)}; expected to take ${o.days} days${o.eta ? ', ready around ' + o.eta : ''}${o.loc && o.loc.place ? '; location ' + o.loc.place : ''}${o.siteType && SITE_TYPES[o.siteType] ? '; facility type ' + SITE_TYPES[o.siteType].name : ''}.\n` +
+            `Decision announced today: "${o.text}"\nType: ${o.cat}${o.kind ? ' / ' + o.kind : ''}; budget ${formatVal(o.cost || 0)}; expected to take ${o.buildDays || o.days} days${o.eta ? ', ready around ' + o.eta : ''}${o.loc && o.loc.place ? '; location ' + o.loc.place : ''}${o.siteType && SITE_TYPES[o.siteType] ? '; facility type ' + SITE_TYPES[o.siteType].name : ''}.\n` +
             (T.length ? `Countries concerned: ${T.map(t => { let r = 0; try { r = getRel(me, t.iso); } catch (e) { } return `${newsName(t.iso)} (${t.stance}, relations ${relLabel(r)[0].toLowerCase()}${(() => { try { return atWarWith(t.iso) ? ', at war' : ''; } catch (e) { return ''; } })()})`; }).join('; ')}.\n` : 'No foreign country is directly concerned.\n') +
             (() => { try { const w = playerAtWar(); return w.length ? `${state.player} is at war: ${w.map(c => c.name).join(', ')}.\n` : ''; } catch (e) { return ''; } })();
         const user = `${facts}\nWrite the news article about this decision. Return JSON: {"headline":"news headline, max 90 characters","dek":"one-sentence standfirst","body":["${small ? '1-2' : '2-3'} short paragraphs"],"quote":{"speaker":"name and title of a ${state.player} official or a foreign official","country":"ISO3","text":"one sentence"}}`;
