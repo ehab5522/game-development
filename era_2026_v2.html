@@ -88,6 +88,9 @@
         .sp-row { display: flex; justify-content: space-between; gap: 10px; font-size: 11px; padding: 2px 0; border-bottom: 1px dashed rgba(51,65,85,.6); }
         .sp-row span:first-child { color: #94a3b8; } .sp-row span:last-child { text-align: right; font-weight: 600; }
 
+        .ox-box { margin-top: 6px; padding: 4px 7px; border-left: 2px solid rgba(209,173,91,.45); background: rgba(0,0,0,.18); font-size: 10.5px; line-height: 1.35; }
+        .ox-row { display: flex; gap: 10px; justify-content: space-between; padding: 1px 0; } .ox-row span:first-child { color: #94a3b8; white-space: nowrap; } .ox-row span:last-child { text-align: right; color: #e2e8f0; }
+        .ox-num { color: #a3e635; font-family: ui-monospace, monospace; font-size: 10px; }
         .site-dot.small { width: 20px; height: 20px; font-size: 10px; border-width: 1.5px; }
         .unit-dot { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; background: #0b1220; border: 2px solid #f59e0b; box-shadow: 0 2px 8px rgba(0,0,0,.7); }
         .unit-dot.mine { box-shadow: 0 0 0 3px rgba(129,140,248,.45), 0 2px 8px rgba(0,0,0,.7); }
@@ -6628,8 +6631,11 @@
         function classifyOrder(text) {
             const s = ' ' + text.toLowerCase() + ' ';
             const site = (state.sites && state.playerIso) ? detectSite(text) : null;
-            const type = siteTypeOf(s);
+            const unitProd = isUnitProduction(s);                     // "build 50 tanks" buys weapons, it is not a building
+            const type = unitProd ? null : siteTypeOf(s);
             const mineSite = site && (site.owner === state.playerIso || site.host === state.playerIso);
+            // Demolish one of your own buildings (instant, 50% salvage) — before "shut down" and before budget policy ("scrap the university")
+            { const dm = demolishOrderOf(text, s, site, mineSite, type); if (dm) return dm; }
             // Manage one of our own facilities
             if (mineSite && (SHUT_RX.test(s) || RESTART_RX.test(s) || REPAIR_RX.test(s)) && !STRIKE_RX.test(s)) {
                 return { cat: 'construction', kind: REPAIR_RX.test(s) ? 'repair' : RESTART_RX.test(s) ? 'restart' : 'shutdown', siteTarget: site.id, targets: [], scale: 1, covert: COVERT_RX.test(s), blocs: [] };
@@ -6653,6 +6659,11 @@
             if (!(type && BUILD_RX.test(s)) && !(state.playerIso && detectCountries(text).filter(f => f.iso !== state.playerIso).length)) {
                 const pol = policyOf(text);
                 if (pol.length) return { cat: 'domestic', kind: 'policy', policies: pol, targets: [], scale: 1, covert: false, blocs: [] };
+            }
+            // A building the catalogue does not know ("build a space elevator"): the game defines a new type from the words (the AI refines it before Execute)
+            if (!type && !unitProd && !(site && !mineSite) && BUILD_INTENT_RX.test(s) && !STRIKE_RX.test(s) && typeof customTypeFor === 'function') {
+                const ck = customTypeFor(text);
+                if (ck) { const base = classifyOrderBase(text); return { ...base, cat: 'construction', kind: 'build', siteType: ck, unknownBuild: true, covert: COVERT_RX.test(s), intel: null, targets: base.targets.map(t => ({ ...t, stance: t.stance === 'hostile' ? 'neutral' : t.stance })) }; }
             }
             // New construction project
             if (type && BUILD_RX.test(s) && !(site && !mineSite && STRIKE_RX.test(s))) {
@@ -6742,18 +6753,20 @@
                 case 'humanitarian': cost = g * 0.0006 * c.scale; days = rint(3, 6); break;
                 case 'construction': {
                     if (c.kind === 'build') {
-                        const T = SITE_TYPES[c.siteType];
-                        const pc = p.pop ? p.gdp / p.pop : 20000;
-                        const units = c.siteType === 'nuclear' ? +((text.toLowerCase().match(/(\d+)\s*(reactors?|units?)/) || [])[1] || 1.5) / 1.5 : 1;
-                        cost = T.cost * clamp(pc / 45000, 0.45, 1.1) * clamp(units, 0.6, 3) * (c.scale > 1 ? 1.4 : c.scale < 1 ? 0.7 : 1);
-                        days = rint(2, 5);
+                        // catalogue price: spec buildables cost the same everywhere; others follow local price levels. A size word only changes non-catalogue projects.
+                        const T = siteT(c.siteType);
+                        const units = c.siteType === 'nuclear' ? +((text.toLowerCase().match(/(\d+)\s*(reactors?|units?)/) || [])[1] || 1) : 1;
+                        cost = catalogBase(c.siteType, state.playerIso) * clamp(units, 1, 6) * (T.fixed || T.gen || T.custom ? 1 : (c.scale > 1 ? 1.4 : c.scale < 1 ? 0.7 : 1));
+                        days = 1;
                     } else if (c.kind === 'joint') {
                         const T = SITE_TYPES[c.siteType];
                         cost = T.cost * 0.08 + g * 0.00003;                 // negotiation, studies and a down payment; the build share is charged on agreement
                         days = rint(5, 10);
+                    } else if (c.kind === 'demolish') {
+                        cost = 0; days = 1;                                   // demolition is instant and pays you back (salvage)
                     } else {
-                        const site = state.sites.find(x => x.id === c.siteTarget), T = SITE_TYPES[site.type];
-                        cost = c.kind === 'repair' ? T.cost * (site.status === 'destroyed' ? 0.7 : 0.3) : c.kind === 'restart' ? T.cost * 0.02 : 1e6;
+                        const site = state.sites.find(x => x.id === c.siteTarget), T = siteT(site && site.type);
+                        cost = c.kind === 'repair' ? T.cost * (site && site.status === 'destroyed' ? 0.7 : 0.3) : c.kind === 'restart' ? T.cost * 0.02 : 0;
                         days = rint(2, 6);
                     }
                     break; }
@@ -6767,9 +6780,14 @@
                 o.eta = fmtDate(dateIn(o.days + o.move.prep + o.move.travel));
                 if (o.move.hostile && !o.targets.some(t => t.iso === o.move.to.host)) o.targets.unshift({ iso: o.move.to.host, stance: 'hostile' });
             }
-            if (o.cat === 'construction' && o.kind === 'build') { o.loc = planLocation(o); o.specs = genSpecs(o.siteType, o, o.loc.host); if (o.userCost) o.cost = Math.round(o.userCost); else if (o.userPersonnel) o.cost = Math.max(1e6, Math.round(o.cost * clamp(o.userPersonnel / 4000, 0.15, 25))); o.eta = fmtDate(dateIn(o.days + 2 + (SITE_TYPES[o.siteType].days[0] + SITE_TYPES[o.siteType].days[1]) / 2)); if (o.loc.host !== state.playerIso && !o.targets.some(t => t.iso === o.loc.host)) o.targets.unshift({ iso: o.loc.host, stance: 'friendly' }); }
+            if (o.cat === 'construction' && o.kind === 'build') {
+                o.loc = planLocation(o); o.specs = genSpecs(o.siteType, o, o.loc.host);
+                o.baseCost = o.cost / D().cost;                                   // list price before difficulty and the steel-mill discount
+                if (o.userPersonnel && !o.userCost) o.baseCost *= clamp(o.userPersonnel / 4000, 0.15, 25);
+                refreshBuildOrder(o, true);
+            }
             if (o.cat === 'construction' && o.kind === 'joint') { o.loc = { place: orderChain(state.playerIso, o.targets.map(t => t.iso)).map(shortName).join(' – '), host: state.playerIso }; o.eta = fmtDate(dateIn(o.days)); }
-            else if (o.cat === 'construction' && o.kind !== 'build') { const st = state.sites.find(x => x.id === o.siteTarget); o.loc = { place: st.name, host: st.host }; }
+            else if (o.cat === 'construction' && o.kind !== 'build') { const st = state.sites.find(x => x.id === o.siteTarget); if (st) o.loc = { place: st.name, host: st.host || st.owner, lat: st.lat, lng: st.lng }; }
             return o;
         }
 
@@ -7127,7 +7145,7 @@
                     const dmg = 0.003 * s.sev * clamp(theirPower / mine, 0.3, 2);
                     p.gdp *= (1 - dmg); p.stability = clamp(p.stability - 3, 0, 100);
                     logEvent(`💥 ${nm} retaliates with missile and drone strikes on our military sites (GDP −${(dmg * 100).toFixed(1)}%).`, 'bad');
-                    const mySites = state.sites.filter(x => x.owner === me && x.host === me && ['active', 'construction'].includes(x.status) && ['military', 'enrich', 'weapons', 'nuclear'].includes(SITE_TYPES[x.type].sens));
+                    const mySites = state.sites.filter(x => x.owner === me && x.host === me && ['active', 'construction'].includes(x.status) && ['military', 'enrich', 'weapons', 'nuclear'].includes(siteT(x.type).sens));
                     if (mySites.length && Math.random() < 0.5) { const st = pick(mySites); if (damageSite(st, rollOutcome(0.5), s.iso)) logEvent(`💥 ${esc(st.name)} was hit in the strike.`, 'bad'); }
                     const c = state.conflicts.find(k => (k.sideA.includes(me) && k.sideB.includes(s.iso)) || (k.sideB.includes(me) && k.sideA.includes(s.iso)));
                     if (c) c.intensity = clamp(c.intensity + 8, 0, 100);
@@ -7367,12 +7385,47 @@
                 return;
             }
             state.orders.queue.push(o);
-            if (o.cat === 'construction' && o.kind === 'build') { showProposedSite(o); flashReply(`🏗 ${esc(SITE_TYPES[o.siteType].name)} proposed at <b>${esc(o.loc.place)}</b> — the pin is on the map. Drag it to move the site, or use <b>📍 Choose on map</b>. Press <b>Execute</b> to start.`); }
-            if (o.cat === 'construction' && o.kind === 'joint') flashReply(`🤝 Joint ${esc(SITE_TYPES[o.siteType].name.toLowerCase())} talks with ${o.targets.map(t => esc(shortName(t.iso))).join(', ')} queued. Each country will answer in Diplomacy; the route is drawn once partners agree.`);
+            if (o.cat === 'construction' && o.kind === 'build') { showProposedSite(o); flashReply(`🏗 <b>${esc(o.siteName || siteT(o.siteType).name)}</b> (${esc(siteT(o.siteType).name)}) proposed at <b>${esc(o.loc.place)}</b> — ${formatVal(o.cost)}, ${fmtBuildTime(o.buildDays)}. The pin is on the map: drag it, or use <b>📍 Choose on map</b>. Press <b>Execute</b> and work starts at once.`); }
+            if (o.cat === 'construction' && o.kind === 'joint') flashReply(`🤝 Joint ${esc(siteT(o.siteType).name.toLowerCase())} talks with ${o.targets.map(t => esc(shortName(t.iso))).join(', ')} queued. Each country will answer in Diplomacy; the route is drawn once partners agree.`);
             if (state.pin && (o.cat === 'construction' || o.kind === 'move')) clearPin();
             renderQueue(); updateCapacity();
         }
 
+        // What the game understood from an order — shown on its card, so the player sees exactly how a command was read
+        function costLabel(c) { return c > 0 ? formatVal(c) : 'free'; }
+        function orderExplain(o) {
+            const me = state.playerIso, rows = [];
+            const row = (k, v) => rows.push(`<div class="ox-row"><span>${k}</span><span>${v}</span></div>`);
+            try {
+                if (o.cat === 'construction' && o.kind === 'build') {
+                    const T = siteT(o.siteType), mt = o.unknownBuild ? null : siteTypeMatch(o.text), home = !o.loc || o.loc.host === me;
+                    row('Understood as', `<b>${esc(T.name)}</b>${o.unknownBuild ? ' · <i>new type, priced from real-world costs</i>' : mt && mt.key === o.siteType ? ` · <i>from “${esc(mt.words)}”</i>` : ''}`);
+                    if (o.siteName) row('Name', esc(o.siteName));
+                    if (o.loc) row('Location', `${esc(o.loc.place)}${home ? ' · your territory' : ', ' + esc(shortName(o.loc.host)) + ' · their government must agree'}`);
+                    const disc = home ? steelDiscount() : 0;
+                    row('Cost', `${formatVal(o.cost)}${o.userCost ? ' (your figure)' : T.fixed ? ' · catalogue price' : ''}${disc && !o.userCost ? ` · −${Math.round(disc * 100)}% steel mills` : ''}`);
+                    row('Build time', `${fmtBuildTime(o.buildDays)} → ready ~${esc(o.eta || '')}${home ? ' · work starts on Execute, no approval needed' : ''}`);
+                    const ec = typeEconLine(o.siteType);
+                    row('Effect', `${esc(T.desc || '')}${ec ? `<br><span class="ox-num">${esc(ec)}</span>` : ''}`);
+                    if (o.aiPending) row('AI', '🤖 checking type, price and name…'); else if (o.aiBuildNote) row('AI', `🤖 ${esc(o.aiBuildNote)}`);
+                } else if (o.cat === 'construction' && o.kind === 'demolish') {
+                    const st = (state.sites || []).find(x => x.id === o.siteTarget);
+                    row('Understood as', st ? `Demolish <b>${esc(st.name)}</b>` : '<span style="color:#fca5a5">No building of yours matches — name it as it appears in the Sites tab</span>');
+                    if (st && typeof salvageValue === 'function') row('Salvage', `+${formatVal(salvageValue(st))} back to the treasury · instant on Execute`);
+                } else {
+                    const kind = o.kind && o.kind !== 'general' ? ' · ' + String(o.kind).replace(/([A-Z])/g, ' $1').toLowerCase() : '';
+                    row('Understood as', `${esc(o.cat)}${esc(kind)}${o.cat === 'construction' && o.loc ? ' · ' + esc(o.loc.place) : ''}`);
+                    row('Cost', o.cost > 0 ? `${formatVal(o.cost)}${orderCostWhy(o)}` : `free <i>${esc(orderCostWhy(o))}</i>`);
+                    if (isUnitProduction(' ' + String(o.text).toLowerCase() + ' ')) row('Note', 'Tanks, jets and ships are bought for a formation in the ⚔ Military panel (press M).');
+                }
+            } catch (e) { return ''; }
+            return `<div class="ox-box">${rows.join('')}</div>`;
+        }
+        // why an order costs what it costs (only real projects and purchases cost money)
+        function orderCostWhy(o) {
+            if (o.cost > 0) return o.cat === 'military' ? ' · operation costs' : o.cat === 'humanitarian' ? ' · aid paid out' : o.cat === 'intelligence' ? ' · agents, equipment and bribes' : o.kind === 'spend' ? ' · spending programme' : o.kind === 'welfare' ? ' · welfare programme' : o.kind === 'joint' ? ' · studies and down payment' : o.kind === 'proxy' ? ' · money and weapons sent' : '';
+            return o.cat === 'diplomacy' ? '— talks and diplomacy cost nothing' : o.cat === 'economy' ? '— agreements and trade deals cost nothing (the goods are paid when delivered)' : o.cat === 'domestic' ? '— policies and statements cost nothing (budget changes show in the budget)' : '— no project, no cost';
+        }
         function renderQueue() {
             if (typeof syncProposed === 'function') syncProposed();
             if (typeof renderIdeasUI === 'function') setTimeout(renderIdeasUI, 0);
@@ -7390,13 +7443,13 @@
                         <div class="text-[12px] text-slate-200 leading-snug">${esc(o.text)}</div>
                         <div class="flex flex-wrap items-center gap-1 mt-1.5">
                             <span class="cc-tag cc-pill" style="${CAT_STYLE[o.cat]};border-color:transparent">${o.cat}</span>${o.grade ? gradePill(o) : ''}
-                            <span class="text-[10px] font-mono text-slate-400">~${o.days}d · ${formatVal(o.cost)}${o.cost > p.treasury ? ' <span class="text-red-400">(insufficient funds)</span>' : ''}${o.covert ? ' · covert' : ''}</span>
+                            <span class="text-[10px] font-mono text-slate-400">${o.cat === 'construction' && o.kind === 'build' && o.buildDays ? fmtBuildTime(o.buildDays) : '~' + o.days + 'd'} · ${costLabel(o.cost)}${o.cost > 0 && o.cost > p.treasury ? ' <span class="text-red-400">(insufficient funds)</span>' : ''}${o.covert ? ' · covert' : ''}</span>
                             ${o.eta ? `<span class="cc-pill" style="border-color:#22c55e88;color:#86efac">${o.kind === 'move' ? '⏱ Arrives' : '⏱ Done'} ~${o.eta}</span>` : ''}
                             ${o.move ? `<span class="cc-pill" style="border-color:#94a3b888;color:#cbd5e1">${UNIT_TYPES[o.unitType].icon} ${esc(o.move.strength.label)} · ${o.move.dist.toLocaleString()} km from ${esc(o.move.from.label)}</span>` : ''}
                             ${o.cat === 'construction' && o.kind === 'build' ? `<button type="button" class="cc-pill cursor-pointer" style="border-color:#d1ad5b;color:#e6c66e" onclick="repinOrder('${o.id}')" title="Pick the exact spot on the map (or drag the pin)">📍 Choose on map</button>` : ''}
-                            ${o.loc ? `<span class="cc-pill" style="border-color:#f59e0b88;color:#fcd34d">📍 ${esc(o.loc.place)}${o.loc.host !== state.playerIso ? ', ' + esc(shortName(o.loc.host)) : ''}${o.siteType ? ' · ' + SITE_TYPES[o.siteType].icon + ' ' + SITE_TYPES[o.siteType].name : ''}</span>` : ''}
+                            ${o.loc ? `<span class="cc-pill" style="border-color:#f59e0b88;color:#fcd34d">📍 ${esc(o.loc.place)}${o.loc.host !== state.playerIso ? ', ' + esc(shortName(o.loc.host)) : ''}${o.siteType ? ' · ' + siteT(o.siteType).icon + ' ' + siteT(o.siteType).name : ''}</span>` : ''}
                             ${tgt}
-                        </div></div>
+                        </div>${orderExplain(o)}</div>
                     <button type="button" class="text-slate-500 hover:text-red-400 text-lg leading-none px-1 cursor-pointer" title="Remove">×</button>`;
                 div.querySelector('button[title="Remove"]').onclick = () => { playClick(); state.orders.queue.splice(i, 1); renderQueue(); updateCapacity(); };
                 list.appendChild(div);
@@ -7668,46 +7721,68 @@
         // =====================================================================
         //  SITES — construction projects & known facilities on the map
         // =====================================================================
+        // BUILD CATALOGUE — every buildable the game knows. One entry per type:
+        //   rx (what words name it) · prio (bonus when several types match: the most specific wins) · name · icon · days [min,max] (realistic build time)
+        //   cost (list price; fixed:true = the same price everywhere, otherwise scaled by income per head) · cat (Build menu group) · desc (what it does)
+        //   y / u (yearly revenue / upkeep as a share of the list price) · mw (+ power supplied / − power used) · fx (special effects read by the economy, see BUILD_FX)
+        //   growth (GDP growth points while operating) · approval (one-off on completion) · defense (on completion) · sens (who abroad reacts)
+        //   homeOnly (only on your own, government-held land) · coastal (needs a coastline) · produces (military output, used by the military system)
+        //   popGrowth (% a year added to national population growth) · eu / euUse (enriched uranium produced / used per month — the nuclear economy reads them)
         const SITE_TYPES = {
-            nuke_weapon: { rx:/(nuclear (weapon|warhead|bomb|arsenal|test)|atomic bomb|warheads?)/, name:'Nuclear Weapons Facility', icon:'☢', days:[150,240], cost:6e9, approval:3, defense:4, sens:'weapons' },
-            enrichment:  { rx:/(enrich|centrifuge)/, name:'Uranium Enrichment Facility', icon:'⚛', days:[90,150], cost:3e9, sens:'enrich' },
-            nuclear:     { rx:/(nuclear|reactor|\bnpp\b|atomic power)/, name:'Nuclear Power Plant', icon:'☢', days:[160,260], cost:9e9, growth:0.25, approval:1, sens:'nuclear' },
-            chip_fab:    { rx:/(semiconductor|chip (fab|plant|factory)|\bfab\b|foundry)/, name:'Semiconductor Fab', icon:'💾', days:[120,200], cost:15e9, growth:0.4 },
-            data_center: { rx:/(data ?cent(er|re)|ai (cluster|campus|supercomputer|hub)|supercomputer|server farm)/, name:'AI Data Center', icon:'🖥', days:[45,90], cost:3e9, growth:0.15 },
-            expo:        { rx:/(\bexpo\b|world'?s fair|exhibition (site|centre|center)|exposition)/, name:'Expo Site', icon:'🎪', days:[90,160], cost:7e9, growth:0.3, approval:3, sens:'prestige' },
-            stadium:     { rx:/(stadium|arena|olympic)/, name:'National Stadium', icon:'🏟', days:[90,150], cost:1.2e9, growth:0.05, approval:2 },
-            airbase:     { rx:/(air ?base|airfield|air force base)/, name:'Air Base', icon:'✈', days:[50,90], cost:2e9, defense:2, sens:'military' },
-            naval:       { rx:/(naval (base|station|port|facility)|navy base|submarine base)/, name:'Naval Base', icon:'⚓', days:[70,120], cost:3e9, defense:2, sens:'military' },
-            missile:     { rx:/(missile (site|base|silo|battery|launch|complex)|\bsilos?\b|air.defen[cs]e (site|system|battery|complex))/, name:'Missile Site', icon:'🚀', days:[30,60], cost:0.8e9, defense:1.5, sens:'military' },
-            spaceport:   { rx:/(space ?port|launch (site|pad|complex)|cosmodrome|space cent)/, name:'Spaceport', icon:'🛰', days:[120,200], cost:4e9, growth:0.1, approval:2 },
-            base:        { rx:/(military base|army base|garrison|barracks|\bbase\b)/, name:'Military Base', icon:'🛡', days:[45,90], cost:1.5e9, defense:2, sens:'military' },
-            refinery:    { rx:/(refiner)/, name:'Oil Refinery', icon:'🛢', days:[120,200], cost:6e9, growth:0.2 },
-            port:        { rx:/(sea ?port|\bport\b|harbou?r|container terminal)/, name:'Deep-Water Port', icon:'⚓', days:[90,170], cost:2.5e9, growth:0.2 },
-            airport:     { rx:/(airport)/, name:'International Airport', icon:'🛫', days:[120,200], cost:4e9, growth:0.2, approval:1 },
-            railway:     { rx:/(\brail|high.speed|\bmetro\b|train line|subway)/, name:'Rail Line', icon:'🚄', days:[120,240], cost:8e9, growth:0.25, approval:1 },
-            dam:         { rx:/(\bdam\b|hydroelectric|hydropower)/, name:'Hydroelectric Dam', icon:'🌊', days:[180,300], cost:5e9, growth:0.15, sens:'water' },
-            solar:       { rx:/(solar|wind (farm|park)|renewable|wind turbines)/, name:'Renewable Energy Park', icon:'☀', days:[30,70], cost:1e9, growth:0.1, approval:1 },
-            desal:       { rx:/(desalination)/, name:'Desalination Plant', icon:'💧', days:[60,110], cost:1e9, growth:0.05, approval:2 },
-            hospital:    { rx:/(hospital|medical cent)/, name:'National Hospital', icon:'🏥', days:[40,80], cost:0.4e9, approval:3 },
-            university:  { rx:/(university|academy|research (cent|lab|institute)|laboratory)/, name:'Research University', icon:'🎓', days:[60,120], cost:0.6e9, growth:0.08, approval:2 },
-            sez:         { rx:/(special economic zone|free (trade )?zone|industrial (park|zone)|\bsez\b|smart city|new city)/, name:'Special Economic Zone', icon:'🏙', days:[90,180], cost:3e9, growth:0.35 },
-            mine:        { rx:/(\bmine\b|mining|lithium|rare.earth|copper|cobalt|uranium mine)/, name:'Mining Complex', icon:'⛏', days:[60,120], cost:1.5e9, growth:0.15 },
-            embassy:     { rx:/(embassy|consulate)/, name:'Embassy', icon:'🏛', days:[20,40], cost:0.08e9, sens:'diplomatic' },
-            powerplant:  { rx:/(power (plant|station)|coal(-fired)? plant|gas(-fired)? plant|thermal plant|geothermal)/, name:'Power Station', icon:'⚡', days:[90,160], cost:2e9, growth:0.15 },
-            pipeline:    { rx:/(pipeline)/, name:'Pipeline', icon:'🛢', days:[120,220], cost:4e9, growth:0.15 },
-            canal:       { rx:/(canal|waterway)/, name:'Canal', icon:'🌊', days:[200,360], cost:6e9, growth:0.2 },
-            bridge:      { rx:/(bridge)/, name:'Strategic Bridge', icon:'🌉', days:[90,180], cost:1.5e9, growth:0.08, approval:1 },
-            highway:     { rx:/(highway|motorway|expressway|freeway|ring road|\broads?\b)/, name:'Highway', icon:'🛣', days:[90,200], cost:3e9, growth:0.12, approval:1 },
-            wall:        { rx:/(border wall|\bwall\b|\bfence\b|border barrier|fortification|defensive line|trenches)/, name:'Border Fortifications', icon:'🧱', days:[60,140], cost:2e9, defense:1, approval:1, sens:'military' },
-            bunker:      { rx:/(bunker|bomb shelter|shelters|command (center|centre|post))/, name:'Command Bunker', icon:'🔒', days:[60,120], cost:0.8e9, defense:1, sens:'military' },
-            housing:     { rx:/(\bhousing\b|\bhomes\b|\bapartments?\b|\bhouses\b|\bresidential\b)/, name:'Housing Program', icon:'🏠', days:[60,140], cost:1.5e9, growth:0.05, approval:3 },
-            school:      { rx:/(schools?|kindergarten|college)/, name:'School Network', icon:'🏫', days:[40,90], cost:0.4e9, growth:0.04, approval:2 },
-            prison:      { rx:/(prison|detention cent)/, name:'Prison', icon:'🔒', days:[40,90], cost:0.3e9 },
-            landmark:    { rx:/(monument|statue|memorial|mosque|church|cathedral|temple|palace|museum|tower|parliament building|opera|library)/, name:'Landmark', icon:'🏛', days:[60,180], cost:0.6e9, approval:2 },
-            factory:     { rx:/(factory|\bplant\b|manufactur|assembly|steel mill|gigafactory|\bworks\b|shipyard)/, name:'Industrial Plant', icon:'🏭', days:[60,120], cost:1.5e9, growth:0.15 },
-            project:     { rx:/(building|facility|complex|cent(er|re)|headquarters|\bhq\b|\bhub\b|terminal|warehouse|depot|\bpark\b|\bzoo\b|\bcamp\b|\blab\b|tunnel|station|market|mall|resort|hotel|farm|greenhouse|silo|reservoir|well)/, name:'Public Works Project', icon:'🏗', days:[45,120], cost:1e9, growth:0.05, approval:1 }
+            nuke_weapon: { rx:/(nuclear (weapons?|warhead|bomb|arsenal|test)s?( (facility|complex|plant|site|program(me)?|lab))?|atomic bomb|warheads?|weapons?.grade (plutonium|uranium)( plant)?)/, prio:18, name:'Nuclear Weapons Facility', icon:'☢', days:[900,1500], cost:6e9, approval:3, defense:4, sens:'weapons', cat:'nuclear', homeOnly:true, y:0, u:.03, mw:-120, desc:'Designs and assembles nuclear warheads. Huge deterrent; sanctions and strikes likely.' },
+            enrichment:  { rx:/(uranium enrichment|enrichment (factory|plant|facility|site|complex|hall)|enrich|centrifuge)/, prio:22, name:'Uranium Enrichment Factory', icon:'⚛', days:[600,1000], cost:3e9, fixed:true, sens:'enrich', cat:'nuclear', homeOnly:true, eu:10, y:0, u:.04, mw:-150, desc:'Refines uranium ore into 10 Enriched Uranium (EU) a month — fuel for reactors, warheads and ICBMs.' },
+            nuclear:     { rx:/(nuclear (power|plant|reactor|energy|station|generating)|reactors?\b|\bnpp\b|atomic power|nuclear)/, prio:4, name:'Nuclear Power Plant', icon:'☢', days:[2190,2920], cost:4e9, fixed:true, growth:0.25, approval:1, sens:'nuclear', cat:'energy', euUse:1, y:.09, u:.025, mw:2200, fx:{ energyIndep:1 }, desc:'Total energy independence: no gas imports for power, surplus electricity sold abroad. Burns 1 EU a month.' },
+            chip_fab:    { rx:/(semiconductor|chip (fab|plant|factory|foundry|maker)|\bfab\b|foundry|microchip|wafer (fab|plant))/, prio:22, name:'Semiconductor Foundry', icon:'💾', days:[1000,1460], cost:10e9, fixed:true, growth:0.4, cat:'industry', homeOnly:true, y:.17, u:.05, mw:-250, fx:{ tech:1 }, desc:'Massive microchip export revenue and chip supply; gives you a say over global tech prices.' },
+            data_center: { rx:/(data ?cent(er|re)|ai (cluster|campus|supercomputer|hub|data)|supercomputer|server farm|cloud (campus|region))/, prio:15, name:'AI Data Center', icon:'🖥', days:[365,700], cost:3e9, growth:0.15, cat:'science', y:.14, u:.05, mw:-300, fx:{ tech:1 }, desc:'Compute for AI and cloud services; tech revenue, heavy power use.' },
+            expo:        { rx:/(\bexpo\b|world'?s fair|exhibition (site|centre|center)|exposition)/, prio:15, name:'Expo Site', icon:'🎪', days:[1100,1800], cost:7e9, growth:0.3, approval:3, sens:'prestige', cat:'culture', y:.06, u:.02, mw:-40, fx:{ tourism:1 }, desc:'A world exhibition: prestige, visitors and tourism income.' },
+            stadium:     { rx:/(stadium|arena|olympic)/, prio:10, name:'National Stadium', icon:'🏟', days:[700,1100], cost:1.2e9, growth:0.05, approval:2, cat:'culture', y:.06, u:.04, mw:-15, fx:{ tourism:.5 }, desc:'Sport and events; approval and some tourism.' },
+            airbase:     { rx:/(air ?base|airfield|air force (base|station)|air station|military air(port|field)|fighter (base|wing base))/, prio:20, name:'Air Force Base', icon:'✈', days:[540,900], cost:1.5e9, fixed:true, defense:2, sens:'military', cat:'military', y:0, u:0, mw:-30, fx:{ airShield:.12 }, desc:'Hosts fighter wings. Shields your industry from air raids (fewer strike losses). Upkeep is paid by the military budget.' },
+            naval:       { rx:/(naval (base|station|port|facility|garrison)|navy base|(nuclear )?submarine (base|pens?)|fleet (base|headquarters)|marine base)/, prio:24, name:'Naval Base', icon:'⚓', days:[900,1460], cost:3e9, defense:2, sens:'military', cat:'military', coastal:true, homeOnly:false, y:0, u:0, mw:-30, desc:'Home port for warships (needed to commission ships). Upkeep is paid by the military budget.' },
+            missile:     { rx:/(missile (site|base|battery|launch(er)? (site|complex)|complex|range|test (site|range|centre|center)|defen[cs]e (site|system|shield))|air.defen[cs]e (site|system|battery|complex|network)|(rocket|weapons?) test (range|site)|test range)/, prio:12, name:'Missile Site', icon:'🚀', days:[270,540], cost:0.8e9, defense:1.5, sens:'military', cat:'military', y:0, u:.03, mw:-10, desc:'Launchers, radar and test ranges; strengthens deterrence, alarms rivals.' },
+            spaceport:   { rx:/(space ?port|launch (site|pad|complex)|cosmodrome|space (cent|launch)|rocket launch)/, prio:16, name:'Spaceport', icon:'🛰', days:[1100,1800], cost:4e9, growth:0.1, approval:2, cat:'space', coastal:false, y:.08, u:.04, mw:-50, fx:{ tech:.5 }, desc:'Satellite and crewed launches; prestige and launch-contract revenue.' },
+            base:        { rx:/(military base|army base|army garrison|garrison|barracks|military camp|training camp|cantonment|\bbase\b)/, prio:6, name:'Army Base', icon:'🛡', days:[365,640], cost:0.8e9, fixed:true, defense:2, sens:'military', cat:'military', y:0, u:0, mw:-15, fx:{ rebel:.3 }, desc:'Garrisons brigades and suppresses regional rebellions that would halt tax collection. Upkeep is paid by the military budget.' },
+            refinery:    { rx:/(refiner|refining (plant|complex))/, prio:18, name:'Oil Refinery', icon:'🛢', days:[900,1460], cost:1e9, fixed:true, growth:0.15, cat:'energy', y:.17, u:.05, mw:-60, fx:{ oil:1 }, desc:'Multiplies the value of your crude: refined fuels sell at a premium on the world market.' },
+            port:        { rx:/(sea ?port|\bport\b|harbou?r|container (terminal|port)|commercial port|cargo (port|terminal)|deep.water port)/, prio:6, name:'Commercial Seaport', icon:'⚓', days:[1095,1825], cost:1.5e9, fixed:true, growth:0.15, cat:'transport', coastal:true, y:.16, u:.04, mw:-30, fx:{ tariffs:1 }, desc:'Tariffs and customs duties on imports; boosts export capacity (better market access).' },
+            airport:     { rx:/(airport|air terminal|aerodrome)/, prio:10, name:'Civilian Airport', icon:'🛫', days:[1095,1825], cost:1.2e9, fixed:true, growth:0.1, approval:1, cat:'transport', y:.15, u:.04, mw:-20, fx:{ tourism:1 }, desc:'Tourism taxes, landing fees and regional trade.' },
+            railway:     { rx:/(\brail|high.speed|\bmetro\b|train line|subway|tram(way)?s?\b)/, prio:8, name:'Rail Line', icon:'🚄', days:[1100,2500], cost:8e9, growth:0.25, approval:1, cat:'transport', y:.07, u:.02, mw:-60, desc:'Moves people and freight; long-term growth.' },
+            dam:         { rx:/(\bdam\b|hydroelectric|hydro ?power|hydro (plant|station))/, prio:12, name:'Hydroelectric Dam', icon:'🌊', days:[1825,2920], cost:2e9, fixed:true, growth:0.15, sens:'water', cat:'energy', y:.11, u:.01, mw:1800, desc:'Massive long-term utility revenue with near-zero fuel import costs.' },
+            solar:       { rx:/(solar|wind (farm|park|power|turbines?)|renewable|wind turbines)/, prio:10, name:'Renewable Energy Park', icon:'☀', days:[270,540], cost:1e9, growth:0.1, approval:1, cat:'energy', y:.08, u:.02, mw:500, desc:'Clean power; cuts gas and oil imports.' },
+            desal:       { rx:/(desalination|desalinat|water (purification|treatment) plant)/, prio:20, name:'Desalination Plant', icon:'💧', days:[540,900], cost:0.3e9, fixed:true, growth:0.05, approval:2, cat:'health', coastal:true, popGrowth:0.15, y:.08, u:.05, mw:-40, fx:{ health:.6 }, desc:'Fresh water for arid coasts: faster population growth, a bigger taxpayer base, better health.' },
+            hospital:    { rx:/(hospital(?! ship)|medical (cent|complex|city)|clinics?\b)/, prio:10, name:'National Hospital', icon:'🏥', days:[700,1100], cost:0.4e9, approval:3, cat:'health', y:.02, u:.1, mw:-10, fx:{ health:1 }, desc:'Raises the health index and approval.' },
+            university:  { rx:/(university|academy|college campus|research (cent|lab|institute|park|campus)|laborator|institute of technology|polytechnic)/, prio:0, name:'Research University', icon:'🎓', days:[730,1095], cost:0.5e9, fixed:true, growth:0.08, approval:2, cat:'education', y:.14, u:.06, mw:-10, fx:{ edu:1.5 }, desc:'Raises the national education index; a higher-skilled workforce pays more tax.' },
+            sez:         { rx:/(special economic zone|free (trade )?zone|industrial (park|zone|estate)|\bsez\b|smart city|new city)/, prio:12, name:'Special Economic Zone', icon:'🏙', days:[1100,2200], cost:3e9, growth:0.35, cat:'finance', y:.14, u:.02, mw:-80, desc:'Attracts investors and factories; strong growth.' },
+            mine:        { rx:/(\bmines?\b|mining|copper|gold|iron ore|nickel|bauxite|uranium mine|quarry)/, prio:6, name:'Mining Complex', icon:'⛏', days:[700,1100], cost:1.5e9, growth:0.15, cat:'industry', y:.15, u:.05, mw:-50, desc:'Metal ore for industry and export.' },
+            ree_mine:    { rx:/((rare.?earth|\bree\b|lithium|cobalt|critical.minerals?)( elements?)?( (mine|mining|extraction|deposit|plant|processing|refinery|project))?)/, prio:20, name:'Rare Earth Element (REE) Mine', icon:'💎', days:[540,900], cost:0.75e9, fixed:true, growth:0.08, cat:'industry', homeOnly:true, y:.16, u:.05, mw:-40, fx:{ rare:1 }, desc:'Lithium, cobalt and rare earths for export or your own high-tech factories.' },
+            embassy:     { rx:/(embassy|consulate)/, prio:15, name:'Embassy', icon:'🏛', days:[365,700], cost:0.08e9, sens:'diplomatic', cat:'government', y:0, u:.1, mw:0, desc:'A diplomatic mission abroad.' },
+            powerplant:  { rx:/(power (plant|station)|thermal plant|geothermal|power generation|electricity (plant|station))/, prio:4, name:'Power Station', icon:'⚡', days:[700,1100], cost:2e9, growth:0.15, cat:'energy', y:.12, u:.045, mw:1000, desc:'Generic power station; supplies the grid.' },
+            coal_plant:  { rx:/(coal(-fired)? (power )?(plant|station|generat\w*)|coal power|coal-fired)/, prio:24, name:'Coal Power Plant', icon:'⚡', days:[730,1095], cost:0.6e9, fixed:true, growth:0.06, cat:'energy', y:.08, u:.06, mw:1200, fx:{ industry:.12 }, desc:'Cheap baseload power: your factories produce and pay more tax (+12% industrial revenue per plant, up to +36%).' },
+            gas_plant:   { rx:/((natural )?gas(-fired)? (power |turbine )?(plant|station)|gas power|combined.cycle|\bccgt\b)/, prio:22, name:'Natural Gas Power Plant', icon:'🔥', days:[540,900], cost:0.8e9, fixed:true, growth:0.1, cat:'energy', y:.135, u:.045, mw:900, desc:'Steady civic utility fees and power for medium industry.' },
+            pipeline:    { rx:/(pipeline)/, prio:12, name:'Pipeline', icon:'🛢', days:[700,1400], cost:4e9, growth:0.15, cat:'energy', y:.1, u:.02, mw:-10, desc:'Moves oil or gas to markets.' },
+            canal:       { rx:/(canal|waterway)/, prio:10, name:'Canal', icon:'🌊', days:[1800,3600], cost:6e9, growth:0.2, cat:'transport', y:.09, u:.015, mw:0, desc:'A shipping shortcut; transit fees.' },
+            bridge:      { rx:/(bridge)/, prio:8, name:'Strategic Bridge', icon:'🌉', days:[1000,1800], cost:1.5e9, growth:0.08, approval:1, cat:'transport', y:.04, u:.015, mw:0, desc:'Links regions; growth and approval.' },
+            highway:     { rx:/(highway|motorway|expressway|freeway|ring road|\broads?\b)/, prio:6, name:'Highway', icon:'🛣', days:[1000,2200], cost:3e9, growth:0.12, approval:1, cat:'transport', y:.05, u:.02, mw:0, fx:{ infra:.6 }, desc:'Faster freight and commuting; raises the infrastructure index.' },
+            wall:        { rx:/(border wall|\bwall\b|\bfence\b|border barrier|fortification|defensive line|trenches)/, prio:6, name:'Border Fortifications', icon:'🧱', days:[365,1100], cost:2e9, defense:1, approval:1, sens:'military', cat:'security', y:0, u:.03, mw:0, desc:'Hardens a border.' },
+            bunker:      { rx:/(bunker|bomb shelter|shelters|command (center|centre|post))/, prio:6, name:'Command Bunker', icon:'🔒', days:[365,700], cost:0.8e9, defense:1, sens:'military', cat:'security', y:0, u:.03, mw:-5, desc:'Protected command post for war time.' },
+            housing:     { rx:/(\bhousing\b|\bhomes\b|\bapartments?\b|\bhouses\b|\bresidential\b)/, prio:8, name:'Housing Program', icon:'🏠', days:[540,1100], cost:1.5e9, growth:0.05, approval:3, cat:'social', y:.03, u:.02, mw:-20, desc:'Homes for families; approval.' },
+            school:      { rx:/(schools?\b|kindergarten|\bcollege\b)/, prio:-2, name:'School Network', icon:'🏫', days:[365,700], cost:0.4e9, growth:0.04, approval:2, cat:'education', y:.06, u:.06, mw:-5, fx:{ edu:.8 }, desc:'Raises the education index.' },
+            prison:      { rx:/(prison|detention cent|penitentiary)/, prio:10, name:'Prison', icon:'🔒', days:[540,1000], cost:0.3e9, cat:'security', y:0, u:.08, mw:-5, fx:{ safety:.6 }, desc:'Raises public safety.' },
+            landmark:    { rx:/(monument|statue|memorial|mosque|church|cathedral|temple|palace|museum|tower|parliament building|opera|library)/, prio:2, name:'Landmark', icon:'🏛', days:[700,1500], cost:0.6e9, approval:2, cat:'culture', y:.04, u:.02, mw:-5, fx:{ tourism:.3 }, desc:'National pride and some tourism.' },
+            aerospace:   { rx:/(aerospace|aviation (cent|complex|industr|research|hub|cluster)|aircraft (research|design|development|r ?& ?d|engineering)|(fighters?|jets?|aircraft|stealth|bombers?|warplanes?|drone)( jets?)? (research|development|design|r ?& ?d|programs?|programmes?|test|engineering|engines?|labs?)|(\d+(st|nd|rd|th)|sixth|fifth|seventh|next)[- ]?gen(eration)?\b.{0,25}(fighters?|jets?|aircraft|planes?|bombers?)|jet engines?|satellite (launch|manufactur\w*|factory|plant|industry|centre|center)|space (industry|agency|research|program(me)?))/, prio:24, name:'Aerospace Facility', icon:'🛰', days:[1095,1825], cost:2.5e9, fixed:true, growth:0.1, approval:1, cat:'space', homeOnly:true, y:.15, u:.04, mw:-60, fx:{ tech:1 }, desc:'High-tech exports and commercial satellite launch contracts; next-generation aircraft design.' },
+            state_media: { rx:/(state (media|tv|television|broadcaster|news|radio)|media (center|centre|hub|complex|city)|propaganda (center|centre|ministry|office)|broadcast(ing)? (center|centre|tower|station|complex)|national (tv|television|broadcaster|radio)|tv station|television station|radio station|news agency)/, prio:24, name:'State Media Center', icon:'📡', days:[180,365], cost:0.1e9, fixed:true, cat:'government', homeOnly:true, y:.18, u:.1, mw:-5, fx:{ appr:1.5, unrest:.3, strikes:.4 }, desc:'Reduces unrest and steadies approval; saves internal-security money and prevents strike losses.' },
+            icbm_silo:   { rx:/((icbm|intercontinental( ballistic missile)?|ballistic missile|missile|launch|nuclear) silos?|icbm (launch )?(site|base|field|complex|facility|silos?)|(?<!(grain|wheat|food|corn|feed) )\bsilos?\b)/, prio:26, name:'ICBM Launch Silo', icon:'🎯', days:[730,1095], cost:2e9, fixed:true, defense:2, sens:'military', cat:'military', homeOnly:true, y:0, u:.05, mw:-10, fx:{ leverage:.02 }, desc:'No revenue (budget drain), but heavy diplomatic leverage: better prices in every trade deal. Houses up to 10 ICBMs.' },
+            drone_factory:{ rx:/((drones?|uavs?|uas|unmanned (aircraft|aerial vehicles?)|loitering munitions?) (factory|factories|plant|production|manufactur\w*|assembly|works|industry|line))/, prio:30, name:'Drone Production Factory', icon:'🛸', days:[270,540], cost:0.4e9, fixed:true, growth:0.05, cat:'military', homeOnly:true, y:.27, u:.06, mw:-30, fx:{ arms:1 }, produces:{ drones:20, perDays:30 }, desc:'Massive income from global arms sales and exports of drones to partners and proxies.' },
+            missile_factory:{ rx:/((missiles?|rockets?|interceptors?|ballistic missiles?|air.defen[cs]e missiles?) (factory|factories|plant|production|manufactur\w*|works|industry|assembly|line))/, prio:30, name:'Missile Factory', icon:'🚀', days:[540,900], cost:1.5e9, fixed:true, growth:0.05, cat:'military', homeOnly:true, y:.21, u:.05, mw:-60, fx:{ arms:1 }, produces:{ missiles:40, perDays:30 }, desc:'Air-defence and ballistic missiles; highly profitable arms exports to allies building their defences.' },
+            tank_factory:{ rx:/((tanks?|armou?red vehicles?|armou?r|apcs?|ifvs?|military vehicles?|combat vehicles?) (factory|factories|plant|assembly|production|manufactur\w*|works|line|industry))/, prio:30, name:'Tank Factory', icon:'🪖', days:[365,730], cost:1.5e9, fixed:true, growth:0.05, defense:1, cat:'military', homeOnly:true, y:0, u:.04, mw:-80, produces:{ tanks:50, perDays:30 }, desc:'Domestic armour production: 50 tanks every 30 days (built tanks cost $3.5M instead of $5M abroad).' },
+            plane_factory:{ rx:/((planes?|aircraft|fighters?|fighter jets?|jets?|bombers?|helicopters?|warplanes?) (factory|factories|plant|assembly|production|manufactur\w*|works|line)|aircraft industry)/, prio:30, name:'Plane Factory', icon:'✈', days:[1095,1460], cost:6e9, fixed:true, growth:0.08, defense:1.5, cat:'military', homeOnly:true, y:0, u:.03, mw:-120, produces:{ aircraft:10, perDays:30 }, desc:'Builds 10 aircraft every 30 days: multirole jets, stealth fighters or strategic bombers at domestic prices.' },
+            shipyard:    { rx:/(ship ?yards?|naval (shipyard|dockyard)|dockyards?|shipbuilding|warship (factory|yard|plant)|dry ?docks?|ship (factory|plant))/, prio:30, name:'Naval Shipyard', icon:'🚢', days:[1460,2190], cost:12e9, fixed:true, growth:0.1, defense:1.5, cat:'military', homeOnly:true, coastal:true, y:0, u:.025, mw:-150, produces:{ perDays:365, carriers:1, destroyers:4, frigates:8, capacity:{ carrier:.5, destroyer:.125, frigate:.125 } }, desc:'Builds warships: a carrier in 1 year (50% of capacity), a destroyer every 3 months, a frigate every ~50 days.' },
+            auto_plant:  { rx:/((auto(mobile|motive)?|cars?|vehicles?|trucks?|evs?|electric vehicles?|bus(es)?) (factory|factories|plant|assembly|manufactur\w*|production|works|industry)|gigafactory|car ?maker)/, prio:26, name:'Automobile Manufacturing Plant', icon:'🚗', days:[540,900], cost:0.9e9, fixed:true, growth:0.08, cat:'industry', homeOnly:true, y:.16, u:.05, mw:-50, desc:'Cars and trucks sold at home and abroad; high corporate tax revenue.' },
+            farm:        { rx:/(\bfarms?\b|(grain|wheat|corn|feed) silos?|farmland|agri.?business|agricultur\w* (complex|project|zone|park|hub)|plantations?|ranch|greenhouses?|irrigation (project|scheme|network)|food (security )?(hub|park)|orchards?|vineyards?|fish farm|aquaculture)/, prio:8, name:'Commercial Farm', icon:'🌾', days:[90,180], cost:0.05e9, fixed:true, cat:'agriculture', homeOnly:true, y:.2, u:.06, mw:-2, fx:{ food:1 }, desc:'Cuts expensive food imports and earns agricultural export revenue; prevents food-shortage crashes.' },
+            steel_mill:  { rx:/(steel ?(mill|works|plant|factory|complex)|steelworks|smelter|blast furnace|alumin(i)?um (plant|smelter))/, prio:30, name:'Steel Mill', icon:'🔩', days:[730,1095], cost:1.1e9, fixed:true, growth:0.08, cat:'industry', homeOnly:true, y:.13, u:.045, mw:-200, fx:{ steel:.03 }, desc:'Exports raw materials and makes every other domestic building 3% cheaper (up to 15%).' },
+            cyber_hub:   { rx:/(cyber ?(security|intelligence|defen[cs]e|command|operations?|warfare)? ?(hub|cent(er|re)|command|agency|headquarters|hq|unit|academy|facility)|cyber hub|cyber ?security|signals intelligence (cent|base|hub)|intelligence (hub|cent(er|re)|headquarters))/, prio:28, name:'Cyber Security & Intelligence Hub', icon:'🛡', days:[365,545], cost:0.6e9, fixed:true, cat:'security', homeOnly:true, y:.14, u:.05, mw:-20, fx:{ cyber:.35, tech:.3 }, desc:'Steals industrial secrets to boost tech revenue and blocks losses from enemy hackers (−35% damage per hub).' },
+            factory:     { rx:/(factory|factories|\bplant\b|manufactur|assembly|\bworks\b|industrial complex|processing plant)/, prio:-6, name:'Industrial Plant', icon:'🏭', days:[365,730], cost:1.5e9, growth:0.15, cat:'industry', y:.14, u:.05, mw:-80, desc:'General manufacturing; growth and corporate tax.' },
+            project:     { rx:/(building|facility|complex|cent(er|re)|headquarters|\bhq\b|\bhub\b|terminal|warehouse|depot|\bpark\b|\bzoo\b|\bcamp\b|\blab\b|tunnel|station|market|mall|resort|hotel|reservoir|\bwells?\b|institute|office)/, prio:-20, name:'Public Works Project', icon:'🏗', days:[365,1100], cost:1e9, growth:0.05, approval:1, cat:'infrastructure', y:.05, u:.03, mw:-10, desc:'A public building or works project.' }
         };
-        const BUILD_RX = /\b(build|construct|establish|set up|erect|create|develop|open a new|open new|launch construction|begin construction|start construction|break ground|commission a new|install a new|bid to host)\b|\bhost (a|an|the)\b.{0,25}(expo|olympic|world'?s fair)|\bexpand\b.{0,40}\b(base|port|plant|facility|airport|data cent|fab|refinery|complex)\b/;
+        const BUILD_RX = /\b(build|building|construct|constructing|establish|set up|setting up|erect|create|develop|open a new|open new|open an?|launch construction|begin construction|start construction|break ground|commission a new|install a new|bid to host|put up|start work on|lay the foundations? (of|for)|fund an?|finance an?|i want an?|we need an?|i need an?)\b|\bhost (a|an|the)\b.{0,25}(expo|olympic|world'?s fair)|\bexpand\b.{0,40}\b(base|port|plant|facility|airport|data cent|fab|refinery|complex)\b/;
         const SHUT_RX = /\b(shut ?down|close|mothball|decommission|suspend|halt|pause|dismantle)\b/;
         const RESTART_RX = /\b(restart|reactivate|reopen|resume|bring (it )?back online|switch on|turn on)\b/;
         const REPAIR_RX = /\b(repair|rebuild|restore|reconstruct)\b/;
@@ -7715,7 +7790,68 @@
                                damaged:'Damaged', destroyed:'Destroyed', cancelled:'Cancelled', closed:'Closed / decommissioning' };
         const STATUS_COLOR = { planned:'#94a3b8', construction:'#f59e0b', commissioning:'#a3e635', active:'#22c55e', inactive:'#64748b',
                                damaged:'#f97316', destroyed:'#ef4444', cancelled:'#475569', closed:'#64748b' };
-        function siteTypeOf(s) { for (const k in SITE_TYPES) if (SITE_TYPES[k].rx.test(s)) return k; return null; }
+        // ---- which buildable does an order mean? Every type whose words match is scored (length of the matched words + its priority),
+        //      and the most specific one wins: "6th gen fighter research center" is an Aerospace Facility, not a university;
+        //      "nuclear submarine base" is a naval base, not a power plant. Procedural types match through their archetypes (BUILD_ARCH).
+        function siteTypeMatch(s) {
+            s = ' ' + String(s || '').toLowerCase() + ' ';
+            const all = [];
+            for (const k in SITE_TYPES) { const T = SITE_TYPES[k]; if (!T || !T.rx || T.gen) continue; const m = s.match(T.rx); if (m && m[0].trim()) all.push({ key: k, score: m[0].trim().length + (T.prio || 0), words: m[0].trim() }); }
+            try { if (typeof buildArchMatches === 'function') buildArchMatches(s).forEach(x => all.push(x)); } catch (e) { }
+            all.sort((a, b) => b.score - a.score);
+            return all.length ? { key: all[0].key, score: all[0].score, words: all[0].words, all } : null;
+        }
+        function siteTypeOf(s) { const m = siteTypeMatch(s); return m ? m.key : null; }
+        // a type that is unknown here (an AI-defined type from another campaign, a damaged save) still renders as a public works project
+        function siteT(type) { return SITE_TYPES[type] || SITE_TYPES.project; }
+        // "build 50 tanks", "produce 10 stealth fighters", "buy 4 frigates": weapons, not a building (bought in the Military panel)
+        const UNIT_PROD_RX = /\b(build|produce|manufacture|make|buy|purchase|order|procure|acquire|assemble|field)\b.{0,30}?\b(\d[\d,]*|a few|several|dozens? of|hundreds? of|a squadron of|a fleet of|an?|one|two|three|four|five|six|seven|eight|nine|ten|twelve|twenty|thirty|fifty|hundred)\s+(new\s+)?([\w-]+\s+){0,3}?(tanks?|jets?|fighters?|bombers?|aircraft|planes?|helicopters?|drones?|frigates?|destroyers?|carriers?|submarines?|warships?|ships?|corvettes?|missiles?|warheads?|nukes?|icbms?|soldiers|troops|batteries|interceptors|apcs?|ifvs?|armou?red vehicles)\b/;
+        const FACILITY_RX = /\b(factory|factories|plant|facility|complex|site|base|cent(er|re)|silos?|lab|laboratory|program(me)?|yards?|works|mill|station|hub|line|range|campus|institute|industry|academy|school|hangar|depot|port|dock)\b/;
+        const RND_RX = /\b(\d+(st|nd|rd|th)|sixth|fifth|seventh|next)[- ]?gen(eration)?\b|\b(prototype|design|develop|research)/;
+        function isUnitProduction(s) { return UNIT_PROD_RX.test(s) && !FACILITY_RX.test(s) && !RND_RX.test(s); }
+        // tearing down your own building (salvage) — "scrap" only counts when one of your sites is named
+        const DEMOLISH_RX = /\b(demolish\w*|raze|razing|tear (it |them )?down|tear down|bulldoze|knock (it )?down|flatten|level the|salvage|dismantle and sell)\b/;
+        // a strong building verb with no catalogue match: the game (or the AI) defines a new type from the words
+        const BUILD_INTENT_RX = /\b(build|building|construct|constructing|erect|put up|start work on|break ground on|lay the foundations? (of|for))\b/;
+
+        // ---- catalogue helpers: price, time, money ----
+        const BUILD_CATS = [['military', 'Military', 'swords'], ['industry', 'Industry', 'factory'], ['energy', 'Energy', 'bolt'], ['nuclear', 'Nuclear', 'atom'], ['transport', 'Transport & trade', 'route'],
+            ['infrastructure', 'Infrastructure', 'crane'], ['science', 'Science & tech', 'chip'], ['space', 'Space & aerospace', 'satellite'], ['education', 'Education', 'cap'], ['health', 'Health & water', 'medical'],
+            ['agriculture', 'Agriculture', 'wheat'], ['security', 'Security & intelligence', 'shield'], ['government', 'Government & media', 'columns'], ['culture', 'Culture & tourism', 'stadium'],
+            ['finance', 'Finance & trade zones', 'coins'], ['environment', 'Environment', 'sun'], ['social', 'Housing & social', 'home'], ['custom', 'Your custom projects', 'star']];
+        // price level of a country (the poorer the country, the cheaper local labour) — spec buildables have one fixed price everywhere
+        function regionalIndex(iso) { try { const p = nationIso(iso || state.playerIso); const pc = p && p.pop ? p.gdp / p.pop : 20000; return clamp(pc / 45000, 0.45, 1.1); } catch (e) { return 1; } }
+        // every operating steel mill of yours makes domestic construction 3% cheaper (at most 15%)
+        function steelDiscount() { try { const me = state.playerIso; const n = (state.sites || []).filter(s => s.owner === me && s.status === 'active' && SITE_TYPES[s.type] && SITE_TYPES[s.type].fx && SITE_TYPES[s.type].fx.steel).length; return clamp(n * 0.03, 0, 0.15); } catch (e) { return 0; } }
+        function catalogBase(key, iso) { const T = siteT(key); return T.fixed ? T.cost : T.cost * regionalIndex(iso); }
+        function catalogCost(key, iso, host) { const me = state.playerIso; return Math.round(catalogBase(key, iso) * D().cost * ((host || me) === me ? 1 - steelDiscount() : 1)); }
+        function fmtBuildTime(d) { d = Math.round(d); return d < 60 ? `${d} days` : d < 550 ? `${Math.round(d / 30.4)} months` : `${(d / 365).toFixed(1)} years`; }
+        function typeTimeText(T) { return `${fmtBuildTime(T.days[0])}–${fmtBuildTime(T.days[1])}`.replace(/ (months|years)–(\d)/, '–$2').replace(/ days–(\d+) days/, '–$1 days'); }
+        // monthly revenue / upkeep of a type at a given list price (before conditions: sanctions, war, prices…)
+        function typeMonthly(T, base) { return { rev: Math.round(base * (T.y || 0) / 12), upk: Math.round(base * (T.u || 0) / 12) }; }
+        function typeEconLine(key, iso) {
+            const T = siteT(key), base = catalogBase(key, iso), m = typeMonthly(T, base), out = [];
+            if (m.rev) out.push(`+${formatVal(m.rev)}/mo`);
+            if (m.upk) out.push(`upkeep ${formatVal(m.upk)}/mo`); else if (T.cat === 'military' && !T.u) out.push('upkeep: military budget');
+            if (T.mw) out.push(T.mw > 0 ? `+${T.mw.toLocaleString()} MW` : `${T.mw} MW`);
+            if (T.eu) out.push(`+${T.eu} EU/mo`); if (T.euUse) out.push(`uses ${T.euUse} EU/mo`);
+            if (T.popGrowth) out.push(`+${T.popGrowth}% pop/yr`);
+            if (T.growth) out.push(`growth +${T.growth.toFixed(2)}`);
+            if (T.defense) out.push(`defence +${T.defense}`);
+            if (T.produces) out.push(producesText(T.produces));
+            return out.join(' · ');
+        }
+        function producesText(P) {
+            if (!P) return '';
+            if (P.carriers) return 'per year: 1 carrier or 4 destroyers or 8 frigates (mixable)';
+            const k = Object.keys(P).find(x => x !== 'perDays' && typeof P[x] === 'number');
+            return k ? `${P[k]} ${k} / ${P.perDays || 30} days` : '';
+        }
+        // the catalogue in a few lines, for the AI (aiGameRules, order interpretation)
+        function buildCatalogBrief(max = 60) {
+            const keys = Object.keys(SITE_TYPES).filter(k => !SITE_TYPES[k].gen && !SITE_TYPES[k].custom);
+            return keys.slice(0, max).map(k => { const T = SITE_TYPES[k]; return `${k}: ${T.name} ${formatVal(T.cost)}${T.fixed ? '' : ' (scaled by local prices)'}, ${typeTimeText(T)}${T.homeOnly ? ', own territory only' : ''}${T.coastal ? ', coast' : ''} — ${T.desc || ''}`; }).join('\n');
+        }
 
         // Known facilities as of January 2026 (positions approximate)
         const REAL_SITES = [
@@ -8123,7 +8259,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         }
         function siteTerms(site) {
             const t = [normName(site.name)];
-            if (site.place) t.push(normName(site.place + ' ' + SITE_TYPES[site.type].name.split(' ')[0]));
+            if (site.place) t.push(normName(site.place + ' ' + siteT(site.type).name.split(' ')[0]));
             return t.concat(site.terms || []).filter(Boolean);
         }
         function detectSite(text) {
@@ -8253,9 +8389,57 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             }
             return { host, lat, lng, place };
         }
+        // A queued build order after its place, type or price changed: one price, one build-time roll, one name, the real completion date
+        function refreshBuildOrder(o, reroll) {
+            const me = state.playerIso, T = siteT(o.siteType), home = !o.loc || o.loc.host === me;
+            if (o.userCost) o.cost = Math.round(o.userCost);
+            else if (o.baseCost) o.cost = Math.max(1e6, Math.round(o.baseCost * D().cost * (home ? 1 - steelDiscount() : 1)));
+            if (reroll || !o.buildDays) o.buildDays = rint(T.days[0], T.days[1]);
+            o.days = home ? 1 : (o.days > 1 ? o.days : rint(5, 10));        // your own land: work starts on Execute; abroad the host government must agree first
+            o.eta = fmtDate(dateIn(o.buildDays + (home ? 0 : o.days)));
+            if (!o.aiName) o.siteName = siteNameFor(o, T, (o.loc && o.loc.place) || shortName(me));
+            o.targets = (o.targets || []).filter(t => !(t.stance === 'friendly' && t.auto));
+            if (o.loc && o.loc.host !== me && !o.targets.some(t => t.iso === o.loc.host)) o.targets.unshift({ iso: o.loc.host, stance: 'friendly', auto: true });
+            return o;
+        }
+        // The site keeps the player's own words: "build 6th gen fighter research center" → "6th-Gen Fighter Research Center, Bandar Abbas"
+        const NAME_STOP = new Set(['a', 'an', 'the', 'of', 'and', 'for', 'new', 'our', 'my', 'small', 'large', 'big', 'major', 'huge', 'giant', 'mega', 'modern', 'national', 'state', 'of-the-art', 'state-of-the-art', 'some', 'more', 'another']);
+        const NAME_UPPER = new Set(['ai', 'icbm', 'icbms', 'ree', 'ev', 'evs', 'lng', 'uav', 'uavs', 'sez', 'npp', 'hq', 'it', 'r&d', 'uk', 'us', 'un', 'nato', 'gps', 'tv', 'ccgt']);
+        function buildPhraseOf(text) {
+            const m = String(text || '').match(/\b(?:build(?:ing)?|construct(?:ing)?|erect|create|develop|establish|set(?:ting)? up|open|put up|start work on|fund|finance|commission|install|i want|we need|i need)\s+(.+?)(?=\s+(?:in|at|near|on|for|to|along|between|across|outside|by|with|next|close|that|which|so|costing|worth|called|named|here|there|within|inside|around|east|west|north|south)\b|[.,;:!?(]|$)/i);
+            if (!m) return null;
+            let w = m[1].trim().replace(/^(?:(?:a|an|the|new|our|my|another|one|some|more|brand[- ]new)\s+)+/i, '');
+            w = w.replace(/^(?:\d[\d,]*|two|three|four|five|six|seven|eight|nine|ten)\s+(?=[a-z])/i, '').trim();      // a count ("2 hospitals") — never an ordinal ("6th gen")
+            if (!w || w.length < 3 || w.length > 60 || /[^\p{L}\p{N}\s'&-]/u.test(w) || /\b\p{L}+[,;]\p{L}/u.test(m[1])) return null;   // junk such as "mi,itary base" keeps the catalogue name
+            const words = w.split(/\s+/); if (words.length > 7) return null;
+            return words.map((x, i) => {
+                const lx = x.toLowerCase();
+                if (/^\d+(st|nd|rd|th)$/i.test(x)) return lx;
+                if (NAME_UPPER.has(lx)) return lx.toUpperCase();
+                if (i > 0 && ['of', 'and', 'for', 'the', 'on', 'de'].includes(lx)) return lx;
+                return lx.charAt(0).toUpperCase() + lx.slice(1);
+            }).join(' ').replace(/\b(\d+(?:st|nd|rd|th)) (Gen(?:eration)?)\b/g, '$1-$2');
+        }
+        function siteNameFor(o, T, place) {
+            const t = String(o.text || '');
+            const named = (t.match(/(?:called|named)\s+["“']?([^"”',.]+)/i) || [])[1];
+            if (named && named.trim().length >= 2) return named.trim();
+            if (o.siteType === 'expo') { const y = (t.match(/expo\s*(20\d\d)/i) || [])[1]; if (y) return `Expo ${y} ${place}`; }
+            const ph = buildPhraseOf(t);
+            if (ph) {
+                // the player's words name it when they say more than the catalogue name does ("Fighter Research Center" ≠ "Aerospace Facility")
+                const known = new Set((T.name + ' ' + ((siteTypeMatch(t) || {}).words || '')).toLowerCase().split(/[^a-z0-9&]+/).filter(Boolean));
+                const pw = ph.toLowerCase().split(/[^a-z0-9&]+/).filter(x => x && !NAME_STOP.has(x));
+                const extra = pw.filter(x => !known.has(x) && !known.has(x.replace(/s$/, '')));
+                const tn = new Set(T.name.toLowerCase().split(/[^a-z0-9&]+/)), shared = pw.filter(x => tn.has(x) || tn.has(x.replace(/s$/, ''))).length;
+                // ...or when they used their own words for it ("Cyber Command Center", "Nuclear Submarine Base", "Grain Silo")
+                if (extra.length || (pw.length && shared * 2 < pw.length)) return `${ph}${FACILITY_RX.test(ph.toLowerCase()) || T.cat !== 'space' ? '' : ' Program'}, ${place}`;
+            }
+            return `${place} ${T.name}`;
+        }
 
         function sitePopupHTML(site) {
-            const T = SITE_TYPES[site.type], col = STATUS_COLOR[site.status];
+            const T = siteT(site.type), col = STATUS_COLOR[site.status];
             const own = nationIso(site.owner), host = site.host || site.owner;
             const rows = [];
             rows.push(['Owner', `${flagHTML(own, 10)} ${esc(shortName(site.owner))}`]);
@@ -8283,7 +8467,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             </div>`;
         }
         function siteIcon(site) {
-            const T = SITE_TYPES[site.type];
+            const T = siteT(site.type);
             const mine = site.owner === state.playerIso && state.phase === 'playing';
             const small = site.layer && !mine;
             let side = '';                                       // whose facility: yours (blue), ally (green), hostile (red)
@@ -8356,7 +8540,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                     ${['mobilizing', 'transit', 'returning'].includes(m.status) ? `<div class="cc-bar mt-1.5"><div style="width:${Math.round(moveProgress(m) * 100)}%;background:#f59e0b"></div></div>` : ''}</div>`).join('');
             if (!items.length && !forces.length) { list.innerHTML = `<div class="text-center text-xs text-slate-500 py-6 px-6">No sites yet. Try an order like <i>"Build a nuclear power plant near ${esc((CITIES.find(c => c[1] === me) || ['the capital'])[0])}"</i>, or use 📍 to pin an exact location first.</div>`; return; }
             list.innerHTML = (forces.length ? `<div class="text-[10px] uppercase tracking-wider font-bold text-slate-400 px-1">Forces</div>${forcesHTML}<div class="text-[10px] uppercase tracking-wider font-bold text-slate-400 px-1 mt-1">Sites</div>` : '') + items.slice(0, 150).map(s => {
-                const T = SITE_TYPES[s.type], col = STATUS_COLOR[s.status];
+                const T = siteT(s.type), col = STATUS_COLOR[s.status];
                 return `<div class="cc-card !py-2 cursor-pointer hover:border-indigo-400/50" onclick="focusSite('${s.id}')">
                     <div class="flex items-center gap-2">
                         <div class="site-dot st-${s.status}" style="width:24px;height:24px;font-size:12px">${T.icon}</div>
@@ -8416,13 +8600,10 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
 
         // ---------- Construction lifecycle ----------
         function startSiteFromOrder(o) {
-            const me = state.playerIso, T = SITE_TYPES[o.siteType];
-            const named = (o.text.match(/(?:called|named)\s+["“']?([^"”',.]+)/i) || [])[1];
-            const expoYear = o.siteType === 'expo' ? (o.text.match(/expo\s*(20\d\d)/i) || [])[1] : null;
-            const noun = ['project', 'landmark'].includes(o.siteType) ? (o.text.match(/(?:build|construct|erect|create|develop|establish|set up|open)\s+(?:a|an|the|new|our|\d+)?\s*(?:new\s+)?([a-z][a-z\- ]{2,40}?)(?=\s+(?:in|at|near|on|for|to|along|between|across|outside|by|with)\b|[.,]|$)/i) || [])[1] : null;
-            const name = named ? named.trim() : expoYear ? `Expo ${expoYear} ${o.loc.place}` : noun ? `${o.loc.place} ${noun.trim().replace(/\b\w/g, c => c.toUpperCase())}` : `${o.loc.place} ${T.name}`;
+            const me = state.playerIso, T = siteT(o.siteType);
+            const name = o.siteName || siteNameFor(o, T, o.loc.place);
             const site = addSite({ name, type: o.siteType, owner: me, host: o.loc.host, lat: o.loc.lat, lng: o.loc.lng, place: o.loc.place,
-                status: 'planned', progress: 0, buildDays: rint(T.days[0], T.days[1]), cost: o.cost, specs: o.specs, covert: o.covert,
+                status: 'planned', progress: 0, buildDays: o.buildDays || rint(T.days[0], T.days[1]), days0: o.buildDays, base: o.baseCost, cost: o.cost, specs: o.specs, covert: o.covert,
                 started: state.date.toLocaleDateString(), notes: [`${state.date.toLocaleDateString()}: Ordered — "${o.text.slice(0, 90)}${o.text.length > 90 ? '…' : ''}"`], fromGame: true });
             o.siteId = site.id;
             // AI HOOK: a short briefing on the project (only with an API key)
@@ -8436,7 +8617,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const me = state.playerIso, p = nationIso(me);
             const site = state.sites.find(s => s.id === o.siteId || s.id === o.siteTarget);
             if (!site) { fx('Site not found', false); return; }
-            const T = SITE_TYPES[site.type];
+            const T = siteT(site.type);
             if (o.kind === 'build') {
                 const host = site.host;
                 if (host !== me) {
@@ -8490,7 +8671,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
 
         // How the world reacts to sensitive projects
         function sensitiveReaction(site, phase, fx) {
-            const me = state.playerIso, T = SITE_TYPES[site.type];
+            const me = state.playerIso, T = siteT(site.type);
             fx = fx || (() => {});
             if (T.sens === 'enrich' && !NUCLEAR.includes(me)) {
                 const lvl = parseFloat(site.specs['Enrichment level']) || 3.67;
@@ -8533,7 +8714,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         }
 
         function completeSite(site) {
-            const me = state.playerIso, T = SITE_TYPES[site.type], p = nationIso(me);
+            const me = state.playerIso, T = siteT(site.type), p = nationIso(me);
             setSiteStatus(site, 'active', 'Construction completed; facility operational.');
             if (site.owner === me) {
                 if (T.approval) p.stability = clamp(p.stability + T.approval, 0, 100);
@@ -8568,6 +8749,23 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             return true;
         }
 
+        // ---------- Demolition & salvage ----------
+        // which of YOUR buildings does an order name? ("demolish the tank factory", "tear down the Sari Research University")
+        function ownSiteFor(text, type) {
+            const me = state.playerIso, t = ' ' + normName(text) + ' ';
+            const L = (state.sites || []).filter(x => x.owner === me && !['cancelled'].includes(x.status) && (!type || x.type === type));
+            if (!L.length) return null;
+            return L.find(x => x.place && t.includes(' ' + normName(x.place) + ' ')) || L[L.length - 1];
+        }
+        function demolishOrderOf(text, s, site, mineSite, type) {
+            const scrap = /\b(scrap|dismantle|decommission and demolish)\b/.test(s);
+            if (!DEMOLISH_RX.test(s) && !(scrap && (mineSite || (type && ownSiteFor(text, type))))) return null;
+            if (site && !mineSite) return null;                                         // "flatten their air base" is a strike, not a demolition
+            const target = mineSite ? site : type ? ownSiteFor(text, type) : null;
+            if (!target && (STRIKE_RX.test(s) || detectCountries(text).some(f => f.iso !== state.playerIso))) return null;
+            return { cat: 'construction', kind: 'demolish', siteTarget: target ? target.id : null, targets: [], scale: 1, covert: false, blocs: [], intel: null };
+        }
+
         // Daily: construction progress, covert discovery
         function sitesDailyTick(catchUp) {
             const me = state.playerIso;
@@ -8586,7 +8784,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 if (site.covert && site.owner === me && ['enrichment', 'nuke_weapon', 'missile'].includes(site.type) && site.status !== 'cancelled' && state.dayIndex % 7 === 0 && Math.random() < 0.1) {
                     site.covert = false; site.specs['Declared to IAEA'] && (site.specs['Declared to IAEA'] = 'No — exposed');
                     site.notes.push(`${state.date.toLocaleDateString()}: Exposed by foreign intelligence and satellite imagery.`);
-                    logEvent(`🛰 Satellite imagery exposes ${state.player}'s secret ${SITE_TYPES[site.type].name.toLowerCase()} near ${esc(site.place)}.`, 'bad');
+                    logEvent(`🛰 Satellite imagery exposes ${state.player}'s secret ${siteT(site.type).name.toLowerCase()} near ${esc(site.place)}.`, 'bad');
                     sensitiveReaction(site, 'exposed'); updateSiteMarker(site);
                 }
             });
@@ -9008,7 +9206,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const me = state.playerIso, items = [];
             state.sites.filter(s => s.owner === me && s.fromGame && ['planned', 'construction'].includes(s.status)).forEach(s => {
                 const left = s.status === 'planned' ? null : Math.max(1, Math.round(s.buildDays * (1 - s.progress)));
-                items.push({ icon: SITE_TYPES[s.type].icon, name: s.name, pct: s.progress, col: '#f59e0b', when: left ? `Done ${fmtDate(dateIn(left))}` : 'Awaiting approval', click: `focusSite('${s.id}')` });
+                items.push({ icon: siteT(s.type).icon, name: s.name, pct: s.progress, col: '#f59e0b', when: left ? `Done ${fmtDate(dateIn(left))}` : 'Awaiting approval', click: `focusSite('${s.id}')` });
             });
             (state.moves || []).filter(m => m.owner === me && ['authorized', 'mobilizing', 'transit', 'returning'].includes(m.status)).forEach(m => {
                 items.push({ icon: UNIT_TYPES[m.unitType].icon, name: m.name, pct: moveProgress(m), col: m.status === 'returning' ? '#38bdf8' : m.hostile ? '#ef4444' : '#f59e0b',
@@ -10211,6 +10409,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.6 10.8c.8.6 1.1 1.4 1.1 2.2h5c0-.8.3-1.6 1.1-2.2A6 6 0 0012 3z"/>',
             advisor: '<circle cx="12" cy="7.5" r="3.5"/><path d="M5 21c.8-4 3.6-6.5 7-6.5s6.2 2.5 7 6.5"/><path class="f" d="M12 14.5l-1.3 2.3L12 21l1.3-4.2z"/>',
             pin: '<path d="M12 21s-7-6.2-7-11.5A7 7 0 0119 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+            car: '<path d="M3 15.5V12l2.2-4.6c.3-.6.9-.9 1.5-.9h10.6c.6 0 1.2.3 1.5.9L21 12v3.5"/><path d="M3 12h18"/><path d="M3 15.5h18v2.5h-3v-2.5M6 18H3"/><circle class="f" cx="7" cy="14" r="1.1"/><circle class="f" cx="17" cy="14" r="1.1"/>',
             crane: '<path d="M6 21V5l13 3"/><path d="M6 5h13"/><path d="M16 5v6"/><rect x="14" y="11" width="4" height="3"/><path d="M3 21h8"/>',
             checkc: '<circle cx="12" cy="12" r="9"/><path d="M7.5 12.5l3 3 6-6.5"/>',
             timer: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/>',
@@ -10350,11 +10549,13 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const RI = { oil: 'barrel', gas: 'flame', food: 'wheat', metals: 'ingot', rare: 'crystal', chips: 'chip' };
             const SI = { nuke_weapon: 'radiation', enrichment: 'atom', nuclear: 'reactor', chip_fab: 'chip', data_center: 'server', expo: 'tent', stadium: 'stadium',
                 airbase: 'plane', naval: 'anchor', missile: 'rocket', spaceport: 'satellite', base: 'shield', refinery: 'refinery', port: 'portcrane', airport: 'takeoff',
-                railway: 'train', dam: 'wave', solar: 'sun', desal: 'drop', hospital: 'medical', university: 'cap', sez: 'city', mine: 'pick', embassy: 'columns', factory: 'factory', powerplant: 'bolt', pipeline: 'barrel', canal: 'wave', bridge: 'route', highway: 'route', wall: 'shield', bunker: 'lock', housing: 'home', school: 'cap', prison: 'lock', landmark: 'columns', project: 'crane' };
+                railway: 'train', dam: 'wave', solar: 'sun', desal: 'drop', hospital: 'medical', university: 'cap', sez: 'city', mine: 'pick', embassy: 'columns', factory: 'factory', powerplant: 'bolt', pipeline: 'barrel', canal: 'wave', bridge: 'route', highway: 'route', wall: 'shield', bunker: 'lock', housing: 'home', school: 'cap', prison: 'lock', landmark: 'columns', project: 'crane',
+                ree_mine: 'crystal', coal_plant: 'bolt', gas_plant: 'flame', aerospace: 'satellite', state_media: 'mic', icbm_silo: 'target', drone_factory: 'drone', missile_factory: 'rocket', tank_factory: 'tank', plane_factory: 'plane', shipyard: 'ship', auto_plant: 'car', farm: 'wheat', steel_mill: 'ingot', cyber_hub: 'spy' };
             const UI = { airdef: 'radar', carrier: 'ship', naval: 'anchor', air: 'plane', missile: 'rocket', armor: 'tank', drones: 'drone', peace: 'dove', special: 'target', ground: 'helmet' };
             Object.entries(RI).forEach(([k, v]) => { if (RES[k]) { RES[k].emoji = RES[k].icon; RES[k].icon = ic(v); } });
             Object.entries(SI).forEach(([k, v]) => { if (SITE_TYPES[k]) { SITE_TYPES[k].emoji = SITE_TYPES[k].icon; SITE_TYPES[k].icon = ic(v); } });
             Object.entries(UI).forEach(([k, v]) => { if (UNIT_TYPES[k]) { UNIT_TYPES[k].emoji = UNIT_TYPES[k].icon; UNIT_TYPES[k].icon = ic(v); } });
+            Object.keys(SITE_TYPES).forEach(k => { const T = SITE_TYPES[k]; if (!T.emoji && T.ico && ICONS[T.ico]) { T.emoji = T.icon; T.icon = ic(T.ico); } });   // procedural and custom types name their insignia in .ico
             Object.keys(SITE_TYPES).forEach(k => { if (!SITE_TYPES[k].emoji) { SITE_TYPES[k].emoji = SITE_TYPES[k].icon; } });
         })();
 
@@ -13294,7 +13495,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         function showProposedSite(o) {
             if (!o || !o.loc || o.loc.lat === undefined || typeof L === 'undefined') return;
             removeProposed(o.id);
-            const T = SITE_TYPES[o.siteType];
+            const T = siteT(o.siteType);
             try {
                 const mk = L.marker([o.loc.lat, o.loc.lng], { draggable: true, zIndexOffset: 1000, icon: L.divIcon({ className: 'site-pin', html: `<div class="site-dot st-planned mine proposed" title="Drag to move">${T ? T.icon : '📍'}</div>`, iconSize: [30, 30], iconAnchor: [15, 15] }) }).addTo(map);
                 mk.bindTooltip && mk.bindTooltip(`Proposed: ${T ? T.name : 'site'} — drag to move`, { direction: 'top', offset: [0, -14] });
@@ -13313,6 +13514,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             o.loc = { host: iso, lat: ll.lat, lng: ll.lng, place: nc && nc.iso === iso ? nc.name : `${regionWord(iso, ll.lat, ll.lng)} ${shortName(iso)}` };
             o.targets = o.targets.filter(t => !(t.stance === 'friendly' && t.auto));
             if (iso !== state.playerIso && !o.targets.some(t => t.iso === iso)) o.targets.unshift({ iso, stance: 'friendly', auto: true });
+            if (o.kind === 'build') refreshBuildOrder(o);                 // new place → new name, steel discount, consent delay and completion date
             const mk = proposedMarkers[id]; if (mk && mk.setLatLng) mk.setLatLng([ll.lat, ll.lng]);
             renderQueue();
             flashReply(`📍 Site moved to <b>${esc(o.loc.place)}</b>${iso !== state.playerIso ? ` — in ${esc(shortName(iso))}, so their government must agree` : ''}.`);
