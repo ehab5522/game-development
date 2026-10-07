@@ -4118,7 +4118,7 @@
             C.active = { leader: juntaName(state.playerIso), day: state.dayIndex, speed: state.speed || 0 };
             if (state.speed > 0) setSpeed(0);
             logEvent(`🚨 <b>Coup attempt!</b> Army units under ${esc(C.active.leader)} are moving on the capital.`, 'bad');
-            openCoupPanel();
+            openCoupPanel(); try { renderCoupBtn(); } catch (e) { }
         }
         function coupChance(kind) {
             const me = state.playerIso, n = nationIso(me), C = coupState(), s = state.soc && state.soc[me];
@@ -5382,7 +5382,12 @@
                     else c.intensity = clamp(c.intensity - rint(15, 25), 0, 100);
                     c.ceasefireByPlayer = true; c.ceasefireDay = state.dayIndex; c.intensity = clamp(c.intensity, 9, 100);
                     out.push(d.kind === 'deesc' ? `🤝 Both sides step back in the ${c.name}.` : `🕊 A ceasefire is in force in the ${c.name}; the front lines freeze.`);
-                } else { c.type = 'resolved'; c.intensity = 0; try { delete (state.capit || {})[foe]; } catch (e) { } try { delete reactState().war[foe]; } catch (e) { } out.push(`📜 The ${c.name} is over: peace treaty signed.`); }
+                } else {
+                    const side = c.sideA.includes(foe) ? 'sideA' : 'sideB', rest = c[side].filter(x => x !== foe && WORLD[x]);
+                    try { delete (state.capit || {})[foe]; } catch (e) { } try { delete reactState().war[foe]; } catch (e) { }
+                    if (rest.length) { c[side] = c[side].filter(x => x !== foe); out.push(`📜 ${fn} signs a separate peace and leaves the ${c.name}; ${rest.map(shortName).join(', ')} fight${rest.length > 1 ? '' : 's'} on.`); }
+                    else { c.type = 'resolved'; c.intensity = 0; out.push(`📜 The ${c.name} is over: peace treaty signed.`); }
+                }
             }
             // reactions: the other side, your people, the world
             const land = !!(gained && gained.dp) || annexed;
@@ -13110,7 +13115,7 @@ function annexMapSync() {
         try { map.removeLayer(geojsonLayer); } catch (e) { }
         playerFeature = null; targetFeature = null;
         geojsonLayer = L.geoJSON(simplifyGeo(RAW_GEO), COUNTRY_OPTS).addTo(map);
-        keys.forEach(l => { const vn = isoToName(annexFinal(l)), lay = nameLayer[vn] || nameLayer[state.player]; [A[l].mapName, isoToName(l)].forEach(n => { if (n && lay && n !== vn) nameLayer[n] = lay; }); });
+        annexAlias();
         if (state.phase === 'playing') highlightPlayerCountry();
         if (state.target && nameLayer[state.target] && nameLayer[state.target] !== playerFeature) { targetFeature = nameLayer[state.target]; try { targetFeature.setStyle(getHighlightStyle('target')); } catch (e) { } }
         GEO_INDEX = null;
@@ -13122,6 +13127,10 @@ function annexMapSync() {
         try { refreshMapView(); } catch (e) { }
     } catch (e) { console.warn('annex map', e); }
     return true;
+}
+function annexAlias() {          // the annexed state's map names lead to its new owner's layer (clicks, chat, "show on map")
+    const A = state.annexed || {};
+    Object.keys(A).forEach(l => { if (!WORLD[A[l].by]) return; const vn = isoToName(annexFinal(l)), lay = nameLayer[vn]; [A[l].mapName, isoToName(l)].forEach(n => { if (n && lay && n !== vn) nameLayer[n] = lay; }); });
 }
 function _annexGeomFor(iso) { let g = null; try { geojsonLayer.eachLayer(l => { if (!g && l.feature && annexFeatIso(l.feature) === iso) g = l.feature.geometry; }); } catch (e) { } return g; }
 function annexMapSoon() {       // the borders may still be loading (a save opened from the start screen): retry until they are drawn
@@ -16158,6 +16167,8 @@ function systemsEnsure() {
     updateTargetUI = function (cName) { const a = [...arguments]; try { const i = resolveIso(cName), A = (state.annexed || {})[i]; if (A && WORLD[A.by]) a[0] = isoToName(annexFinal(i)); } catch (e) { } return _ut.apply(this, a); };
     const _mi = milInventory;               // the annexed state's army and reservists join the victor's manpower
     milInventory = function (iso) { const r = _mi.apply(this, arguments); try { const A = state.annexed || {}; Object.keys(A).forEach(l => { if (A[l].by === iso && r) r.troops += A[l].mp || 0; }); } catch (e) { } return r; };
+    const _sg = setGraphics;                // a graphics change rebuilds the country layer from the merged borders: re-point the annexed names
+    setGraphics = function () { _sg.apply(this, arguments); try { annexAlias(); } catch (e) { } };
     const _pi = proxiesIn;                  // armed groups in annexed land now operate inside the victor
     proxiesIn = function (iso) { const r = _pi.apply(this, arguments); try { const A = state.annexed || {}; Object.keys(A).forEach(l => { if (A[l].by === iso) _pi(l).forEach(p => { if (!r.includes(p)) r.push(p); }); }); } catch (e) { } return r; };
 }
