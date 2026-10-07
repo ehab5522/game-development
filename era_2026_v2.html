@@ -1281,7 +1281,10 @@
                 if (hitM) { hitM._activate(e.originalEvent); return; }
                 closeAllPopups();
                 const le = Object.assign(ev(e), { _stopped: false });
-                const hit = hitCountry(e.point);
+                let hit = hitCountry(e.point);
+                // the tiles under the pointer may not be drawn yet (a click right after a jump, a zoom or a fast pan): fall back to the exact outlines
+                if (!hit && le.latlng) { try { const pc = typeof preciseCountryAt === 'function' ? preciseCountryAt(le.latlng) : null, l = pc && typeof nameLayer !== 'undefined' ? nameLayer[pc.name] : null;
+                    if (l && GJ.some(G => G._on && G._proxies.includes(l))) hit = l; } catch (er) { } }
                 if (hit) { le.target = hit; hit.fire('click', le); if (le._stopped) return; }
                 W.fire('click', ev(e));
             });
