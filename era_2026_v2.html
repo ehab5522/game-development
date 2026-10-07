@@ -11979,6 +11979,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (c.money) p.treasury -= p.gdp * c.money * sev;
             if (c.growth) state.mods.growth += c.growth * sev;
             logEvent(`🚨 <b>Domestic crisis:</b> ${esc(c.t)} Approval ${Math.round(c.appr * sev)}%. Suggested response: <a href="#" onclick='document.getElementById("command-center").classList.remove("hidden");document.getElementById("cc-input").value=${JSON.stringify(c.fix)};document.getElementById("cc-input").focus();return false' class="underline">${esc(c.fix)}</a>`, 'bad');
+            try { (state.crises = state.crises || []).push({ t: c.t, fix: c.fix, day: state.dayIndex }); if (state.crises.length > 12) state.crises.shift(); } catch (e) { }   // kept for the 🪖 internal-security panel
             updateEconomyUI();
         }
 
@@ -16129,18 +16130,18 @@ function systemsEnsure() {
 // =====================================================================
 //  WAR & PEACE WIRING — peace terms, capitulations and annexations: saved fields, loading, new games, ticks, redirects
 // =====================================================================
-['annexed', 'capit', 'reparations', 'peaceTalks', 'occV'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+['annexed', 'capit', 'reparations', 'peaceTalks', 'occV', 'crises'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 {
     const _gf = geomFor;            // fronts and control keep each country's own 2026 grid after a merge
     geomFor = function (iso) { return ANNEX_GEO.geom[iso] || _gf.apply(this, arguments); };
     const _iw = initWorld;
-    initWorld = function () { _iw.apply(this, arguments); state.annexed = {}; state.capit = {}; state.reparations = []; state.peaceTalks = {}; };
+    initWorld = function () { _iw.apply(this, arguments); state.annexed = {}; state.capit = {}; state.reparations = []; state.peaceTalks = {}; state.crises = []; };
     const _as = applySave;
     applySave = function (d) {
         try { annexStaticReset(); if (d && d.state && d.state.occ && d.state.occV === undefined) d.state.occV = 4; } catch (e) { console.warn('annex load', e); }   // older saves kept their fronts
         _as.apply(this, arguments);
         try {
-            ['annexed', 'capit', 'reparations', 'peaceTalks'].forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; });
+            ['annexed', 'capit', 'reparations', 'peaceTalks', 'crises'].forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; });
             state.annexed = state.annexed || {}; state.capit = state.capit || {}; state.reparations = state.reparations || []; state.peaceTalks = state.peaceTalks || {};
             annexStaticApply(); annexMapSoon(); try { rankCache.key = null; updateEconomyUI(); } catch (e) { }
             WAR_UI.mode = 'ext'; WAR_UI.reply = null; WAR_UI.done = null; WAR_UI.annexAsk = null; closeWarPanel(); renderWarButton();
