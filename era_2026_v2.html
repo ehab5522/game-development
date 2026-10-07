@@ -4646,7 +4646,7 @@
             f.geometry = { type: 'MultiPolygon', coordinates: fp };
         }
         // Accuracy pass over the borders dataset (Natural Earth admin-0):
-        //  · France, Norway, Northern Cyprus, Kosovo and Somaliland come without an ISO code (-99): give them theirs, so every lookup by code works
+        //  · France, Norway, Kosovo and Somaliland come without an ISO code (-99): give them theirs, so every lookup by code works
         //  · Bir Tawil (claimed by neither Egypt nor Sudan) is shown as part of Sudan, which borders it on three sides — no separate territory
         //  · Egypt's outline has three stray holes in the Halaib triangle (data artefacts that drew loose border lines): filled
         //  · slivers that are not countries go to the state that holds them; disputed reefs with no land of note are left off the map
@@ -4656,7 +4656,9 @@
         // older saves may still target a territory that is now merged into its neighbour (or left off the map)
         function remapMergedTarget() { if (state.target && Object.prototype.hasOwnProperty.call(GEO_MERGED_INTO, state.target) && !(typeof nameLayer !== 'undefined' && nameLayer[state.target])) state.target = GEO_MERGED_INTO[state.target]; }
         function geoFixups2026(F, byName, polysOf) {
-            const ISO_FIX = { France: ['FRA', 'FR'], Norway: ['NOR', 'NO'], 'Northern Cyprus': ['CYN', ''], Kosovo: ['XKX', 'XK'], Somaliland: ['SOL', ''] };
+            // (Northern Cyprus keeps no code: the territorial-control table lists its whole area as held by the TRNC entity, which with a
+            //  code would show the TRNC's own government holding 0% of its land; its lookups go through its name, as before)
+            const ISO_FIX = { France: ['FRA', 'FR'], Norway: ['NOR', 'NO'], Kosovo: ['XKX', 'XK'], Somaliland: ['SOL', ''] };
             Object.keys(ISO_FIX).forEach(n => { const f = byName(n); if (f && !/^[A-Z]{3}$/.test(f.properties['ISO3166-1-Alpha-3'] || '')) f.properties = { ...f.properties, 'ISO3166-1-Alpha-3': ISO_FIX[n][0], 'ISO3166-1-Alpha-2': ISO_FIX[n][1] || f.properties['ISO3166-1-Alpha-2'] }; });
             const eg = byName('Egypt');
             if (eg) eg.geometry = { type: 'MultiPolygon', coordinates: polysOf(eg.geometry).map(pl => [pl[0]].concat(pl.slice(1).filter(h => !h.every(c => c[0] > 33.5 && c[0] < 36.5 && c[1] > 21.5 && c[1] < 23.5)))) };
