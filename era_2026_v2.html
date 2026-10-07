@@ -9288,7 +9288,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         // DEMOLITION: instant, 50% salvage, sound and a dust-and-collapse animation on the map; the site's effects and garrison go with it
         function demolishSite(id, opt = {}) {
             const me = state.playerIso, i = (state.sites || []).findIndex(s => s.id === id), site = state.sites[i];
-            if (!canDemolish(site)) { if (!opt.order) flashReply('⛔ Only your own buildings can be demolished.'); return null; }
+            if (!canDemolish(site)) { if (!opt.order) flashReply(site ? '⛔ Only your own buildings can be demolished.' : 'That building is already gone.'); return null; }
             const T = siteT(site.type), p = nationIso(me), v = salvageValue(site), extra = [];
             p.treasury += v;
             try { sfxDemolish(); } catch (e) { }
@@ -10284,8 +10284,6 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             startGameLoop();
             logEvent(`💾 Campaign loaded: ${esc(d.meta.player)}, ${d.meta.date}. Game paused — press Space to resume.`, 'good');
         }
-        // buildings: the campaign's custom building types, last month's building ledger, rebel-held share at the start
-        ['customSiteTypes', 'econ', 'rebel0'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 
         function highlightPlayerCountry() {
             if (typeof geojsonLayer === 'undefined' || !geojsonLayer) return;
@@ -18035,6 +18033,8 @@ function mapFind(q) {
 // saved with the game; a save from before these systems existed starts them fresh
 const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react', 'orgs', 'orgApp', 'orgCd', 'allyCalls', 'allyJoined', 'intel', 'counterOn', 'counterIntel'];
 NEW_FIELDS.forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+// buildings: the campaign's custom building types, last month's building ledger, rebel-held share at the start
+['customSiteTypes', 'econ', 'rebel0'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 function systemsEnsure() {
     if (!state.proxies) proxyInit(); else proxyMigrate();
     if (!state.treaties) treatyInit();
