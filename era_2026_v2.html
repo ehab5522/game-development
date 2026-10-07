@@ -15756,7 +15756,8 @@ function newsPlayerVoice(t) {
     // reaction lines are written from your side ("our diplomats"); news is written from outside
     const P = state.player || 'the government';
     return String(t).replace(/\bour (diplomats|exports|military sites|banks|government|forces|country|allies)\b/gi, `${P}'s $1`).replace(/\bagainst us\b/gi, `against ${P}`).replace(/\bon us\b/gi, `on ${P}`)
-        .replace(/\byour\b/g, `${P}'s`).replace(/(\S\s)you\b/g, `$1${P}`);
+        .replace(/\byour\b/g, `${P}'s`).replace(/(\S\s)you\b/g, `$1${P}`)
+        .replace(/\b(over|protests|against) the order "[^"]*"/g, '$1 the decision').replace(/'s order\b/g, "'s decision");
 }
 function newsWeekday(d) { return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()]; }
 function newsGet(id) { const N = newsState(); return N.items.find(x => x.id === id) || null; }
@@ -15940,10 +15941,10 @@ function newsOrderResolved(o) {
     const it = o && o.newsId && newsGet(o.newsId); if (!it || it.resolved) return;
     it.resolved = true;
     const [ph, tone] = NEWS_OUTCOME[o.outcome] || ['has been completed', 'neutral'];
-    const facts = (o.effects || []).filter(e => e && e.txt && !/^\s*🤖/.test(e.txt)).map(e => newsStrip(newsPlain(e.txt))).filter(Boolean).slice(0, 4);
+    const facts = (o.effects || []).filter(e => e && e.txt && !/^\s*🤖/.test(e.txt)).map(e => newsPlayerVoice(newsStrip(newsPlain(e.txt)))).filter(Boolean).slice(0, 4);
     it.updates.push({ d: state.dayIndex, date: state.date.toISOString(), text: `The ${({ military: 'operation', construction: 'project', economy: 'measure', domestic: 'measure', diplomacy: 'initiative', humanitarian: 'aid mission' })[o.cat] || 'plan'} ${ph}.${facts.length ? ' Key facts: ' + facts.map(newsSentence).join(' ') : ''}` });
     it.outcome = o.outcome; it.tone = tone === 'bad' ? 'bad' : it.tone === 'bad' ? 'bad' : tone;
-    it.dek = `${it.dek.split(' · ')[0]} · ${o.outcome}`;
+    it.dek = `${it.dek.split(' · ')[0].replace(/[.]+$/, '')} · ${o.outcome}`;
     it.upd = state.dayIndex; it.read = false;
     newsRender();
 }
@@ -16016,7 +16017,7 @@ function newsAIFields(it, r) {
     const s = (v, n) => typeof v === 'string' && v.trim() ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
     const h = s(r.headline, 150); const body = (Array.isArray(r.body) ? r.body : typeof r.body === 'string' ? [r.body] : []).map(p => s(p, 900)).filter(Boolean).slice(0, 4);
     if (!h || !body.length) return false;
-    it.headline = h; it.body = body; const dk = s(r.dek, 240); if (dk) it.dek = it.kind === 'order' && it.outcome ? `${dk.slice(0, 200)}` : dk;
+    it.headline = h; it.body = body; const dk = s(r.dek, 240); if (dk) it.dek = it.kind === 'order' && it.outcome ? `${dk.slice(0, 200).replace(/[.]+$/, '')} · ${it.outcome}` : dk;
     const q = Array.isArray(r.quotes) ? r.quotes : r.quote ? [r.quote] : [];
     const qs = q.map(x => x && ({ iso: aioIso(x.country) || null, who: s(x.speaker || x.who, 80), text: s(x.text || x.quote, 300) })).filter(x => x && x.text && x.who).slice(0, 2);
     if (qs.length) it.quotes = qs;
