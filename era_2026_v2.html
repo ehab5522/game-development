@@ -5639,7 +5639,7 @@
             diplomacy: /\b(diplomat|envoy|ambassador|embass|talks|negotiat|summit|consult|meet|visit|treaty|alliance|recogni[sz]|sanction|condemn|statement|united nations|security council|mediat|ceasefire|truce|peace|dialogue|normali[sz]|delegation|propose|invite|back.channel|hotline|congratulat|condolence|isolate|expel|recall)/,
             economy: /\b(tax|tariffs?|invest|budget|stimulus|subsid|trade|exports?|imports?|infrastructure|privati[sz]|nationali[sz]|loan|debt|bonds?|currency|interest rate|inflation|oil|gas|energy|industr|factor|manufactur|mining|minerals|rare.earth|agricultur|tourism|sovereign wealth|imf|opec|price control|deficit|austerity|economy|economic|swap line|fund|vat|wages?|jobs|growth|tankers?|shadow fleet|shipping|refiner|pipeline|sanctions evasion|get around)/,
             domestic: /\b(speech|address|reform|protests?|crackdown|arrest|elections?|healthcare|hospital|education|schools?|pension|welfare|police|corruption|censor|media|curfew|martial law|amnesty|referendum|unity|morale|propaganda|housing|unemployment|crime|cabinet|reshuffle|parliament|congress|legislat|constitution|national assembly|campaign|prisoners?)/,
-            intelligence: /\b(intelligence|spy|spies|espionage|cyber|hack|audit|surveil|covert|sabotage|counterintelligence|counter.?intel|infiltrat|informant|investigat|intercept|leak|disinformation|propaganda|assess|inquiry|reconnaissance|recon|satellite|mole|agents?|bribe|blackmail|steal|destabili[sz]|subvert|subversion|assassinat|eavesdrop|wiretap|foment|psyop)/,
+            intelligence: /\b(intelligence|spy|spies|espionage|cyber|hack|audit|surveil|covert|sabotage|counterintelligence|counter.?intel|infiltrat|informant|investigat|intercept|leak|disinformation|assess|inquiry|reconnaissance|recon|satellite|mole|agents?|bribe|blackmail|steal|destabili[sz]|subvert|subversion|assassinat|eavesdrop|wiretap|foment|psyop)/,
             humanitarian: /\b(aid|humanitarian|relief|refugees?|evacuat|donat|food|medical|vaccin|famine|disaster|reconstruction|rebuild)/
         };
         const HOSTILE_RX = /\b(strike|bomb|attack|invade|invasion|assault|shell|missile|airstrike|air strike|blockade|sanction|embargo|expel|condemn|threaten|warn|ultimatum|seize|annex|sabotage|assassinat|destabili[sz]|isolate|retaliat|punish|tariffs? on|cut ties|sever(ed)? (ties|relations)|freeze|declare war|war on|occupy|incursion|cyber.?attack|hack|pressure|deter\b|deterr|confront|accuse|reject|block|bans?\b|banned|demand|against|counter)/;
@@ -5654,11 +5654,11 @@
         const COVERT_RX = /\b(covert|secret|quiet|quietly|discreet|deniable|back.channel|clandestine)/;
         // ---------- Intelligence & covert operations: a typed system with real effects, never a cause of war ----------
         const INTEL_RX = {
-            assassinate: /\b(assassinat|liquidat|targeted killing|target .{0,30}(scientist|general|commander|leader|official|officer)s?\b|eliminate .{0,30}(scientist|general|commander|leader|official)|poison .{0,20}(the|their|a))/,
-            sabotage: /\b(sabotage|blow up|cripple|disable .{0,30}(grid|pipeline|plant|reactor|facility|network|system|railway|port)|cut .{0,20}(the )?(power|cables?|supply)|plant (a |an )?(bomb|device|explosive))/,
+            assassinate: /\b(assassinat|liquidat|targeted killing|target .{0,30}(scientist|general|commander|leader|official|officer)s?\b|(eliminate|kill|murder) .{0,30}(scientist|general|commander|leader|official|chief|defector)s?\b|poison .{0,20}(the|their|a))/,
+            sabotage: /\b(sabotage|blow up|(cripple|disable|knock out) .{0,30}(grid|pipeline|plant|reactor|facility|centrifuges?|network|system|railway|port|refinery|factory|radars?|air defen[cs]es?)|cut .{0,20}(undersea |internet |communications? |data )?cables?|plant (a |an )?(bomb|device|explosive))/,
             cyber: /\b(cyber.?attack|cyber.?operation|hack|hacking|hacked|ddos|malware|ransomware|wiper|breach .{0,20}(network|system|grid|server)|penetrate .{0,20}(network|system)|digital (attack|intrusion)|take down .{0,30}(grid|network|systems?|servers?))/,
             subvert: /\b(destabili[sz]|subvert|subversion|foment|incite|stir up (unrest|protest)|coup|regime change|overthrow|color revolution|fund (the )?(opposition|rebels|protest)|back (the )?(opposition|rebels|protest|uprising)|support (the )?(opposition|protest|uprising|rebels)|election (meddl|interfer|rig)|rig (the |an )?election|meddle in .{0,20}election|interfere in .{0,20}election|covertly fund)/,
-            disinfo: /\b(disinformation|propaganda campaign|fake news|influence (campaign|operation)|psyop|psychological operation|smear|sow (discord|division|doubt)|spread (rumou?rs|lies|propaganda)|troll (farm|campaign)|run a disinformation)/,
+            disinfo: /\b(disinformation|propaganda (campaign )?(against|targeting|aimed at|in (?!our|the country\b))|fake news|influence (campaign|operation)|psyop|psychological operation|smear|sow (discord|division|doubt)|spread (rumou?rs|lies|propaganda)|troll (farm|campaign)|run a disinformation)/,
             steal: /\b(steal .{0,30}(technolog|secrets?|plans?|data|designs?|blueprints?|intellectual property|ip\b)|exfiltrat|industrial espionage|plant (a |an )?mole|recruit (a |an )?(agent|informant|mole|asset|spy)|bribe .{0,20}official|blackmail)/,
             counter: /\b(counter.?intelligence|counter.?espionage|counter.?intel|catch (the )?(spy|spies|mole)|mole hunt|roll up .{0,20}(network|cell|ring)|secure our (networks?|systems?)|harden our (networks?|systems?|cyber)|protect .{0,30}(against|from) .{0,20}(hackers?|cyber|espionage|spies|sabotage))/,
             collect: /\b(spy on|spies|espionage|surveil|reconnaissance|\brecon\b|intercept .{0,20}communicat|eavesdrop|wiretap|bug .{0,20}(the|their)|monitor .{0,20}(their|the)|gather intelligence|collect intelligence|intelligence on|satellite (imagery|surveillance)|signals intelligence|infiltrat|informant|surveillance of)\b/
@@ -12981,7 +12981,7 @@ function resolveIntelOp(o, outcome, m, fx) {
         else fx('The counter-intelligence sweep found little', false);
         return;
     }
-    if (!iso) { if (good) fx('Intelligence gathered', true); return; }
+    if (!iso) { if (good) { const p = nationIso(me); p.stability = clamp(p.stability + 1, 0, 100); state.mods.defense += 0.5; fx('Intelligence gathered — internal security improved', true); } return; }
     const n = nationIso(iso), tf = (typeof fpOf === 'function') ? fpOf(iso) : { intelTol: 0.3, style: 'firm' };
     // ----- effect of a successful operation (scaled by outcome) -----
     if (good) {
