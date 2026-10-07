@@ -8091,6 +8091,8 @@
         }
 
         // ---- AI: interprets a build order before Execute (type, price, time, name, effects) — never blocks the order; the estimate stays if it fails ----
+        // the AI's name for a building, with the place once ("Tabriz Research University", not "…, Tabriz" again)
+        function aiSiteName(name, place) { const n = String(name).replace(/,.*$/, '').slice(0, 60).trim(); return place && normName(n).includes(normName(place)) ? n : `${n}, ${place}`; }
         async function aiInterpretOrder(o) {
             if (!o || o.cat !== 'construction' || o.kind !== 'build' || o.fromMenu || typeof aiReady !== 'function' || !aiReady()) return;
             o.aiPending = true; try { renderQueue(); } catch (e) { }
@@ -8126,13 +8128,13 @@
                         coastal: !!r.coastal, homeOnly: r.home_only !== false, ico: String(r.icon || ''), desc: String(r.description || ''), ai: true });
                     o.siteType = key; o.baseCost = cost; o.unknownBuild = true;
                 }
-                if (r.name && String(r.name).length > 2) { o.aiName = true; o.siteName = `${String(r.name).replace(/,.*$/, '').slice(0, 60)}, ${o.loc ? o.loc.place : shortName(me)}`; }
+                if (r.name && String(r.name).length > 2) { o.aiName = true; o.siteName = aiSiteName(r.name, o.loc ? o.loc.place : shortName(me)); }
                 o.aiBuildNote = String(r.note || `Understood as ${siteT(o.siteType).name}.`).slice(0, 220);
                 if (o.siteType !== prev) {
                     o.specs = genSpecs(o.siteType, o, o.loc.host);
                     if (o.loc && !canBuildAt(o.siteType, o.loc.lat, o.loc.lng).ok) { const sp = findBuildSpot(o.siteType, me); o.loc = { host: me, lat: sp.lat, lng: sp.lng, place: sp.place || buildPlaceName(me, sp.lat, sp.lng) }; }
                     refreshBuildOrder(o, true);
-                    if (o.aiName) o.siteName = `${String(r.name).replace(/,.*$/, '').slice(0, 60)}, ${o.loc.place}`;
+                    if (o.aiName) o.siteName = aiSiteName(r.name, o.loc.place);
                     showProposedSite(o);
                 }
                 renderQueue();
@@ -8778,7 +8780,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 const extra = pw.filter(x => !known.has(x) && !known.has(x.replace(/s$/, '')));
                 const tn = new Set(T.name.toLowerCase().split(/[^a-z0-9&]+/)), shared = pw.filter(x => tn.has(x) || tn.has(x.replace(/s$/, ''))).length;
                 // ...or when they used their own words for it ("Cyber Command Center", "Nuclear Submarine Base", "Grain Silo")
-                if (extra.length || (pw.length > 2 && shared * 2 <= pw.length) || (pw.length && shared * 2 < pw.length)) return `${ph}${FACILITY_RX.test(ph.toLowerCase()) || T.cat !== 'space' ? '' : ' Program'}, ${place}`;
+                if (extra.length || (pw.length > 2 && shared * 2 <= pw.length) || (pw.length && shared * 2 < pw.length)) { const nm = `${ph}${FACILITY_RX.test(ph.toLowerCase()) || T.cat !== 'space' ? '' : ' Program'}`; return place && normName(nm).includes(normName(place)) ? nm : `${nm}, ${place}`; }
             }
             return `${place} ${T.name}`;
         }
