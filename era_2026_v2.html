@@ -965,7 +965,6 @@
                         <span id="target-leader-role" class="gs-section !mb-0.5">Leader</span>
                         <span id="target-leader-name" class="gs-leader-name">—</span>
                         <span id="target-leader-note" class="text-[10.5px] text-slate-400 leading-snug mt-1">Holds executive power</span>
-                        <span id="portrait-credit" class="text-[9px] text-slate-500 mt-1 hidden">Photo: Wikipedia</span>
                     </div>
                 </div>
                 
@@ -8194,20 +8193,21 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const n = getNation(cName);
             const img = document.getElementById('target-portrait'), fb = document.getElementById('target-portrait-fallback');
             const nameEl = document.getElementById('target-leader-name'), roleEl = document.getElementById('target-leader-role'), noteEl = document.getElementById('target-leader-note');
-            const credit = document.getElementById('portrait-credit');
             if (!img) return;
             const mine = state.phase === 'playing' && iso && iso === state.playerIso;
             const ph = mine ? { name: n.hog, role: 'Commander (you)', other: n.hos, otherRole: 'Head of State' } : powerHolder(iso, n);
             nameEl.textContent = cleanLeaderName(ph.name) || ph.name;
             roleEl.textContent = ph.role;
             noteEl.textContent = ph.other && ph.other !== ph.name ? `${ph.otherRole}: ${cleanLeaderName(ph.other) || ph.other}` : 'Holds executive power';
-            fb.textContent = initials(ph.name);
-            img.classList.add('hidden'); fb.classList.remove('hidden'); credit.classList.add('hidden');
+            // same leader still shown (daily refresh): keep the photo instead of flashing back to initials
+            if (!mine && img.dataset.for === ph.name && !img.classList.contains('hidden')) return;
+            fb.textContent = initials(ph.name); img.dataset.for = '';
+            img.classList.add('hidden'); fb.classList.remove('hidden');
             if (mine) return;
             const req = ++portraitReq;
             const url = await fetchPortrait(ph.name);
             if (req !== portraitReq || !url) return;
-            img.onload = () => { if (req === portraitReq) { img.classList.remove('hidden'); fb.classList.add('hidden'); credit.classList.remove('hidden'); } };
+            img.onload = () => { if (req === portraitReq) { img.classList.remove('hidden'); fb.classList.add('hidden'); img.dataset.for = ph.name; } };
             img.onerror = () => { img.classList.add('hidden'); fb.classList.remove('hidden'); };
             img.src = url; img.alt = cleanLeaderName(ph.name);
         }
@@ -13598,13 +13598,13 @@ function entSelect(id, keepView) {
     document.getElementById('target-placeholder').classList.add('hidden'); document.getElementById('target-data').classList.remove('hidden');
     document.getElementById('target-flag').innerHTML = groupFlagHTML(p, 18);
     document.getElementById('target-country-name').textContent = p.state_name || p.name;
-    const roleEl = document.getElementById('target-leader-role'), nameEl = document.getElementById('target-leader-name'), noteEl = document.getElementById('target-leader-note'), img = document.getElementById('target-portrait'), fb = document.getElementById('target-portrait-fallback'), credit = document.getElementById('portrait-credit');
+    const roleEl = document.getElementById('target-leader-role'), nameEl = document.getElementById('target-leader-name'), noteEl = document.getElementById('target-leader-note'), img = document.getElementById('target-portrait'), fb = document.getElementById('target-portrait-fallback');
     if (p.shared) { roleEl.textContent = 'Shared influence'; nameEl.textContent = p.shared.sides.map(x => x.who.split(' · ')[0].replace(/^(President|Secretary-General) /, '')).join(' & '); noteEl.textContent = p.shared.title; }
     else { roleEl.textContent = 'Ruler'; nameEl.textContent = p.leader || 'Unknown'; noteEl.textContent = p.title || p.kind; }
     if (ENT.portraitFor !== id) {
     ENT.portraitFor = id;
-    fb.textContent = initials(p.leader || p.short); img.classList.add('hidden'); fb.classList.remove('hidden'); credit.classList.add('hidden');
-    const req = ++portraitReq; fetchPortrait(p.wiki || p.leader).then(url => { if (req !== portraitReq || !url) return; img.onload = () => { if (req === portraitReq) { img.classList.remove('hidden'); fb.classList.add('hidden'); credit.classList.remove('hidden'); } }; img.onerror = () => { img.classList.add('hidden'); fb.classList.remove('hidden'); }; img.src = url; }).catch(() => { });
+    fb.textContent = initials(p.leader || p.short); img.classList.add('hidden'); fb.classList.remove('hidden'); img.dataset.for = '';
+    const req = ++portraitReq; fetchPortrait(p.wiki || p.leader).then(url => { if (req !== portraitReq || !url) return; img.onload = () => { if (req === portraitReq) { img.classList.remove('hidden'); fb.classList.add('hidden'); } }; img.onerror = () => { img.classList.add('hidden'); fb.classList.remove('hidden'); }; img.src = url; }).catch(() => { });
     }
     const [rv, rl] = entRelation(p), col = relLabel(rv)[1]; document.getElementById('target-relation').innerHTML = `<span style="color:${col}">${rv > 0 ? '+' : ''}${rv} · ${rl}</span>`;
     const c = p.conf && state.conflicts.find(k => k.id === p.conf), T = proxyTerritory(p), host = p.host[0], hn = nationIso(host);
@@ -16309,9 +16309,9 @@ function worldForcesHTML() {
     const rows = isos.map(i => ({ i, r: R.mil[i] || 999, ...milInventory(i) }));
     const k = MIL_WSORT; rows.sort((a, b) => k === 'rank' ? a.r - b.r : b[k] - a[k]);
     const th = (key, l) => `<th style="cursor:pointer;text-align:right;${MIL_WSORT === key ? 'color:#f3d98a' : ''}" onclick="MIL_WSORT='${key}';renderMilPanel()">${l}</th>`;
-    return `<div class="mil-note">Approximate national inventories (2025 public estimates; ~ marks a rough estimate). Numbers change with wars, losses and defence budgets. Click a column to sort.</div>
+    return `<div class="mil-note">Approximate national inventories (2025 public estimates; hover a country for the source). Numbers change with wars, losses and defence budgets. Click a column to sort.</div>
         <div class="mil-list" style="max-height:52vh"><table class="w-full text-[11.5px]"><thead><tr class="text-slate-500"><th style="cursor:pointer;text-align:left;${MIL_WSORT === 'rank' ? 'color:#f3d98a' : ''}" onclick="MIL_WSORT='rank';renderMilPanel()">#</th><th style="text-align:left">Country</th>${th('troops', 'Troops')}${th('tanks', 'Tanks')}${th('jets', 'Jets')}${th('helis', 'Helos')}${th('carriers', 'Carriers')}${th('destroyers', 'Destroyers')}${th('frigates', 'Frigates')}${th('ships', 'All vessels')}</tr></thead>
-        <tbody>${rows.map(x => `<tr class="border-t border-slate-800${x.i === me ? ' text-[#d1ad5b]' : ''}"><td class="py-0.5">${x.r < 999 ? x.r : '—'}</td><td>${flagHTML(nationIso(x.i), 10)} ${esc(shortName(x.i))}${x.i === me ? ' (you)' : ''}</td>${['troops', 'tanks', 'jets', 'helis', 'carriers', 'destroyers', 'frigates', 'ships'].map(f => `<td style="text-align:right">${x.est ? '~' : ''}${x[f].toLocaleString()}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+        <tbody>${rows.map(x => `<tr class="border-t border-slate-800${x.i === me ? ' text-[#d1ad5b]' : ''}" title="${x.est ? 'Modelled from population, economy and defence spending (no detailed public order of battle)' : '2025 published order of battle'}"><td class="py-0.5">${x.r < 999 ? x.r : '—'}</td><td>${flagHTML(nationIso(x.i), 10)} ${esc(shortName(x.i))}${x.i === me ? ' (you)' : ''}</td>${['troops', 'tanks', 'jets', 'helis', 'carriers', 'destroyers', 'frigates', 'ships'].map(f => `<td style="text-align:right">${x[f].toLocaleString()}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
 }
 function milCostUpd() {
     const el = document.getElementById('mil-cost'); if (!el) return;
@@ -16401,8 +16401,9 @@ function milReinforcePrompt(id) {
 // ---- intel panel: the armed forces of the selected country ----
 function milStripHTML(iso) {
     if (!iso || !WORLD[iso] || NON_SOVEREIGN.has(iso)) return '';
-    const I = milInventory(iso), t = (sym, v, l) => `<div>${unitSvg(sym, false)}<b>${I.est ? '~' : ''}${fmtK(v)}</b><span>${l}</span></div>`;
-    return `<div class="gs-section" style="margin-top:6px">Armed forces${I.est ? ' (est.)' : ''}</div><div class="tmil">${t('inf', I.troops, 'troops')}${t('arm', I.tanks, 'tanks')}${t('jet', I.jets, 'jets')}${t('heli', I.helis, 'helos')}${t('carrier', I.carriers, 'carriers')}${t('destroyer', I.destroyers, 'destroyers')}${t('frigate', I.frigates, 'frigates')}</div>`;
+    const I = milInventory(iso), t = (sym, v, l) => `<div>${unitSvg(sym, false)}<b>${fmtK(v)}</b><span>${l}</span></div>`;
+    // same look for every country; where the numbers come from is in the tooltip only (no stray "~" before some countries' figures)
+    return `<div class="gs-section" style="margin-top:6px">Armed forces</div><div class="tmil" title="${I.est ? 'Modelled from population, economy and defence spending (no detailed public order of battle)' : '2025 published order of battle'}, adjusted for wars, losses and budgets">${t('inf', I.troops, 'troops')}${t('arm', I.tanks, 'tanks')}${t('jet', I.jets, 'jets')}${t('heli', I.helis, 'helos')}${t('carrier', I.carriers, 'carriers')}${t('destroyer', I.destroyers, 'destroyers')}${t('frigate', I.frigates, 'frigates')}</div>`;
 }
 {
     const _ut = updateTargetUI;
