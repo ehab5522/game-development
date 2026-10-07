@@ -126,7 +126,7 @@
         .news-card.t-bad { border-left-color: #b8432f; } .news-card.t-good { border-left-color: #6f9a3e; } .news-card.k-order { border-left-color: var(--gs-gold, #d1ad5b); }
         .news-card.unread::after { content: ''; position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #e0a458; }
         .news-kick { font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--gs-gold, #d1ad5b); display: flex; align-items: center; gap: 5px; }
-        .news-kick .upd { color: #e0a458; }
+        .news-kick .upd-k { color: #e0a458; }
         .news-hl { font-family: 'Roboto Condensed', 'Arial Narrow', Arial, sans-serif; font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--gs-ink, #ece2c4); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .news-dek { font-size: 11px; color: var(--gs-muted, #ab9f80); line-height: 1.3; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .news-meta { font-size: 9.5px; color: var(--gs-dim, #7c7259); margin-top: 2px; }
@@ -15730,7 +15730,16 @@ function newsConf(cid) { return cid ? ((state.conflicts || []).find(c => c.id ==
 function newsCountries(txt, lead) {
     const out = lead ? [lead] : [];
     try { detectCountries(txt).slice(0, 4).forEach(f => { if (!out.includes(f.iso) && WORLD[f.iso]) out.push(f.iso); }); } catch (e) { }
+    // the order parser leaves out ambiguous names (Chad, Georgia, Jordan); in news copy a capitalised country name is the country
+    if (out.length < 2) try { const R = newsNameRx(); let m; R.rx.lastIndex = 0; while ((m = R.rx.exec(txt)) && out.length < 4) { const i = R.map[m[1]]; if (i && i !== state.playerIso && !out.includes(i)) out.push(i); } } catch (e) { }
     return out.slice(0, 4);
+}
+function newsNameRx() {
+    if (newsNameRx.c && newsNameRx.n === Object.keys(WORLD).length) return newsNameRx.c;
+    const map = {}; Object.keys(WORLD).forEach(i => { if (!(WORLD[i][3] > 0)) return; const n = WORLD[i][1]; if (n && /^[A-Z]/.test(n) && n.length >= 4 && !map[n]) map[n] = i; });
+    const names = Object.keys(map).sort((a, b) => b.length - a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    newsNameRx.n = Object.keys(WORLD).length;
+    return (newsNameRx.c = { map, rx: new RegExp(`(?<![\\p{L}])(${names.join('|')})(?![\\p{L}])`, 'gu') });
 }
 function newsKicker(t) {
     const s = String(t).toLowerCase();
@@ -15770,6 +15779,7 @@ function newsRoute(msg, type, cat) {
     const raw = String(msg == null ? '' : msg), txt = newsPlain(raw), me = state.playerIso;
     if (!txt) return false;
     if (/^📰/.test(txt)) return newsAIHeadline(newsStrip(txt));          // the AI judge's one-line headline for one of your orders
+    if (/^✅ .+ is now operational/.test(txt)) newsSiteDone(txt);         // stays in the log, and closes the story of the order that built it
     if (cat !== 'world' && cat !== 'news' && NEWS_LOG_RX.some(r => r.test(txt))) return false;
     const lead = newsLeadIso(raw);
     const art = NEWS_CTX && NEWS_CTX.newsId ? newsGet(NEWS_CTX.newsId) : null;
@@ -15849,11 +15859,17 @@ function newsWriteWorld(group) {
     const s0 = group[0], iso = s0.iso, me = state.playerIso, c = newsConf(s0.cid), isos = [...new Set(group.flatMap(s => s.isos || []))].slice(0, 4);
     const kick = newsKicker(group.map(s => s.text).join(' '));
     const body = [];
-    const attrib = s0.gov ? ['the government said', 'officials announced', 'state media reported', 'according to a government statement'] : ['according to reports from the region', 'local officials and witnesses said', 'according to regional security sources', 'humanitarian workers on the ground reported'];
+    const attrib = s0.gov ? ['the government said', 'officials announced', 'state media reported', 'according to a government statement'] : kick === 'Politics' ? ['local media reported', 'according to reports from the capital', 'witnesses and local media said', 'diplomats in the capital said'] : kick === 'Conflict' ? ['according to reports from the region', 'local officials and witnesses said', 'according to regional security sources', 'humanitarian workers on the ground reported'] : ['according to reports from the region', 'officials said', 'local media reported', 'according to people familiar with the matter'];
     const lede = newsSentence(s0.text).replace(/[.!]$/, ''), a1 = attrib[newsHash(s0.key) % attrib.length];
     body.push(`${/[?"”…]$/.test(lede) ? lede : `${lede}, ${a1}.`}${group.slice(1, 4).map(s => ' ' + newsSentence(s.text)).join('')}${s0.n > 1 ? ` It is the ${s0.n === 2 ? 'second' : s0.n === 3 ? 'third' : s0.n + 'th'} such report in recent days.` : ''}`);
     if (c && c.brief) body.push(`Background: ${c.brief}`);
     else if (iso && iso !== me) { const f = newsCountryFacts(iso); if (f) body.push(f); }
+    // coups: what kind of takeover this is, and the regional pattern (from the game's coup history)
+    if (iso && /\bcoup\b/i.test(s0.text)) try {
+        const ok = /^🪖?\s*Coup in\b/.test(s0.text) || /seize/i.test(s0.text), H = (coupState().hist || []).filter(h => h && h.ok && h.iso !== iso && (state.dayIndex || 0) - h.day <= 365);
+        body.push(ok ? `The new military rulers did not say when civilian rule would be restored. Coups are typically followed by curfews, the suspension of political parties and a review of foreign agreements.${H.length ? ` It is the latest in a string of military takeovers: ${[...new Set(H.slice(-3).map(h => newsName(h.iso)))].join(', ')} ${H.length === 1 ? 'has' : 'have'} also seen ${H.length === 1 ? 'a coup' : 'coups'} in the past year.` : ''}`
+            : `The government said the situation was under control and that those responsible would face military justice. Analysts said the attempt exposed deep divisions inside the armed forces.`);
+    } catch (e) { }
     const you = newsForYou(isos, s0.cid); if (you) body.push(you);
     const quotes = [];
     if (s0.gov && iso && iso !== me && newsNation(iso) && kick !== 'World' && (newsHash(s0.key) % 3 !== 0)) {
@@ -15868,9 +15884,11 @@ function newsPost(a) {
     const it = Object.assign({ id: ++N.seq, d, date: state.date.toISOString(), read: false, src: 'rules', outlet: newsOutlet(a.headline + N.seq), rx: [], updates: [], quotes: [], body: [] }, a);
     N.items.unshift(it);
     if (N.items.length > NEWS_MAX) {
-        // drop read world news first, keep your own order articles longer
-        for (let k = N.items.length - 1; k >= 0 && N.items.length > NEWS_MAX; k--) if (N.items[k].read && N.items[k].kind !== 'order') N.items.splice(k, 1);
-        N.items.length = Math.min(N.items.length, NEWS_MAX);
+        // drop the oldest read world news first, then the oldest world news; your own order articles (max 30) stay longest
+        const age = x => x.upd || x.d, drop = f => { let k = -1; N.items.forEach((x, j) => { if (f(x) && (k < 0 || age(x) < age(N.items[k]) || (age(x) === age(N.items[k]) && x.id < N.items[k].id))) k = j; }); if (k >= 0) N.items.splice(k, 1); return k >= 0; };
+        while (N.items.length > NEWS_MAX && drop(x => x.read && x.kind !== 'order')) { }
+        while (N.items.length > NEWS_MAX && N.items.filter(x => x.kind === 'order').length < 30 && drop(x => x.kind !== 'order')) { }
+        while (N.items.length > NEWS_MAX && drop(() => true)) { }
     }
     const dock = document.getElementById('event-feed-container');
     if (dock && (!dock.classList.contains('feed-open') || NEWS_TAB !== 'news')) NEWS_CLOSEDN++;
@@ -15936,16 +15954,62 @@ function newsOrderIssued(o) {
     newsAIOrder(it.id, o);
     return it;
 }
+// the Order Log's effect lines ("Relations with Iran -30 (now -70)", "Approval -5%") rewritten as reporting, without game numbers
+function newsFactProse(t) {
+    const P = state.player || 'the government', num = v => Math.abs(parseFloat(String(v).replace('−', '-'))) || 0, up = v => !/^[−-]/.test(String(v).trim());
+    const pts = v => { const n = num(v); return `${n % 1 ? n.toFixed(1) : n} point${n === 1 ? '' : 's'}`; };
+    let s = newsStrip(String(t || '').replace(/\byou\b/gi, P)).replace(/\s+/g, ' ').trim(), m;
+    if (!s || /^(Covert project|Order points?|Cost:)/i.test(s)) return '';
+    if ((m = s.match(/^Relations with (.+?) ([+−-]\s?\d+)(?: \(now (-?\d+)\))?$/))) { const n = num(m[2]); return up(m[2]) ? `Ties between ${P} and ${m[1]} ${n >= 15 ? 'warmed markedly' : 'improved'}.` : `Relations between ${P} and ${m[1]} ${n >= 40 ? 'collapsed' : n >= 20 ? 'deteriorated sharply' : 'cooled'}.`; }
+    if ((m = s.match(/^Approval ([+−-]\s?\d+(?:\.\d+)?)%$/))) return !num(m[1]) ? '' : `The government's approval rating ${up(m[1]) ? 'rose' : 'fell'} ${pts(m[1])} in the polls.`;
+    if ((m = s.match(/^(.+?)[:,] approval ([+−-]\s?\d+(?:\.\d+)?)%$/))) return num(m[2]) ? `${newsSentence(m[1]).replace(/[.]$/, '')}; the government's approval rating ${up(m[2]) ? 'rose' : 'fell'} ${pts(m[2])}.` : newsSentence(m[1]);
+    if ((m = s.match(/^New conflict: (.+)$/))) return `The move opened a new conflict, already being called the ${m[1]}.`;
+    if ((m = s.match(/^(.+?)'s economy hit \(([−-]?[\d.]+)% GDP\)$/))) return `Economists estimate the damage to ${m[1]}'s economy at about ${num(m[2])}% of GDP.`;
+    if ((m = s.match(/^(.+?)'s GDP ([−-][\d.]+)% from sanctions$/))) return `The sanctions are expected to shave about ${num(m[2])}% off ${m[1]}'s economic output.`;
+    if ((m = s.match(/^(.+?)'s growth outlook ([+−-][\d.]+) pts$/))) return `Forecasters ${up(m[2]) ? 'raised' : 'cut'} ${m[1]}'s growth outlook by ${pts(m[2])}.`;
+    if ((m = s.match(/^(\d+) partners? of (.+?) cools? toward (.+)$/))) return `${+m[1] === 1 ? 'One close partner' : m[1] + ' close partners'} of ${m[2]} cooled toward ${m[3]}.`;
+    if ((m = s.match(/^(\d+) rivals? of (.+?) warms? toward (.+)$/))) return `${+m[1] === 1 ? 'One rival' : m[1] + ' rivals'} of ${m[2]} moved closer to ${m[3]}.`;
+    if ((m = s.match(/^Sanctions from (\d+) countr(?:y|ies): GDP ([−-][\d.]+)%$/))) return `${+m[1] === 1 ? 'One country' : m[1] + ' countries'} imposed sanctions on ${P} in response, at an estimated cost of ${num(m[2])}% of GDP.`;
+    if ((m = s.match(/^Construction started: (.+?)(?: \(~?(\d+) days\))?$/))) return `Ground has been broken on the ${m[1]}${m[2] ? `, which is expected to take about ${m[2]} days to complete` : ''}.`;
+    if ((m = s.match(/^(.+?) budget ([\d.]+)% → ([\d.]+)% of GDP \((\$[^/)]+)\/yr (more|less)\)$/))) return `The ${m[1].toLowerCase()} budget ${+m[3] >= +m[2] ? 'rises' : 'falls'} from ${m[2]}% to ${m[3]}% of GDP, ${m[5] === 'more' ? 'an extra' : 'a saving of'} ${m[4]} a year.`;
+    if ((m = s.match(/^Deal signed with (.+?): (.+)$/))) return `A deal was signed with ${m[1]} under which ${m[2].replace(/^(.+?) (sell|buy|sells|buys) /, (x, a, v) => `${a} will ${v.replace(/s$/, '')} `).replace(/ M bbl\b/, ' million barrels of').replace(/[.]$/, '')}.`;
+    if ((m = s.match(/^(.+?) retaliates diplomatically(?: \([^)]*\))?$/))) return `${m[1]} retaliated with diplomatic measures of its own.`;
+    if ((m = s.match(/^Tariff revenue up, but growth ([−-][\d.]+) pts$/))) return `Tariff revenue is set to rise, but economists warn growth could slow by ${pts(m[1])}.`;
+    if ((m = s.match(/^War economy: GDP ([−-][\d.]+)%/))) return `The war is expected to cost the economy about ${num(m[1])}% of GDP and slow growth.`;
+    if ((m = s.match(/^Tax burden ([+−-][\d.]+) pts of GDP/))) return `The tax burden ${up(m[1]) ? 'rises' : 'falls'} by ${pts(m[1])} of GDP.`;
+    if (/^Deterrence improved$/i.test(s)) return `Defence officials said the country's deterrence had been strengthened.`;
+    if ((m = s.match(/^Diminishing returns: (.+)$/))) return `Pollsters noted diminishing returns: ${m[1].replace(/this before$/, 'such promises before')}.`;
+    if ((m = s.match(/^(.+?) protests the new base$/))) return `${m[1]} protested against the new base.`;
+    // anything else: keep it as a sentence, minus bare score changes like "(−14)" or "(+6)" and game units
+    s = s.replace(/\s*\([+−-]\s?\d+(?:\.\d+)?\)/g, '').replace(/\s*\(now -?\d+\)/g, '').replace(/\bpts\b/g, 'points').trim();
+    return s ? newsSentence(s) : '';
+}
 const NEWS_OUTCOME = { 'Major success': ['was carried out with results beyond expectations, officials said', 'good'], 'Success': ['was carried out as planned, officials confirmed', 'good'], 'Partial': ['was only partly carried out, officials conceded', 'neutral'], 'Failure': ['failed, dealing a setback to the government', 'bad'] };
 function newsOrderResolved(o) {
     const it = o && o.newsId && newsGet(o.newsId); if (!it || it.resolved) return;
     it.resolved = true;
     const [ph, tone] = NEWS_OUTCOME[o.outcome] || ['has been completed', 'neutral'];
-    const facts = (o.effects || []).filter(e => e && e.txt && !/^\s*🤖/.test(e.txt)).map(e => newsPlayerVoice(newsStrip(newsPlain(e.txt)))).filter(Boolean).slice(0, 4);
-    it.updates.push({ d: state.dayIndex, date: state.date.toISOString(), text: `The ${({ military: 'operation', construction: 'project', economy: 'measure', domestic: 'measure', diplomacy: 'initiative', humanitarian: 'aid mission' })[o.cat] || 'plan'} ${ph}.${facts.length ? ' Key facts: ' + facts.map(newsSentence).join(' ') : ''}` });
+    const facts = [...new Set((o.effects || []).filter(e => e && e.txt && !/^\s*🤖/.test(e.txt)).map(e => newsFactProse(newsPlain(e.txt))).filter(Boolean))].slice(0, 5);
+    const what = ({ military: 'operation', construction: 'project', economy: 'measure', domestic: 'measure', diplomacy: 'initiative', humanitarian: 'aid mission' })[o.cat] || 'plan';
+    // a construction order "succeeds" when the ground is broken: say that, not "carried out"
+    const lead = o.cat === 'construction' && o.kind === 'build' && o.outcome !== 'Failure' ? (o.outcome === 'Partial' ? 'Work on the project has begun, but behind schedule and over budget, officials conceded.' : o.outcome === 'Major success' ? 'Work on the project has begun ahead of schedule, officials said.' : 'Work on the project has begun, officials confirmed.') : `The ${what} ${ph}.`;
+    const u = { d: state.dayIndex, date: state.date.toISOString(), text: `${lead}${facts.length ? ' ' + facts.join(' ') : ''}` };
+    it.updates.push(u);
+    try { newsAIUpdate(it.id, o, u); } catch (e) { }
     it.outcome = o.outcome; it.tone = tone === 'bad' ? 'bad' : it.tone === 'bad' ? 'bad' : tone;
     it.dek = `${it.dek.split(' · ')[0].replace(/[.]+$/, '')} · ${o.outcome}`;
     it.upd = state.dayIndex; it.read = false;
+    newsRender();
+}
+function newsSiteDone(txt) {
+    const nm = (txt.match(/^✅ (.+?) is now operational/) || [])[1]; if (!nm) return;
+    const site = (state.sites || []).slice().reverse().find(x => x && x.name === nm && x.owner === state.playerIso); if (!site) return;
+    const o = (state.orders.history || []).slice().reverse().find(k => k && k.newsId && (k.siteId === site.id || k.siteTarget === site.id)), it = o && newsGet(o.newsId); if (!it) return;
+    if (it.updates.some(u => u.site === site.id)) return;
+    const where = site.place && !String(nm).includes(site.place) ? ` near ${site.place}` : '';
+    it.updates.push({ d: state.dayIndex, date: state.date.toISOString(), site: site.id, text: `The ${nm}${where} is now complete and operational, officials said${it.d < state.dayIndex ? `, ${state.dayIndex - it.d} days after the project was announced` : ''}.` });
+    it.upd = state.dayIndex; it.read = false; it.tone = it.tone === 'bad' ? 'bad' : 'good';
+    if (it.dek && !/Completed$/.test(it.dek)) it.dek = `${it.dek.split(' · ')[0]} · Completed`;
     newsRender();
 }
 function newsReact(it, iso, txt, type) {
@@ -16044,6 +16108,20 @@ async function newsAIOrder(id, o) {
         newsRender(); if (NEWS_OPEN === id) newsOpen(id, true);
     } catch (e) { console.warn('news ai order', e); const it = newsGet(id); if (it && it.ai === 'pending') it.ai = 'failed'; }
 }
+// with an AI connected, the outcome update of your order's article is rewritten as reporting too (the rules text stays if it fails)
+async function newsAIUpdate(id, o, u) {
+    try {
+        if (typeof aiReady !== 'function' || !aiReady() || AI.provider === 'builtin' || AI.busy > 1) return;
+        const it = newsGet(id); if (!it) return;
+        const user = `Article so far: "${it.headline}". ${(it.body || [])[0] || ''}\nOutcome today (${o.outcome || 'done'}): ${u.text}\n${(it.rx || []).length ? 'Reactions so far: ' + it.rx.slice(-4).map(r => r.t).join(' ') + '\n' : ''}\nWrite a short update paragraph (2-3 sentences) for this article, reporting the outcome. Return JSON: {"text":"..."}`;
+        const r = await callAI(NEWS_AI_SYS(), user, true, { maxTokens: 300 });
+        const t = r && typeof r.text === 'string' ? r.text.replace(/\s+/g, ' ').trim().slice(0, 700) : '';
+        const cur = newsGet(id); if (!t || !cur) return;
+        const k = cur.updates.indexOf(u); if (k < 0) return;
+        cur.updates[k] = Object.assign({}, u, { text: t, ai: 1 });
+        if (NEWS_OPEN === id) newsOpen(id, true);
+    } catch (e) { console.warn('news ai update', e); }
+}
 async function newsAIWorld() {
     if (typeof aiReady !== 'function' || !aiReady() || AI.busy > 0) return;
     const N = newsState(), d = state.dayIndex || 0, small = AI.provider === 'builtin';
@@ -16085,7 +16163,7 @@ function newsRender() {
         box.dataset.sig = sig;
         const items = N.items.slice().sort((a, b) => (b.upd || b.d) - (a.upd || a.d) || b.id - a.id);
         box.innerHTML = items.length ? items.map(it => `<div class="news-card k-${it.kind} t-${it.tone}${it.read ? '' : ' unread'}" onclick="newsOpen(${it.id})" title="Read the article">
-            <div class="news-kick">${newsFlags(it, 9)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd">· Updated</span>' : ''}</div>
+            <div class="news-kick">${newsFlags(it, 9)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd-k">· Updated</span>' : ''}</div>
             <div class="news-hl">${esc(it.headline)}</div>${it.dek ? `<div class="news-dek">${esc(it.dek)}</div>` : ''}
             <div class="news-meta">${esc(it.outlet)} · ${fmtDate(new Date(it.date))}${it.n > 1 ? ` · ${it.n} reports` : ''}${it.src === 'ai' ? ' · ✍ AI' : ''}</div></div>`).join('') : '<div class="news-empty">No news yet. Issue a command or wait for world events.</div>';
     } catch (e) { console.warn('news render', e); }
@@ -16115,7 +16193,7 @@ function newsOpen(id, keep) {
     const sel = [...new Set([it.iso].concat(it.isos || []))].filter(i => i && i !== me && WORLD[i]).slice(0, 2);
     const btns = (it.kind === 'order' ? `<button type="button" class="gs-btn" onclick="newsClose();newsOrderLog()">📜 Open Order Log</button>` : '') + sel.map(i => `<button type="button" class="gs-btn" onclick="newsClose();newsSelect('${i}')">🎯 ${esc(newsName(i))}</button>`).join('');
     box.innerHTML = `<div class="news-art"><div class="news-mast"><b>${esc(it.outlet)}</b><span>${esc(newsWeekday(date))}, ${fmtDate(date)}</span></div>
-        <div class="news-kick">${newsFlags(it, 11)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd">· Updated</span>' : ''}</div>
+        <div class="news-kick">${newsFlags(it, 11)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd-k">· Updated</span>' : ''}</div>
         <h2>${esc(it.headline)}</h2>${it.dek ? `<div class="dek">${esc(it.dek)}</div>` : ''}
         <div class="by">${it.src === 'ai' ? 'By our correspondent · written with AI' : 'Staff report'}${it.n > 1 ? ` · ${it.n} reports` : ''}</div>
         ${paras}${rx}${up}${btns ? `<div class="flex flex-wrap gap-1.5 mt-3">${btns}</div>` : ''}</div>`;
