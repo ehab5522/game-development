@@ -3473,13 +3473,21 @@
             D.p.forEach((p, i) => {
                 const rings = (p[6] || []).map(s => provDec(s, D.qp)).filter(r => r.length >= 3); if (!rings.length) return;
                 const b = [180, 90, -180, -90]; rings.forEach(r => r.forEach(([x, y]) => { if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y; }));
-                const pr = { i, name: p[0], type: D.t[p[1]] || '', region: D.r[p[2]] || '', iso: p[3], lat: p[4], lng: p[5], rings, bbox: b, area: (b[2] - b[0]) * (b[3] - b[1]) };
+                const pr = { i, name: p[0], type: provType(D.t[p[1]] || '', p[3], D.r[p[2]] || ''), region: D.r[p[2]] || '', iso: p[3], lat: p[4], lng: p[5], rings, bbox: b, area: (b[2] - b[0]) * (b[3] - b[1]) };
                 PROV.list.push(pr); PROV.byIdx[i] = pr; (PROV.byIso[pr.iso] = PROV.byIso[pr.iso] || []).push(pr);
                 for (let gx = Math.floor(b[0] / 5); gx <= Math.floor(b[2] / 5); gx++) for (let gy = Math.floor(b[1] / 5); gy <= Math.floor(b[3] / 5); gy++) {
                     const k = gx + ':' + gy; let c = PROV.grid.get(k); if (!c) PROV.grid.set(k, c = []); c.push(pr);
                 }
             });
             return PROV.list;
+        }
+        // Natural Earth's type names, tidied: typos, "A|B" alternatives, and Spain's provinces (typed as their autonomous community)
+        function provType(t, iso, region) {
+            t = String(t).split('|')[0].trim();
+            t = ({ 'Captial District': 'Capital District', 'Automonous Region': 'Autonomous Region', 'Commissiary': 'Commissary', 'Governarate': 'Governorate', 'Lansdele': 'Region' })[t] || t;
+            if (iso === 'ESP' && t === 'Autonomous Community' && region) return 'Province';
+            if (iso === 'GBR' && /^London Borough/.test(t) && region && region !== 'Greater London') return 'District';
+            return t;
         }
         function provRingHas(x, y, r) { let c = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const a = r[i], b = r[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
         // the province under a point (the smallest one wins: Berlin inside Brandenburg); with iso, only that country's, and a point
