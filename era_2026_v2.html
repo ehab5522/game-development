@@ -4756,7 +4756,7 @@
             if (D0) L.push(`OPEN PROPOSAL FROM YOU: ${D0.topic === 'trade' ? D0.clauses.map(c => clauseText(c, iso)).join('; ') + (D0.asks && D0.asks.length ? '; ' + D0.asks.join('; ') : '') : (D0.peace || []).join(' ')}.`);
             const sm = state.scheduled.filter(x => x.type === 'summit' && x.parties.includes(iso) && x.parties.includes(me));
             if (sm.length) L.push(`SCHEDULED: talks in ${venueName(sm[0].venue)} on ${fmtDate(dateIn(sm[0].day - state.dayIndex))}.`);
-            const acts = state.orders.history.filter(x => x.targets && x.targets.some(q => q.iso === iso)).slice(-5);
+            const acts = state.orders.history.filter(x => x.targets && x.targets.some(q => q.iso === iso) && !(typeof intelSecret === 'function' && intelSecret(x)) && x.cat !== 'intelligence').slice(-5);   // covert ops appear (if known) through the memory line below
             if (acts.length) L.push(`WHAT ${state.player.toUpperCase()} HAS DONE TOWARD YOU: ${acts.map(x => `"${x.text}" (${x.outcome || 'in progress'})`).join('; ')}.`);
             try { L.push(`YOUR FOREIGN POLICY: ${fpBrief(iso)}`); } catch (e) { }
             try { const mem = diploMemory(iso); if (mem.length) L.push(`WHAT YOU REMEMBER ${state.player.toUpperCase()} DID TOWARD YOU: ${mem.join('; ')}.`); } catch (e) { }
@@ -5758,10 +5758,10 @@
             let intel = null;
             if (cat === 'intelligence') {
                 const typ = _itype || intelTypeOf(s) || 'collect';
-                intel = { type: typ, covert: COVERT_RX.test(s) || !['collect', 'counter'].includes(typ) };
+                intel = { type: typ, covert: typ !== 'counter' };   // spying is secret by nature; only counter-intelligence at home is overt
                 if (!['collect', 'counter'].includes(typ)) targets.forEach(t => { if (t.stance !== 'hostile') t.stance = 'hostile'; });
             }
-            return { cat, targets, scale, covert: COVERT_RX.test(s), kind, blocs: detectBlocs(text), intel };
+            return { cat, targets, scale, covert: COVERT_RX.test(s) || !!(intel && intel.covert && targets.length), kind, blocs: detectBlocs(text), intel };
         }
 
         function planOrder(text) {
@@ -5851,6 +5851,7 @@
             if (o.kind === 'move' || o.kind === 'withdraw') prob = 0.88 + (stab - 50) / 400;
             prob += (o.dirProb || 0) + D().prob;
             if (main && state.intel && state.intel[main.iso] && state.intel[main.iso].until > state.dayIndex) prob += 0.05 * (state.intel[main.iso].lvl || 1);
+            if (main && o.cat === 'intelligence' && state.counterOn && state.counterOn[main.iso] > state.dayIndex) prob -= 0.12;   // the target rolled up our networks after an earlier exposure
             return clamp(prob, 0.05, 0.95);
         }
 
@@ -6191,9 +6192,9 @@
         }
 
         // Foreign leaders write to the player via the Diplomacy menu
-        function queueMessage(iso, text) {
+        function queueMessage(iso, text, opts) {
             if (!iso || iso === state.playerIso) return;
-            deliverMessage(iso, text);
+            deliverMessage(iso, text, opts || {});
         }
 
         // =====================================================================
@@ -6575,13 +6576,14 @@
                 : `${state.player}: approval ${n.stability}%, GDP ${formatVal(n.gdp)}, treasury ${formatVal(n.treasury)}. Conflicts: ${conflictsOf(state.playerIso).map(c => c.name).slice(0, 4).join('; ') || 'none'}.` +
                   (small ? '' : `\nMore data if needed: ${AI.provider === 'builtin' ? situationBrief() : JSON.stringify(situationSnapshot()).slice(0, 6000)}`);
             const convo = hist.map(m => `${m.who === 'me' ? 'Leader' : 'Advisor'}: ${m.t}`).join('\n');
+            const world = small ? '' : (() => { try { return '\n' + aiWorldContext(); } catch (e) { return ''; } })();
             const errBox = {};
-            const ai = await callAI(sys, `Background (for you only, do not recite it):\n${ctx}\n\n${convo ? 'Conversation so far:\n' + convo + '\n\n' : ''}Leader: ${q}\nAdvisor:`, false, { maxTokens: wantsBrief ? AI_BUDGET.advisor : small ? AI_BUDGET.advisorSmall : AI_BUDGET.advisor, err: errBox, quiet: true });
+            const ai = await callAI(sys, `Background (for you only, do not recite it):\n${ctx}${world}\n\n${convo ? 'Conversation so far:\n' + convo + '\n\n' : ''}Leader: ${q}\nAdvisor:`, false, { maxTokens: wantsBrief ? AI_BUDGET.advisor : small ? AI_BUDGET.advisorSmall : AI_BUDGET.advisor, err: errBox, quiet: true });
             if (ai) { hist.push({ who: 'me', t: q.slice(0, 400) }, { who: 'adv', t: String(ai).slice(0, 600) }); state.advChat = hist.slice(-8); }
             if (ai) { advRender(box, head, String(ai).replace(/^Advisor:\s*/i, '')); return; }
             // AI configured but failed: say so, and remember the offline answer so later AI turns have the context
             const offline = small ? offlineSmallTalk(q) : offlineAdvisorAnswer2(q);
-            const note = (AI.provider !== 'off') ? `<div class="text-[10.5px] mb-1" style="color:#e0b35a">⚠ The AI is unavailable (${esc(errBox.msg || AI.lastErr || 'no reply')}) — your staff answer instead.</div>` : '';
+            const note = (AI.provider !== 'off') ? `<div class="text-[10.5px] mb-1" style="color:#e0b35a">⚠ The AI is unavailable: ${esc(String(errBox.msg || AI.lastErr || 'no reply').replace(/[.\s]+$/, ''))}. Your staff answer instead.</div>` : '';
             try { const plain = offline.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(); hist.push({ who: 'me', t: q.slice(0, 400) }, { who: 'adv', t: plain.slice(0, 600) }); state.advChat = hist.slice(-8); } catch (e) { }
             box.innerHTML = head + note + offline;
         }
@@ -9466,12 +9468,24 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         function aiSleep(ms) { return new Promise(r => setTimeout(r, ms)); }
         async function callAI(systemText, userText, wantJSON = false, opts = {}) {
             if (!aiReady()) { if (opts.err) opts.err.msg = AI.provider === 'off' ? 'AI is off' : 'AI is not ready (' + (AI_PROVIDERS[AI.provider].key && !aiKey() ? 'no API key this session' : 'not started') + ')'; return null; }
+            // circuit breaker: after the service failed (overloaded, rate-limited, unreachable, key rejected) don't make every
+            // feature wait through its own retries — answer offline at once (with the reason) until the pause ends or the settings change
+            const cdKey = AI.provider + '|' + aiKey() + '|' + aiModel();
+            if (!opts.force && AI.cooldown && AI.cooldown.key === cdKey && Date.now() < AI.cooldown.until) {
+                const left = AI.cooldown.until - Date.now(), why = AI.lastErr || 'the AI failed recently';
+                if (opts.err) opts.err.msg = why.replace(/[.\s]+$/, '') + (left < 3600000 ? ` — the game tries the AI again in ${Math.ceil(left / 1000)} s` : ' — fix it in AI settings, then press Test');
+                if (!opts.quiet) aiToast(why);
+                return null;
+            }
             const small = AI.provider === 'builtin';
             let max = opts.maxTokens || (wantJSON ? 900 : 450);
             const sys = systemText + (wantJSON ? '\n\nReply with ONE valid JSON object only. No markdown fences, no commentary before or after the JSON.' : '');
             const ms = opts.timeout || (small ? 240000 : AI.provider === 'ollama' ? 180000 : 90000);
             const run = async () => {
                 if (!small && !(await aiSlot(opts.low))) { if (opts.err) opts.err.msg = 'skipped (AI busy)'; return null; }
+                if (!small && !opts.force && AI.cooldown && AI.cooldown.key === cdKey && Date.now() < AI.cooldown.until) {   // the service failed while we waited in line
+                    aiRelease(); if (opts.err) opts.err.msg = AI.lastErr || 'the AI failed recently'; return null;
+                }
                 AI.busy++; renderAIIndicator();
                 let attempt = 0, bumped = false, switched = false;
                 try {
@@ -9486,7 +9500,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                                 const cut = /^\s*[\[{]/.test(txt) && !/[\]}]\s*$/.test(txt);
                                 if (out === null) throw aiErr('The model reply was not valid JSON' + (cut ? ' (it was cut off).' : '.'), { code: cut ? 'budget' : 'json' });
                             }
-                            AI.lastErr = ''; AI.lastOk = Date.now(); AI.calls = (AI.calls || 0) + 1;
+                            AI.lastErr = ''; AI.lastOk = Date.now(); AI.calls = (AI.calls || 0) + 1; AI.cooldown = null;
                             const tst = document.getElementById('ai-toast'); if (tst && !opts.quiet) tst.style.display = 'none';
                             if (AI.status !== 'ok' && AI.status !== 'loading') aiSetStatus('ok', 'Connected');
                             return out;
@@ -9513,6 +9527,9 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 } catch (e) {
                     console.warn('AI call failed — using the offline engine.', e);
                     const t = aiErrText(e); AI.lastErr = t; AI.fails = (AI.fails || 0) + 1;
+                    { const st = e && e.status, pause = (st === 401 || st === 403 || /insufficient_quota|credit balance|billing/i.test(e.message || '')) ? 864e5
+                        : (st === 429) ? Math.max(30000, (e.retryAfter || 0) * 1000) : (st >= 500 || ['network', 'timeout'].includes(e && e.code)) ? 30000 : 0;
+                      if (pause && !small) AI.cooldown = { key: cdKey, until: Date.now() + pause }; }
                     if (opts.err) opts.err.msg = t;
                     aiSetStatus('error', t);
                     if (!opts.quiet) aiToast(t);
@@ -9533,7 +9550,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (e && e.code === 'json') return `${m} The model did not follow the reply format, even after a retry. A larger model usually does.`;
             if ((e && e.code === 'network') || /Failed to fetch|NetworkError|Load failed|network error/i.test(m)) return AI.provider === 'ollama' ? `Cannot reach Ollama at ${AI.ollamaUrl}. Is it running, and started with OLLAMA_ORIGINS="*"?`
                 : `The browser could not reach ${aiHost()} — the request was blocked (CORS) or the network is down. Usual causes: an ad-blocker or privacy extension, a corporate proxy/firewall, or no internet. Try disabling extensions for this page or another browser profile.`;
-            if (st === 401 || /invalid.*(x-api-key|api.?key)|authentication|API key not valid|incorrect api key|unauthori[sz]ed/i.test(m)) return `${aiHost()} rejected the API key (401). Check that you pasted the whole key, for the right provider, and that it is still active.`;
+            if (st === 401 || /invalid.*(x-api-key|api.?key)|authentication|API key not valid|incorrect api key|unauthori[sz]ed/i.test(m)) return `${aiHost()} rejected the API key${st ? ' (' + st + ')' : ''}. Check that you pasted the whole key, for the right provider, and that it is still active.`;
             if (/insufficient_quota|credit balance|billing|quota|exceeded your current/i.test(m)) return `Your ${aiHost()} account is out of credit or quota: ${m.slice(0, 140)}. Add credit / check billing, or switch provider.`;
             if (st === 403 || /PERMISSION_DENIED|forbidden|permission/i.test(m)) return `${aiHost()} refused access (403): ${m.slice(0, 140)}. The key may lack access to this model, or the API is not enabled for your account / region.`;
             if (st === 429 || /rate.?limit|too many requests/i.test(m)) return `Rate limit reached at ${aiHost()} (429), even after waiting and retrying. Wait a minute — free tiers allow only a few requests per minute.`;
@@ -9683,6 +9700,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (P === 'off') return aiSetStatus('off', 'AI is off. The offline staff engine analyses your situation with rules instead.');
             if (P === 'builtin') { const ok = await aiStartBuiltin(); if (ok) await aiPing(); return; }
             if (AI_PROVIDERS[P].key && !aiKey()) return aiSetStatus('error', 'Paste your API key first.');
+            AI.cooldown = null;
             aiSetStatus('loading', 'Checking your key and listing models…');
             try {
                 const key = aiKey(); let ids = [];
@@ -9725,12 +9743,12 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const S = AI_PROVIDERS[AI.provider].short, who = state.player || 'a mid-sized country';
             aiSetStatus('loading', prefix + 'Test 1/2 — asking for a short text analysis…');
             const err = {}; let t0 = Date.now();
-            const r = await callAI('You are a terse military staff officer in a geopolitical strategy game set in 2026.', `In one sentence, name the single biggest strategic risk facing ${who} in 2026.`, false, { maxTokens: AI_BUDGET.ping, err, quiet: true });
+            const r = await callAI('You are a terse military staff officer in a geopolitical strategy game set in 2026.', `In one sentence, name the single biggest strategic risk facing ${who} in 2026.`, false, { maxTokens: AI_BUDGET.ping, err, quiet: true, force: true });
             const t1 = ((Date.now() - t0) / 1000).toFixed(1);
             if (!r) { aiSetStatus('error', prefix + 'Text test failed: ' + (err.msg || AI.lastErr || 'no reply')); return false; }
             aiSetStatus('loading', prefix + `Text ✓ (${t1}s). Test 2/2 — asking for a structured (JSON) analysis…`);
             t0 = Date.now(); const err2 = {};
-            const j = await callAI('You are a terse military staff officer in a geopolitical strategy game set in 2026.', `Assess ${who}. Return JSON exactly like {"risk": "<one sentence>", "score": <0-100 number, how serious>, "order": "<one concrete order the leader could give>"}.`, true, { maxTokens: AI_BUDGET.ping, err: err2, quiet: true });
+            const j = await callAI('You are a terse military staff officer in a geopolitical strategy game set in 2026.', `Assess ${who}. Return JSON exactly like {"risk": "<one sentence>", "score": <0-100 number, how serious>, "order": "<one concrete order the leader could give>"}.`, true, { maxTokens: AI_BUDGET.ping, err: err2, quiet: true, force: true });
             const t2 = ((Date.now() - t0) / 1000).toFixed(1);
             if (!j || typeof j !== 'object' || !j.risk) { aiSetStatus('error', prefix + `Text ✓ (${t1}s) but the structured-analysis test failed: ` + (err2.msg || (j ? 'the reply had no "risk" field' : AI.lastErr) || 'no reply') + ' Diplomacy, reports and order judging need this — try another model.'); return false; }
             aiSetStatus('ok', prefix + `Connected — ${S} · ${aiModel()}: text ✓ ${t1}s · JSON ✓ ${t2}s${err.retries || err2.retries ? ' (after retrying)' : ''}. “${String(r).slice(0, 150)}”`);
@@ -10215,7 +10233,12 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const me = state.playerIso, R = (typeof reactState === 'function') ? reactState() : null, out = [];
             try {
                 const acts = (state.orders.history || []).filter(o => o.targets && o.targets.some(t => t.iso === iso)).slice(-4);
-                acts.forEach(o => out.push(`${o.cat === 'intelligence' ? 'a covert operation' : o.text} (${o.outcome || 'under way'})`));
+                const suspect = R && (R.i[iso] || 0) >= 20;
+                acts.forEach(o => {
+                    if (o.cat === 'intelligence' && o.kind !== 'proxy') { if (o.intelExposed) out.push('the covert operation against us that our services exposed'); else if (suspect) out.push('the covert activity we suspect you of'); return; }
+                    out.push(`your order to "${o.text.replace(/[.!]+$/, '').replace(/^./, ch => ch.toLowerCase())}"${o.outcome ? '' : ' (under way)'}`);
+                });
+                for (let k = out.length - 1; k > 0; k--) if (out.indexOf(out[k]) < k) out.splice(k, 1);   // say each thing once
             } catch (e) { }
             if (R) { const g = Math.round(R.g[iso] || 0), f = Math.round(R.f[iso] || 0), w = Math.round(R.w[iso] || 0), iv = Math.round(R.i[iso] || 0);
                 const tags = []; if (g >= 20) tags.push('resentful of recent hostile acts'); if (iv >= 20) tags.push('aware of your intelligence operations'); if (f >= 20) tags.push('alarmed by your military moves'); if (w >= 20) tags.push('grateful for your support');
@@ -10257,7 +10280,8 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                   `"threat_notes":{"<exact threat title from the list>":"one sentence of judgment"},` +
                   `"recommendations":[3 to 5 objects {"title":"","category":"military|diplomacy|economy|domestic|intelligence|humanitarian|construction","target":"country name or empty","objective":"measurable end state","order":"a single concrete order sentence the leader can issue in the game, naming the country","steps":["3-4 concrete steps"],"risks":["2-3"],"effects":["2-3 expected effects"],"alternatives":["1-2"],"rules_of_engagement":"constraints","justification":"public/legal justification","contingency":"what if it fails"}]}` +
                   `\nRecommendations must fit the numbers (e.g. don't recommend expensive programs if runway is short; don't recommend offensives when the power ratio is below 1).`;
-            const r = await callAI(sys, ask, true, { maxTokens: small ? 900 : AI_BUDGET.report });
+            let wc = ''; try { if (!small) wc = '\n\n' + aiWorldContext(); } catch (e) { }
+            const r = await callAI(sys, ask + wc, true, { maxTokens: small ? 900 : AI_BUDGET.report });
             if (rep !== currentReport) return;
             if (!r || typeof r !== 'object') { rep.aiState = 'failed'; renderReport(); return; }
             rep.ai = r; rep.aiState = 'done';
@@ -11771,6 +11795,8 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (state.weekOrders + state.orders.queue.length >= ORDERS_PER_WEEK) { flashReply(`⚠ Command capacity reached (${ORDERS_PER_WEEK} orders per week). Execute or remove queued orders, or wait for next week.`); return; }
             if (state.orders.queue.some(o => o.text === text)) { flashReply('That order is already queued.'); return; }
             const o = planOrder(text);
+            { let bad = null; try { bad = (typeof socValidateOrder === 'function') ? socValidateOrder(o) : null; } catch (e) { } if (bad) { state.orderSeq--; flashReply(bad); return; } }   // same checks as the command bar (B22)
+            if (window.FORCE_DIRECTIVES && typeof needsDirective === 'function' && needsDirective(o)) { state.orderSeq--; openDirective(text); return; }
             state.orders.queue.push(o);
             if (o.cat === 'construction' && o.kind === 'build') showProposedSite(o);
             state.usedIdeas.add(text);
@@ -11939,7 +11965,17 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             // 0) Small talk / greetings — no decision needed; let the AI answer naturally, offline give a style-flavoured line
             if (/^\s*(hi|hello|hey|yo|greetings|good (morning|afternoon|evening|day)|how are you|how'?s it going|sal;?am|bonjour|nice to (meet|see)|pleasure)\b/.test(s) && text.trim().length < 60 && !/\b(trade|deal|sanction|war|peace|weapon|alliance|threat|nuclear)\b/.test(s)) {
                 const greet = (typeof fpLine === 'function') ? fpLine(iso, 'greet') : 'We receive your message.';
-                return out(c ? `${greet} ${I.enemy ? `Though the ${c.name} still stands between us.` : `What is on your mind${rel > 30 ? ', friend' : ''}?`}` : greet, rel > 20 ? 1 : 0, ['Let us talk about trade.', c ? 'What are your terms?' : 'What matters most to you right now?'], false);
+                const cold = rel < -40 ? ` Relations are at ${rel}; words alone will not change that.` : '';
+                return out(c && I.enemy ? `${greet} Though the ${c.name} still stands between us.${cold}` : `${greet}${cold}`, rel > 20 ? 1 : 0, ['Let us talk about trade.', c ? 'What are your terms?' : 'What matters most to you right now?'], false);
+            }
+            // 0a) "Why did you …?" — explain our own recent measures by what the player actually DID (actions, not words)
+            if (/\b(why|what for|explain)\b/.test(s) && /\b(expel|sanction|tariff|protest|recall|summon|freez|embargo|attack|angry|hostile|threat|cut|punish|measure|did you|are you)/.test(s) && !/\b(spy|spies|spying|espionage|hack|cyber|sabotage)\b/.test(s)) {
+                let ours = []; try { ours = reactState().log.filter(l => l.iso === iso).slice(0, 2).map(l => l.txt.replace(/<[^>]+>/g, '')); } catch (e) { }
+                const mem = (typeof diploMemory === 'function') ? diploMemory(iso).filter(x => !/^mood:/.test(x)) : [];
+                const f = fpOf(iso);
+                const because = mem.length ? `You know why: ${mem.slice(-2).join(' and ')}.` : rel < -30 ? `Relations are at ${rel}; your government has given us little reason for trust.` : `We have taken no step against ${state.player} that was not a response to your own conduct.`;
+                const tone = f.style === 'hawk' ? 'Every action has a price, and you set it yourself.' : f.style === 'dove' ? 'We would prefer to settle this through dialogue.' : f.style === 'pragmatic' ? 'Give us a reason to reverse it and we will.' : 'Change course and these measures can be reviewed.';
+                return out(`${ours.length ? 'Our measures were deliberate. ' : ''}${because} ${tone}`, -1, ['What would it take to lift them?', 'That was not our intention.'], false);
             }
             // 0b) Spy / sabotage accusation or confession → a foreign-policy response (and remember it), never war
             if (/\b(spy|spies|spying|espionage|hack(ed|ing)?|cyber|sabotage|sabotaged|agents?|infiltrat|meddl|interfere|assassinat|disinformation)\b/.test(s)) {
@@ -12046,11 +12082,11 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (/^(ok|okay|agreed|yes|good|fine|deal|sounds good|we agree)\b/.test(text.trim().toLowerCase())) return out(`Good. ${c ? 'Then let us fix a date and venue for talks on the ' + c.name + '.' : 'Our ministries will follow up.'}`, 2, c ? ['Let us hold talks in Geneva.', 'We can host the talks.'] : null);
             // 11) Fallback: steer to the real issue between us
             const mem = (typeof diploMemory === 'function') ? diploMemory(iso) : [];
-            const memLine = mem.length ? ` We have not forgotten ${mem.slice(0, 1).join('')}.` : '';
+            const memA = mem.filter(x => !/^mood:/.test(x)), memLine = memA.length ? ` We have not forgotten ${memA[memA.length - 1]}.` : '';
             if (c) return out(I.enemy ? `Let us be direct. On the ${c.name}, ${termsFor(c, iso)[0].charAt(0).toLowerCase() + termsFor(c, iso)[0].slice(1)} Everything else follows from that.${memLine}`
-                            : I.onMyLand ? `Our concern is the ${c.name}. ${termsFor(c, iso)[0]}`
+                            : I.onMyLand ? `Our concern is the ${c.name}. ${termsFor(c, iso)[0]}${memLine}`
                             : I.mediating ? `We value your mediation on the ${c.name}. Propose a date and venue and we will send a delegation.`
-                            : `Our priority is the ${c.name}. Where does ${state.player} stand on it?`, 0,
+                            : `Our priority is the ${c.name}. Where does ${state.player} stand on it?${memLine}`, 0,
                             I.mediating ? ['Let us hold talks in Geneva.', 'We can host the talks.'] : ['What are your terms?', 'We support a ceasefire.'], false);
             const ex = exportsOf(iso)[0];
             return out(rel > 40 ? `Always good to hear from ${state.player}.${memLine} ${ex ? `If you want to deepen ties, our ${RES[ex].name.toLowerCase()} exports and investment are where we can do most.` : 'Tell us what you have in mind.'}`
@@ -12099,7 +12135,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 L.push(tp.length ? `Formal defence partners: ${tp.map(esc).join(', ')}.` : `We have no formal mutual-defence pact — worth building one with a strong friend.`);
             } else if (/(population|people|demograph|citizens|refugee|birth|migrant|how many (people|citizens))/.test(s)) {
                 const p = nationIso(me), so = (state.soc || {})[me];
-                L.push(`<b>Population</b>: about ${(p.pop / 1e6).toFixed(1)} million. GDP per capita ${formatVal(p.gdp / Math.max(1, p.pop))}.`);
+                L.push(`<b>Population</b>: about ${(p.pop / 1e6).toFixed(1)} million. GDP per capita $${Math.round(p.gdp / Math.max(1, p.pop)).toLocaleString('en-US')}.`);
                 if (so) L.push(`Society: stability ${A.domestic.stability}/100, approval ${A.domestic.approval}%.`);
                 L.push(`To grow the taxpayer base, build desalination, hospitals, universities and special economic zones, and keep stability high.`);
             } else if (/(intel|spy|spies|espionage|cyber|sabotage|covert|assassinat|subvert|counter.?intel|hack)/.test(s)) {
@@ -12321,6 +12357,68 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         //  style: hawk (answers in kind, escalates) · firm (proportionate) · pragmatic (transactional) · dove (protests, coalitions)
         // =====================================================================
         const FP_VOICE = { hawk: 'uncompromising and quick to answer in kind', firm: 'measured, formal and proportionate', pragmatic: 'transactional and focused on what each side gains', dove: 'conciliatory, prefers law, courts and coalitions' };
+        // Real-life foreign-policy profiles of the most relevant states (style, appetite for force k, for economic weapons e,
+        // tolerance of foreign spying t, how they answer intelligence operations c, and a one-line doctrine d).
+        // Every other state gets a sensible default derived from its regime, blocs, power and nuclear status (below).
+        const FP_TABLE = {
+            USA: { s: 'firm', k: 0.55, e: 0.95, t: 0.3, c: ['expel', 'sanctions', 'cyberattack', 'counter_intel'], d: 'America First: transactional, reaches first for tariffs and sanctions, answers attacks on its forces with overwhelming force' },
+            CHN: { s: 'firm', k: 0.4, e: 0.9, t: 0.15, c: ['expel', 'counter_intel', 'tariffs', 'cyberattack'], d: 'core interests (Taiwan, sovereignty, regime security) are non-negotiable; economic coercion and sharp rhetoric, patient, avoids open war' },
+            RUS: { s: 'hawk', k: 0.7, e: 0.4, t: 0.05, c: ['expel', 'cyberattack', 'disinfo', 'counter_intel'], d: 'answers pressure with escalation: tit-for-tat expulsions, cyber and disinformation, nuclear signalling; sees NATO as the adversary' },
+            IRN: { s: 'hawk', k: 0.55, e: 0.2, t: 0.05, c: ['cyberattack', 'expel', 'counter_intel', 'disinfo'], d: 'forward defence through allied militias; answers in kind and asymmetrically; the Supreme Leader has the final word' },
+            PRK: { s: 'hawk', k: 0.6, e: 0.05, t: 0.05, c: ['cyberattack', 'disinfo', 'expel'], d: 'missile tests, threats and brinkmanship; cyber theft for hard currency' },
+            ISR: { s: 'hawk', k: 0.8, e: 0.3, t: 0.2, c: ['counter_intel', 'cyberattack', 'expel'], d: 'pre-emption and overwhelming retaliation, intelligence-led operations abroad, close to Washington' },
+            GBR: { s: 'firm', k: 0.4, e: 0.7, t: 0.45, c: ['expel', 'sanctions', 'counter_intel'], d: 'Atlanticist, sanctions in step with allies, tit-for-tat expulsions, strong intelligence services' },
+            FRA: { s: 'firm', k: 0.45, e: 0.6, t: 0.4, c: ['expel', 'counter_intel', 'summon'], d: 'European strategic autonomy, nuclear deterrent, ready to deploy forces abroad' },
+            DEU: { s: 'dove', k: 0.12, e: 0.7, t: 0.5, c: ['summon', 'expel', 'counter_intel'], d: 'multilateral and legalistic, economic statecraft, reluctant to use force' },
+            ITA: { s: 'pragmatic', k: 0.15, e: 0.55, t: 0.5, c: ['summon', 'counter_intel', 'expel'], d: 'EU and NATO member, Mediterranean focus, transactional on migration and energy' },
+            ESP: { s: 'dove', k: 0.1, e: 0.55, t: 0.5, c: ['summon', 'protest', 'counter_intel'], d: 'EU multilateralism, Latin America and Mediterranean ties' },
+            POL: { s: 'firm', k: 0.4, e: 0.5, t: 0.35, c: ['expel', 'counter_intel', 'sanctions'], d: 'frontline NATO state, hawkish on Russia and Belarus, rapid rearmament' },
+            UKR: { s: 'firm', k: 0.5, e: 0.3, t: 0.3, c: ['expel', 'counter_intel', 'summon'], d: 'fighting for survival against Russia, depends on Western weapons and money' },
+            TUR: { s: 'pragmatic', k: 0.5, e: 0.45, t: 0.3, c: ['summon', 'expel', 'counter_intel'], d: 'assertive and transactional between NATO and Russia, cross-border operations against Kurdish militants' },
+            JPN: { s: 'firm', k: 0.2, e: 0.65, t: 0.4, c: ['summon', 'counter_intel', 'expel'], d: 'US alliance, defensive posture, economic statecraft; growing defence spending against China and North Korea' },
+            KOR: { s: 'firm', k: 0.3, e: 0.5, t: 0.4, c: ['summon', 'counter_intel', 'expel'], d: 'US alliance, deterrence of North Korea, careful with China' },
+            TWN: { s: 'dove', k: 0.15, e: 0.4, t: 0.4, c: ['counter_intel', 'protest', 'summon'], d: 'survival through deterrence and US support; avoids provoking Beijing' },
+            IND: { s: 'firm', k: 0.5, e: 0.5, t: 0.25, c: ['expel', 'counter_intel', 'summon'], d: 'strategic autonomy and multi-alignment; firm and quick to retaliate against Pakistan, wary of China' },
+            PAK: { s: 'hawk', k: 0.5, e: 0.15, t: 0.15, c: ['expel', 'counter_intel', 'disinfo'], d: 'India-focused security state where the army chief decides; close to China' },
+            SAU: { s: 'pragmatic', k: 0.35, e: 0.75, t: 0.2, c: ['summon', 'expel', 'counter_intel'], d: 'Vision 2030, oil leverage, hedges between Washington and Beijing, hostile to Iranian influence' },
+            ARE: { s: 'pragmatic', k: 0.3, e: 0.7, t: 0.2, c: ['summon', 'counter_intel', 'expel'], d: 'commercial hub with an interventionist streak, hedging between the powers' },
+            QAT: { s: 'dove', k: 0.05, e: 0.6, t: 0.3, c: ['protest', 'summon', 'counter_intel'], d: 'mediator, LNG power, talks to everyone' },
+            EGY: { s: 'firm', k: 0.3, e: 0.2, t: 0.15, c: ['expel', 'counter_intel', 'summon'], d: 'regime security first, depends on Gulf money and US aid, guards the Nile and Gaza border' },
+            SYR: { s: 'pragmatic', k: 0.15, e: 0.1, t: 0.2, c: ['summon', 'counter_intel', 'expel'], d: 'new government seeking recognition, investment and sanctions relief' },
+            IRQ: { s: 'pragmatic', k: 0.15, e: 0.2, t: 0.25, c: ['summon', 'protest', 'counter_intel'], d: 'balances between Iran and the United States' },
+            YEM: { s: 'hawk', k: 0.6, e: 0.05, t: 0.05, c: ['disinfo', 'expel', 'counter_intel'], d: 'Houthi-dominated, fires missiles and drones at shipping and enemies' },
+            BLR: { s: 'firm', k: 0.25, e: 0.15, t: 0.05, c: ['expel', 'counter_intel', 'disinfo'], d: "follows Moscow's line, regime security above all" },
+            KAZ: { s: 'pragmatic', k: 0.1, e: 0.3, t: 0.25, c: ['summon', 'counter_intel', 'expel'], d: 'multi-vector: balances Russia, China and the West' },
+            AZE: { s: 'firm', k: 0.45, e: 0.4, t: 0.15, c: ['expel', 'counter_intel', 'summon'], d: 'assertive, energy-rich, close to Turkey and Israel' },
+            ARM: { s: 'dove', k: 0.1, e: 0.15, t: 0.3, c: ['protest', 'summon', 'counter_intel'], d: 'seeks new partners after losing faith in Russian protection' },
+            HUN: { s: 'pragmatic', k: 0.1, e: 0.3, t: 0.35, c: ['summon', 'counter_intel', 'expel'], d: 'in the EU and NATO but friendly to Moscow and Beijing; vetoes for leverage' },
+            SRB: { s: 'pragmatic', k: 0.15, e: 0.2, t: 0.25, c: ['summon', 'counter_intel', 'expel'], d: 'balances the EU, Russia and China; Kosovo is a red line' },
+            CHE: { s: 'dove', k: 0.03, e: 0.4, t: 0.4, c: ['protest', 'summon', 'counter_intel'], d: 'armed neutrality, mediation and good offices' },
+            SWE: { s: 'firm', k: 0.2, e: 0.55, t: 0.4, c: ['expel', 'counter_intel', 'summon'], d: 'new NATO member, firm on Russia, rules-based order' },
+            FIN: { s: 'firm', k: 0.25, e: 0.5, t: 0.35, c: ['expel', 'counter_intel', 'summon'], d: 'new NATO member with a long Russian border, calm and well armed' },
+            NOR: { s: 'dove', k: 0.1, e: 0.5, t: 0.45, c: ['summon', 'expel', 'counter_intel'], d: 'NATO founder and peace broker, energy exporter' },
+            NLD: { s: 'firm', k: 0.15, e: 0.6, t: 0.45, c: ['expel', 'counter_intel', 'summon'], d: 'trading nation, firm on Russia, controls key chip-making exports' },
+            CAN: { s: 'firm', k: 0.15, e: 0.55, t: 0.4, c: ['expel', 'counter_intel', 'summon'], d: 'multilateral, close to Europe, cautious with Washington and Beijing' },
+            AUS: { s: 'firm', k: 0.25, e: 0.5, t: 0.35, c: ['expel', 'counter_intel', 'summon'], d: 'US ally, AUKUS, firm against Chinese interference' },
+            MEX: { s: 'dove', k: 0.05, e: 0.3, t: 0.35, c: ['protest', 'summon', 'counter_intel'], d: 'non-intervention doctrine, deeply tied to the US economy' },
+            BRA: { s: 'dove', k: 0.05, e: 0.35, t: 0.35, c: ['protest', 'summon', 'counter_intel'], d: 'non-aligned, BRICS, multilateral and sovereignty-minded' },
+            ARG: { s: 'pragmatic', k: 0.05, e: 0.3, t: 0.4, c: ['summon', 'protest', 'counter_intel'], d: 'pro-US and pro-market under its current government' },
+            VEN: { s: 'firm', k: 0.2, e: 0.2, t: 0.05, c: ['expel', 'counter_intel', 'disinfo'], d: 'regime survival, defiant towards Washington, backed by Russia, China and Cuba' },
+            CUB: { s: 'firm', k: 0.1, e: 0.05, t: 0.05, c: ['expel', 'counter_intel', 'disinfo'], d: 'one-party state, defiant toward Washington, close to Moscow and Caracas' },
+            ZAF: { s: 'dove', k: 0.05, e: 0.3, t: 0.35, c: ['protest', 'summon', 'counter_intel'], d: 'non-aligned, BRICS, international law and the Global South' },
+            NGA: { s: 'pragmatic', k: 0.15, e: 0.25, t: 0.3, c: ['summon', 'protest', 'counter_intel'], d: 'regional heavyweight, security crises at home' },
+            ETH: { s: 'firm', k: 0.35, e: 0.1, t: 0.2, c: ['expel', 'counter_intel', 'summon'], d: 'regional power seeking sea access, hard on internal rebels' },
+            DZA: { s: 'firm', k: 0.25, e: 0.35, t: 0.1, c: ['expel', 'summon', 'counter_intel'], d: 'fiercely sovereign and non-aligned, gas exporter, at odds with Morocco and France' },
+            MAR: { s: 'pragmatic', k: 0.15, e: 0.3, t: 0.3, c: ['summon', 'counter_intel', 'expel'], d: 'Western Sahara is the test of every relationship' },
+            IDN: { s: 'pragmatic', k: 0.1, e: 0.4, t: 0.3, c: ['summon', 'protest', 'counter_intel'], d: '"free and active" non-alignment, ASEAN centrality' },
+            VNM: { s: 'pragmatic', k: 0.2, e: 0.3, t: 0.1, c: ['summon', 'counter_intel', 'expel'], d: '"bamboo diplomacy": bends with every wind, never breaks, wary of China' },
+            PHL: { s: 'firm', k: 0.2, e: 0.2, t: 0.35, c: ['protest', 'summon', 'counter_intel'], d: 'US ally contesting Chinese claims in the South China Sea' },
+            AFG: { s: 'hawk', k: 0.3, e: 0.05, t: 0.05, c: ['expel', 'counter_intel'], d: 'Taliban emirate seeking recognition, hostile to outside meddling' },
+            MMR: { s: 'firm', k: 0.25, e: 0.05, t: 0.05, c: ['expel', 'counter_intel'], d: 'junta fighting a civil war, close to China and Russia' },
+            LBN: { s: 'dove', k: 0.05, e: 0.05, t: 0.3, c: ['protest', 'summon'], d: 'weak state, divided politics, Hezbollah factor' },
+            GRC: { s: 'firm', k: 0.25, e: 0.35, t: 0.4, c: ['summon', 'expel', 'counter_intel'], d: 'EU and NATO member, wary of Turkey' },
+            NZL: { s: 'dove', k: 0.05, e: 0.4, t: 0.45, c: ['protest', 'summon', 'counter_intel'], d: 'independent foreign policy, rules-based order' }
+        };
         function fpOf(iso) {
             const cache = fpOf._c || (fpOf._c = {}), k = iso + '|' + (state.playerIso || '') + '|' + Math.floor((state.dayIndex || 0) / 7);
             if (cache[k]) return cache[k];
@@ -12335,17 +12433,24 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const kinetic = clamp({ hawk: 0.6, firm: 0.35, pragmatic: 0.3, dove: 0.12 }[style] * clamp(Math.sqrt(pw), 0.4, 1.6), 0.05, 1);
             const econ = clamp((reg === 'democracy' ? 0.7 : 0.45) * clamp(Math.sqrt(pw), 0.3, 1.5), 0.1, 1);
             const covert = style === 'hawk' ? ['expel', 'counter_intel', 'cyberattack', 'disinfo'] : style === 'firm' ? ['expel', 'counter_intel', 'summon', 'sanctions'] : style === 'pragmatic' ? ['summon', 'counter_intel', 'expel', 'tariffs'] : ['protest', 'summon', 'counter_intel', 'expel'];
+            const T = FP_TABLE[iso];
+            if (T) {   // a real-life profile overrides the derived default; power and relations still scale it
+                const sp = clamp(Math.sqrt(pw), 0.5, 1.4);
+                return cache[k] = { iso, style: T.s, reg, shared, doctrine: T.d, voice: FP_VOICE[T.s], covert: T.c.slice(),
+                    intelTol: clamp(T.t + (shared.length ? 0.3 : 0) + rel / 300, 0.03, 0.9), kinetic: clamp(T.k * sp, 0.03, 1), econ: clamp(T.e * sp, 0.05, 1) };
+            }
             return cache[k] = { iso, style, reg, intelTol, kinetic, econ, shared, covert, voice: FP_VOICE[style] };
         }
         function fpBrief(iso) {
             const f = fpOf(iso);
-            return `Foreign-policy style: ${f.style} (${f.voice}); ${f.reg} government; tolerance of foreign intelligence activity ${Math.round(f.intelTol * 100)}%, appetite for force ${Math.round(f.kinetic * 100)}%, for economic pressure ${Math.round(f.econ * 100)}%${f.shared.length ? '; shares ' + f.shared.join('/') + ' with ' + state.player : ''}. Intelligence operations are answered with ${f.covert.slice(0, 3).join(', ').replace(/_/g, ' ')} — never with war.`;
+            return `Foreign-policy style: ${f.style} (${f.voice})${f.doctrine ? '; doctrine: ' + f.doctrine : ''}; ${f.reg} government; tolerance of foreign intelligence activity ${Math.round(f.intelTol * 100)}%, appetite for force ${Math.round(f.kinetic * 100)}%, for economic pressure ${Math.round(f.econ * 100)}%${f.shared.length ? '; shares ' + f.shared.join('/') + ' with ' + state.player : ''}. Intelligence operations are answered with ${f.covert.slice(0, 3).join(', ').replace(/_/g, ' ')} — never with war.`;
         }
         // the person who really speaks for a country (the decision-maker, not always the head of government)
         function diploSpeaker(iso) {
             const n = nationIso(iso) || {};
-            try { const ph = powerHolder(iso, n); if (ph && ph.name && !NOT_A_PERSON.test(ph.name)) return ph.name; } catch (e) { }
-            return n.hog || n.hos || ('Government of ' + shortName(iso));
+            const clean = x => String(x || '').replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+            try { const ph = powerHolder(iso, n); if (ph && ph.name && !NOT_A_PERSON.test(ph.name)) return clean(ph.name); } catch (e) { }
+            return clean(n.hog || n.hos) || ('Government of ' + shortName(iso));
         }
         // short lines in each style — used by the rules engine when no AI is connected (and as the AI's fallback)
         const FP_LINES = {
@@ -12901,13 +13006,14 @@ function resolveIntelOp(o, outcome, m, fx) {
     // ----- exposure: scaled by covertness, outcome, the target's capacity and type (never starts a war) -----
     let cap = 1; try { cap = clamp(power(iso) / Math.max(1, power(me)), 0.3, 2.2); } catch (e) { }
     const typeRisk = { collect: 0.6, steal: 1, cyber: 1.1, sabotage: 1.3, disinfo: 0.8, subvert: 1.1, assassinate: 1.7 }[type] || 1;
-    const shield = (state.counterIntel && state.counterIntel.until > state.dayIndex) ? 1 : 1;   // our own counter-intel shields US, not the target
-    const expose = Math.random() < clamp((covert ? 0.14 : 0.4) * (outcome === 'Failure' ? 2.4 : outcome === 'Partial' ? 1.3 : 1) * (0.55 + 0.45 * cap) * typeRisk, 0.02, 0.95);
+    const alert = (state.counterOn[iso] > state.dayIndex) ? 1.6 : 1;   // the target's counter-intelligence is on alert after an earlier exposure
+    const expose = Math.random() < clamp((covert ? 0.14 : 0.4) * (outcome === 'Failure' ? 2.4 : outcome === 'Partial' ? 1.3 : 1) * (0.55 + 0.45 * cap) * typeRisk * alert, 0.02, 0.95);
     if (expose) {
         o.intelExposed = true;
         const pen = Math.round(10 * (1 - 0.5 * tf.intelTol) * (type === 'assassinate' ? 2 : 1));
         addRel(me, iso, -pen);
         fx(`Operation EXPOSED — ${tN} reacts (relations −${pen})`, false);
+        (o.worldReaction = o.worldReaction || []).push({ iso, stance: 'oppose', action: 'expel', text: `${tN} exposes the operation and expels intelligence officers.` });
         try { if (typeof fpLine === 'function') queueMessage(iso, fpLine(iso, 'exposed')); else queueMessage(iso, `Our counter-intelligence has exposed your operation. Your officers have 48 hours to leave.`); } catch (e) { }
         try { state.counterOn[iso] = state.dayIndex + 90; if (typeof reactDo === 'function' && Math.random() < 0.6) reactDo(iso, 'expel', { intel: true }); } catch (e) { }
     } else if (good) fx('The operation stayed deniable', true);
@@ -15029,7 +15135,8 @@ function reactRecord(o) {
     } else if (o.cat === 'intelligence') {
         if (o.kind === 'proxy') {
             const p = proxyById(o.proxyId); if (!p) return; const gov = proxyGov(p);
-            if (['arm', 'fund'].includes(o.act)) reactHostile(gov, 18 * m);
+            if (o.act === 'arm') reactHostile(gov, 18 * m);
+            if (o.act === 'fund') reactAdd(gov, 'i', 16 * m);       // covert funding is an intelligence operation: answered, but never a cause of war by itself
             if (o.act === 'recognize') reactHostile(gov, 30);
             if (['strike', 'sanction'].includes(o.act)) p.patrons.filter(x => x !== state.playerIso).forEach(x => reactAdd(x, 'g', o.act === 'strike' ? 10 : 5));
             if (o.act === 'strike' && getRel(state.playerIso, gov) < 30) reactAdd(gov, 'g', 8);
@@ -15051,17 +15158,27 @@ function reactRecord(o) {
 // When there is no AI judge, the rules engine still makes the world react to EVERY executed order:
 // the directly involved countries, and — for provocative builds, big moves or repression — the ones that care.
 // Soft, flavoured statements (grievance/fear/goodwill are already booked by reactRecord); escalation is left to reactWeekly.
-function worldNotice(o) {
-    if (!o || !o.outcome || state.phase !== 'playing') return;
+// a covert operation nobody exposed: the world cannot openly react to it (the target only suspects — see the intel grievance channel)
+function intelSecret(o) { return !!o && o.cat === 'intelligence' && o.kind !== 'proxy' && !o.intelExposed; }
+function worldNotice(o, skip) {
+    if (!o || !o.outcome || state.phase !== 'playing' || o.worldNoticed) return;
+    if (o.cat === 'intelligence' && o.kind !== 'proxy') return;   // exposure (resolveIntelOp) and the weekly intel answers already cover covert ops
+    o.worldNoticed = true;
     const me = state.playerIso, cast = [];
-    const add = (iso, stance) => { if (iso && iso !== me && WORLD[iso] && !NON_SOVEREIGN.has(iso) && !cast.some(c => c.iso === iso)) cast.push({ iso, stance }); };
-    (o.targets || []).forEach(t => t.iso && add(t.iso, t.stance === 'hostile' ? 'oppose' : t.stance === 'friendly' ? 'support' : 'concern'));
-    try {
+    const add = (iso, stance) => { if (iso && iso !== me && WORLD[iso] && !NON_SOVEREIGN.has(iso) && !(skip || []).includes(iso) && !cast.some(c => c.iso === iso)) cast.push({ iso, stance }); };
+    (o.targets || []).forEach(t => t.iso && add(t.iso, o.cat === 'humanitarian' ? 'thanks' : t.stance === 'hostile' ? 'oppose' : t.stance === 'friendly' ? 'support' : 'concern'));
+    if (!skip) try {
         if (o.cat === 'construction' && ['nuke_weapon', 'enrichment', 'missile', 'base', 'airbase', 'naval', 'spaceport'].includes(o.siteType)) neighboursOf(me).slice(0, 2).forEach(x => add(x, 'concern'));
         else if (o.cat === 'military' && ['strike', 'invasion', 'blockade', 'move', 'posture'].includes(o.kind)) rivalsOf(me).slice(0, 2).forEach(x => add(x, 'concern'));
         else if (o.cat === 'domestic' && o.kind === 'repress') BLOCS.EU.filter(x => x !== me).slice(0, 1).forEach(x => add(x, 'concern'));
-        else if (o.cat === 'humanitarian') (o.targets || []).forEach(t => add(t.iso, 'support'));
     } catch (e) { }
+    // nobody directly involved: our closest partner still takes note (a light line, spam-controlled)
+    if (!cast.length && !skip && o.cat !== 'intelligence') {
+        try {
+            const ob = Object.keys(WORLD).filter(x => x !== me && !NON_SOVEREIGN.has(x)).map(x => [x, getRel(me, x)]).sort((a, b) => b[1] - a[1])[0];
+            if (ob) add(ob[0], 'note');
+        } catch (e) { }
+    }
     if (!cast.length) return;
     o.worldReaction = o.worldReaction || [];
     let spoke = 0;
@@ -15069,22 +15186,25 @@ function worldNotice(o) {
         if (spoke >= 2) break;
         const i = c.iso, f = fpOf(i);
         let action, kind;
-        if (c.stance === 'support') { action = f.econ > 0.6 || getRel(me, i) > 40 ? 'praise' : 'statement'; kind = 'praise'; }
+        if (c.stance === 'thanks') { action = 'thanks'; kind = 'praise'; }
+        else if (c.stance === 'support') { action = f.econ > 0.6 || getRel(me, i) > 40 ? 'praise' : 'statement'; kind = 'praise'; }
         else if (c.stance === 'oppose') { action = f.style === 'dove' ? 'concern' : 'protest'; kind = 'hitback'; }
+        else if (c.stance === 'note') { action = 'note'; kind = 'concern'; }
         else { action = 'concern'; kind = 'concern'; }
         o.worldReaction.push({ iso: i, stance: c.stance, action, text: '' });
         // one light, spam-controlled line (don't flood every order)
         try {
             if (typeof routineAllowed === 'function' && routineAllowed(i, o.text.slice(0, 40))) {
                 reactDo(i, action, { order: o.text.slice(0, 60) });
-                if (Math.random() < 0.5) queueMessage(i, fpLine(i, kind === 'praise' ? 'praise' : kind === 'hitback' ? 'hitback' : 'concern'), { noVoice: false });
+                if (Math.random() < 0.5 && action !== 'note') queueMessage(i, fpLine(i, kind === 'praise' ? 'praise' : kind === 'hitback' ? 'hitback' : 'concern'));
                 spoke++;
             }
         } catch (e) { }
     }
 }
 
-    resolveOrder = function (o) { const r = _ro(o); try { reactRecord(r || o); } catch (e) { console.warn('react', e); } try { if (!(typeof aiReady === 'function' && aiReady())) worldNotice(r || o); } catch (e) { console.warn('worldNotice', e); } return r; };
+    // AI connected: the AI judge writes the reactions (aiOrderApply); if it failed or never answered, the rules react instead
+    resolveOrder = function (o) { const r = _ro(o), x = r || o; try { reactRecord(x); } catch (e) { console.warn('react', e); } try { if (!(typeof aiReady === 'function' && aiReady()) || x.aiAsked === 'failed' || !x.aiAsked) worldNotice(x); } catch (e) { console.warn('worldNotice', e); } return r; };
 }
 const REACT_STANCE = s => state.conflicts.some(c => c.type === 'war' && ((c.sideA.includes(s.iso) && c.sideB.includes(state.playerIso)) || (c.sideB.includes(s.iso) && c.sideA.includes(state.playerIso)))) ? ['At war with you', '#c4553c'] : s.h >= 70 ? ['Preparing for war', '#c4553c'] : s.h >= 45 ? ['Retaliating', '#e0975a'] : s.h >= 25 ? ['Hostile', '#d8b45a'] : s.f >= 30 ? ['Arming in fear', '#d8b45a'] : s.w >= 25 ? ['Grateful', '#93b25f'] : ['Wary', '#ab9f80'];
 function reactStanding() {
@@ -15104,7 +15224,9 @@ const REACT_ACT = {
     aid: (i, c) => { const v = Math.min(c.p.gdp * 0.0004, nationIso(i).gdp * 0.0005); c.p.treasury += v; reactAdd(i, 'w', 12); return [`<b>${c.en}</b> pledges ${formatVal(v)} in support for ${c.nm}.`, 'good']; },
     trade_offer: (i, c) => { state.mods.growth += 0.0012; reactAdd(i, 'w', 10); return [`<b>${c.en}</b> offers ${c.nm} closer trade and investment (growth +0.12 pts).`, 'good']; },
     investment: (i, c) => REACT_ACT.trade_offer(i, c),
-    statement: (i, c) => [`<b>${c.en}</b> responds to ${c.nm}${c.msg ? `: "${esc(c.msg.slice(0, 160))}"` : '.'}`, 'neutral'],
+    statement: (i, c) => [c.msg ? `<b>${c.en}</b> responds to ${c.nm}: "${esc(c.msg.slice(0, 160))}"` : `<b>${c.en}</b> comments on ${c.nm}'s move${c.order ? ` ("${esc(c.order)}")` : ''} and says it will follow developments.`, 'neutral'],
+    thanks: (i, c) => { reactAdd(i, 'w', 8); return [`<b>${c.en}</b> thanks ${c.nm} for its help${c.order ? ` ("${esc(c.order)}")` : ''}.`, 'good']; },
+    note: (i, c) => [`<b>${c.en}</b> takes note of ${c.nm}'s decision${c.order ? ` ("${esc(c.order)}")` : ''}.`, 'neutral'],
     concern: (i, c) => { reactAdd(i, 'g', 4); return [`<b>${c.en}</b> expresses concern over ${c.nm}'s actions${c.msg ? `: "${esc(c.msg.slice(0, 140))}"` : '.'}`, 'neutral']; },
     protest: (i, c) => { reactAdd(i, c.intel ? 'i' : 'g', 8); return [`<b>${c.en}</b> formally protests ${c.nm}'s ${c.intel ? 'activities' : 'actions'}${c.order ? ` ("${esc(c.order)}")` : ''}.`, 'bad']; },
     summon: (i, c) => { reactAdd(i, c.intel ? 'i' : 'g', 8); addRel(c.me, i, -2); return [`<b>${c.en}</b> summons ${c.nm}'s ambassador to protest.`, 'bad']; },
@@ -15118,8 +15240,8 @@ const REACT_ACT = {
     freeze: (i, c) => { const loss = Math.min(c.p.treasury * 0.02, nationIso(i).gdp * 0.002); c.p.treasury -= loss; reactAdd(i, 'g', 12); return [`<b>${c.en}</b> freezes ${formatVal(loss)} of ${c.nm}'s state assets held in its banks.`, 'bad']; },
     embargo: (i, c) => { state.mods.growth -= 0.0003; reactAdd(i, 'g', 10); return [`<b>${c.en}</b> halts key exports to ${c.nm}; prices for your importers rise.`, 'bad']; },
     disinfo: (i, c) => { c.p.stability = clamp(c.p.stability - 1, 0, 100); reactAdd(i, c.intel ? 'i' : 'g', 6); return [`A disinformation campaign traced to <b>${c.en}</b> targets ${c.nm}'s government (approval −1).`, 'bad']; },
-    cyberattack: (i, c) => { const v = c.p.gdp * (c.intel ? 0.0002 : 0.0004); c.p.treasury -= v; reactAdd(i, c.intel ? 'i' : 'g', 10); return [`A cyberattack blamed on <b>${c.en}</b> hits ${c.nm}'s banks and grid (≈ ${formatVal(v)} in damage).`, 'bad']; },
-    sabotage_back: (i, c) => { const v = c.p.gdp * 0.0003; c.p.treasury -= v; reactAdd(i, 'i', 10); return [`Sabotage blamed on <b>${c.en}</b> damages ${c.nm}'s infrastructure (≈ ${formatVal(v)}).`, 'bad']; },
+    cyberattack: (i, c) => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7) * 0.8) { reactAdd(i, c.intel ? 'i' : 'g', 4); return [`${c.nm}'s counter-intelligence blocks a cyberattack traced to <b>${c.en}</b>.`, 'good']; } const v = c.p.gdp * (c.intel ? 0.0002 : 0.0004); c.p.treasury -= v; reactAdd(i, c.intel ? 'i' : 'g', 10); return [`A cyberattack blamed on <b>${c.en}</b> hits ${c.nm}'s banks and grid (≈ ${formatVal(v)} in damage).`, 'bad']; },
+    sabotage_back: (i, c) => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7) * 0.8) return [`${c.nm}'s counter-intelligence foils a sabotage plot linked to <b>${c.en}</b>.`, 'good']; const v = c.p.gdp * 0.0003; c.p.treasury -= v; reactAdd(i, 'i', 10); return [`Sabotage blamed on <b>${c.en}</b> damages ${c.nm}'s infrastructure (≈ ${formatVal(v)}).`, 'bad']; },
     military_alert: (i, c) => { reactAdd(i, 'f', 18); return [`<b>${c.en}</b> puts its forces on alert in response to ${c.nm}.`, 'bad']; },
     mobilize: (i, c) => { reactAdd(i, 'f', 22); addRel(c.me, i, -3); return [`<b>${c.en}</b> mobilises its forces and air defences, citing ${c.nm}'s actions.`, 'bad']; },
     rally: (i, c) => { const fr = Object.keys(WORLD).filter(x => x !== i && x !== c.me && !NON_SOVEREIGN.has(x) && getRel(x, i) > 40).slice(0, 6); fr.forEach(x => addRel(c.me, x, -3)); return [`<b>${c.en}</b> rallies its partners against ${c.nm}${fr.length ? ` — ${fr.slice(0, 3).map(shortName).map(esc).join(', ')} join the criticism` : ''}.`, 'bad']; },
@@ -15847,7 +15969,7 @@ function systemsEnsure() {
 }
 {
     const _iw = initWorld;
-    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; state.faiths = {}; state.react = null; state.orgs = null; state.orgApp = []; state.orgCd = {}; state.allyCalls = []; state.allyJoined = {}; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
+    initWorld = function () { _iw(); state.proxies = null; state.treaties = null; state.pol = null; state.treatyMsg = ''; state.trSel = null; state.ctDraft = null; state.unscLog = []; state.regimes = {}; state.faiths = {}; state.react = null; state.orgs = null; state.orgApp = []; state.orgCd = {}; state.allyCalls = []; state.allyJoined = {}; state.intel = {}; state.counterOn = {}; state.counterIntel = null; try { systemsEnsure(); } catch (e) { console.warn('systems init', e); } setTimeout(() => { try { grpRefresh(true); } catch (e) { } }, 600); };
     const _as = applySave;
     applySave = function (d) { _as(d); try { ENT.sel = null; NEW_FIELDS.forEach(k => { if (!d || !d.state || d.state[k] === undefined) state[k] = undefined; }); systemsEnsure(); if (state.pol && state.pol.over) state.pol.over = null; grpRefresh(true); } catch (e) { console.warn('systems load', e); } };
     const _dt = dailyTick;
@@ -16033,7 +16155,7 @@ async function aiOrderJudge(o) {
         `"headline":"one-line world news headline about this order"}`;
     let r = null;
     try { r = await callAI(sys, user, true, { maxTokens: small ? 500 : AI_BUDGET.judge }); } catch (e) { console.warn('ai order', e); }
-    if (!r || typeof r !== 'object') { o.aiAsked = 'failed'; return; }
+    if (!r || typeof r !== 'object') { o.aiAsked = 'failed'; try { if (o.outcome) worldNotice(o); } catch (e) { } return; }
     o.ai = r;
     if (r.understood) { o.aiNote = String(r.understood).slice(0, 300); logEvent(`🤖 ${esc(o.aiNote)}`, 'neutral'); }
     try { renderOrderLog(); } catch (e) { }
@@ -16060,15 +16182,21 @@ function aiOrderApply(o) {
     if (r.headline) try { logEvent(`📰 ${esc(String(r.headline).slice(0, 200))}`, 'neutral'); } catch (e) { }
     // reactions arrive over the next days, each leader in their own words
     let relBudget = 30;   // cap the total relation swing one order can cause across all countries (B21)
+    const secret = intelSecret(o);   // a covert op nobody exposed: the world can't openly react to it
+    const tgt = (o.targets || []).map(t => t.iso), covered = [];
     (Array.isArray(r.reactions) ? r.reactions : []).slice(0, 5).forEach((x, k) => {
         const iso = aioIso(x.country); if (!iso || iso === me || (typeof NON_SOVEREIGN !== 'undefined' && NON_SOVEREIGN.has(iso))) return;
+        if (secret) return;
+        covered.push(iso);
         let rel = num(x.relations, -30, 20); if (Math.abs(rel) > relBudget) rel = Math.sign(rel) * relBudget; relBudget = Math.max(0, relBudget - Math.abs(rel));
         state.aiReact = state.aiReact || [];
         const action = AIO_ACTIONS.includes(x.action) ? x.action : 'statement';
         (o.worldReaction = o.worldReaction || []).push({ iso, stance: String(x.stance || 'neutral'), action, text: String(x.message || '').slice(0, 300) });
         state.aiReact.push({ iso, day: state.dayIndex + rint(1, 3) + k, action, stance: String(x.stance || 'neutral'),
-            rel, msg: String(x.message || '').slice(0, 400), order: o.text.slice(0, 80), cat: o.cat, intel: o.cat === 'intelligence' });
+            rel, msg: String(x.message || '').slice(0, 400), order: o.text.slice(0, 80), cat: o.cat, intel: o.cat === 'intelligence', ruleMoved: tgt.includes(iso) });
     });
+    // directly involved countries the AI forgot still answer, through the rules (AI and rules mixed, nobody ignored)
+    try { if (!secret && tgt.some(i => i && i !== me && !covered.includes(i))) { o.worldNoticed = false; worldNotice(o, covered); } } catch (e) { }
     try { updateEconomyUI(); renderOrderLog(); } catch (e) { }
 }
 function aiReactTick() {
@@ -16082,7 +16210,7 @@ function aiReactTick() {
         if (x.intel && ['retaliatory_strike', 'military_alert', 'mobilize'].includes(act)) act = pick(fpOf(i).covert);
         if (x.rel) addRel(me, i, Math.round(x.rel * (x.ruleMoved ? 0.5 : 1)));
         reactDo(i, act, { msg: x.msg, order: x.order, intel: x.intel });
-        if (x.msg) try { queueMessage(i, x.msg); } catch (e) { }
+        if (x.msg) try { queueMessage(i, x.msg, { noVoice: true }); } catch (e) { }   // already written by the AI in the leader's voice (B19)
         return false;
     });
     try { updateEconomyUI(); } catch (e) { }
