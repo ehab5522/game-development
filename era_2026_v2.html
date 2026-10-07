@@ -16820,7 +16820,7 @@ function nukeSites() {
         if (s.type === 'nuke_weapon') out.weapons.push(s);
         if (s.type === 'icbm_silo' || (s.type === 'missile' && (s.icbmSilo || /icbm|silo/i.test(s.name || '')))) out.silos.push(s);
         if (s.type === 'missile_factory') out.mfac.push(s);
-        const use = isFinite(T.euUse) ? +T.euUse : s.type === 'nuclear' ? 2 : 0;
+        const use = isFinite(T.euUse) ? +T.euUse : s.type === 'nuclear' ? nukeNppUse() : 0;
         if (use > 0 && s.fromGame) out.npp.push({ s, use });       // reactors you start with run on long-term vendor fuel contracts
     });
     return out;
@@ -17324,9 +17324,11 @@ function nukeSummaryText() {
     const N = nukeOf(), W = nukeWeapons(N), F = nukeFlows(N);
     return `${state.player} nuclear status: ${W.total ? `${nukeNum(W.tac)} warheads and ${nukeNum(W.icbm)} ICBMs (${nukeNum(W.built)} built in-game)` : 'no nuclear weapons'}; enriched uranium ${nukeNum(N.eu)} EU (${F.net >= 0 ? '+' : ''}${nukeNum(F.net)}/month); readiness ${Math.round(N.readiness)}%; ${NPT_LABEL[N.npt] || ''}.`;
 }
+function nukeNppUse() { const T = SITE_TYPES.nuclear || {}; return isFinite(T.euUse) ? +T.euUse : 2; }
+function popDesalRate() { const T = SITE_TYPES.desal || {}; return isFinite(T.popGrowth) ? +T.popGrowth : POP_SITE_DEFAULT.desal; }
 const ECON_AI_RULES = [
-    `- POPULATION: every country grows at its real 2025 rate (births, deaths, migration), moved by health and schooling, stability (instability drives emigration), war (fewer births, refugees), food shortages, projects (a Desalination Plant adds ~0.08%/yr in arid countries; housing and hospitals help) and policy orders ("Introduce a baby bonus", "Attract skilled immigrants", "Restrict immigration"). Cities grow with their country, capitals and big cities faster. Extra people are extra workers and taxpayers: GDP follows them.`,
-    `- ENRICHED URANIUM (EU) is a strategic resource: a Uranium Enrichment Factory makes 10 EU a month; nuclear-weapon states also run their own fuel cycle. Nuclear Power Plants the player builds burn 2 EU a month (or legal reactor fuel from vendors at $${NUKE_LEU_PRICE / 1e6}M per EU); without fuel they go offline and lose their benefits. EU can also be bought on the black market (smuggling network, North Korea, Russia, Pakistan, Iran: about $22–30M per EU, at most ${NUKE_BM_MONTH} EU a month, a 20–30% chance the deal is exposed → sanctions, IAEA scrutiny, seized shipments).`,
+    `- POPULATION: every country grows at its real 2025 rate (births, deaths, migration), moved by health and schooling, stability (instability drives emigration), war (fewer births, refugees), food shortages, projects (a Desalination Plant adds ~${popDesalRate()}%/yr in arid countries; housing and hospitals help) and policy orders ("Introduce a baby bonus", "Attract skilled immigrants", "Restrict immigration"). Cities grow with their country, capitals and big cities faster. Extra people are extra workers and taxpayers: GDP follows them.`,
+    `- ENRICHED URANIUM (EU) is a strategic resource: a Uranium Enrichment Factory makes 10 EU a month; nuclear-weapon states also run their own fuel cycle. Nuclear Power Plants the player builds burn ${nukeNppUse()} EU a month (or legal reactor fuel from vendors at $${NUKE_LEU_PRICE / 1e6}M per EU); without fuel they go offline and lose their benefits. EU can also be bought on the black market (smuggling network, North Korea, Russia, Pakistan, Iran: about $22–30M per EU, at most ${NUKE_BM_MONTH} EU a month, a 20–30% chance the deal is exposed → sanctions, IAEA scrutiny, seized shipments).`,
     `- NUCLEAR WEAPONS: a Tactical Nuclear Warhead costs 50 EU + $500M and takes about 2 months (needs an operational Nuclear Weapons Facility, an enrichment factory, or an existing arsenal); a Strategic ICBM costs 150 EU + $2B and takes about 6 months (needs a free slot in an ICBM Launch Silo, ${NUKE_SILO_CAP} per silo). Every weapon built costs 1 EU + $5M a month to keep; without the EU, readiness falls and radiation leaks or forced dismantling follow. Orders: "Build 5 tactical nukes", "Produce an ICBM", "Buy 40 enriched uranium on the black market", "Buy reactor fuel", "Dismantle 10 warheads", "Test a nuclear bomb", "Withdraw from the NPT", "Join the NPT".`,
     `- The world answers nuclear moves: a first weapon (worse for an NPT member) brings UN Security Council action, sanctions and fear among neighbours and rivals (they rearm, mobilise, seek protectors); tests and NPT withdrawal are condemned; exposed black-market deals bring sanctions; disarmament and joining the NPT are rewarded. Arsenals on 1 Jan 2026 (SIPRI estimates): USA ~5,177 warheads, Russia ~5,459, China ~600, France ~290, UK ~225, India ~180, Pakistan ~170, Israel ~90, North Korea ~50; Iran holds ~400 kg of 60% uranium (150 EU in the game) but no weapons.`
 ].join('\n');
@@ -17344,7 +17346,18 @@ function nukeAdvice(q) {
     L.push(`<b>Nuclear program</b>: ${W.total ? `${nukeNum(W.tac)} warheads and ${nukeNum(W.icbm)} ICBMs, readiness ${Math.round(N.readiness)}%` : 'no nuclear weapons'}; ${nukeNum(N.eu)} EU of enriched uranium (${F.net >= 0 ? '+' : '−'}${nukeNum(Math.abs(F.net))} a month). ${esc(NPT_LABEL[N.npt] || '')}.`);
     const icbm = /\b(icbm|intercontinental|strategic missile|silo)\b/.test(s), buy = /\b(buy|black market|smuggl|purchase)\b/.test(s);
     const cT = nukeCan('tactical'), cI = nukeCan('icbm');
-    if (buy) {
+    const npt = /\b(npt|non.?proliferation|treaty|iaea)\b/.test(s), status = /\b(how many|how much|stock|status|readiness|upkeep|do we have|have we got|our (arsenal|warheads|nukes|uranium|eu))\b/.test(s) && !/\bhow (do|can|could|should) (i|we)\b/.test(s);
+    if (npt && !buy) {
+        const W0 = nukeWeapons(N);
+        if (N.npt === 'nws') L.push(`We are one of the five recognised nuclear-weapon states: the treaty lets us keep our arsenal, and we are committed to disarmament talks. Leaving it would cost us our standing with every Western partner for nothing.`);
+        else if (N.npt === 'member') L.push(`As an NPT member we have promised never to build nuclear weapons and accept IAEA safeguards. Building one while still a member is a treaty breach: heavier sanctions, a UN Security Council case and much angrier Western governments. Withdrawal takes 90 days' notice and is itself condemned (relations −12 with the West, sanctions) — but a weapon built after it costs less goodwill than one built in breach.`);
+        else if (N.npt === 'exiting') L.push(`Our withdrawal from the NPT takes effect ${N.nptExit ? fmtDate(dateIn(N.nptExit - state.dayIndex)) : 'soon'}. We can still change course and stay in.`);
+        else L.push(`We are not bound by the NPT (${esc((NPT_LABEL[N.npt] || '').toLowerCase())}). ${W0.total ? `Joining as a non-nuclear-weapon state means dismantling all ${nukeNum(W0.total)} weapons first; the West would reward it.` : 'Joining would earn goodwill and ease sanctions.'}`);
+        chips.push(N.npt === 'member' || N.npt === 'nws' ? 'Withdraw from the Non-Proliferation Treaty' : 'Join the Non-Proliferation Treaty');
+    } else if (status && !buy) {
+        L.push(`Production ${nukeNum(F.prod)} EU a month${F.fuel ? `, reactors burn ${nukeNum(F.fuel)}` : ''}${F.W ? `, upkeep of the ${nukePl(F.W, 'weapon')} we built ${nukeNum(F.upkeepEU)} EU + ${formatVal(F.upkeepCost)} a month` : ''}.${W.legacy ? ` The ${nukeNum(W.legacy)} weapons we inherited are kept up by the defence budget.` : ''}${N.queue.length ? ` In production: ${N.queue.map(j => `${nukePl(j.n, NUKE_KIND[j.kind].short)} (ready ${fmtDate(dateIn(j.done - state.dayIndex))})`).join(', ')}.` : ''}${N.short ? ` <span style="color:#e0b35a">EU upkeep unmet for ${N.short} month(s) — accident risk.</span>` : ''}`);
+        if (!F.prod && !N.labs) chips.push('Build a uranium enrichment facility near ' + cap);
+    } else if (buy) {
         const ok = nukeSellerList().filter(x => x.ok);
         L.push(`Black-market EU: ${ok.map(x => `${esc(x.name)} ${formatVal(x.price)}/EU (${Math.round(x.risk * 100)}% exposure)`).join(', ') || 'nobody will sell to us right now'}. At most ${NUKE_BM_MONTH} EU a month. If a deal is exposed we face sanctions and an IAEA inquiry, and the shipment may be seized.`);
         if (ok.length) chips.push('Buy 40 enriched uranium on the black market');
@@ -17410,12 +17423,14 @@ function popAdvice(q) {
     offlineAdvisorAnswer2 = function (q) {
         const s = String(q || '').toLowerCase();
         try {
-            const weap = /\b(nukes?|nuclear (weapons?|bombs?|warheads?|arsenal|program(me)?|deterren\w*|forces)|warheads?|icbms?|intercontinental|atomic bombs?|enriched uranium|uranium|enrich\w*|npt|non.?proliferation|fissile)\b/.test(s);
-            if (weap && !/\b(power plant|power station|reactor)\b/.test(s.replace(/reactor fuel/g, ''))) return nukeAdvice(q);
-            if (!/\b(build|construct)\b/.test(s) && /\b(population|demograph\w*|birth ?rate|births|migra\w*|immigra\w*|emigra\w*|how many (people|citizens)|cities|city grow\w*|urbani[sz]\w*|taxpayers?)\b/.test(s)) return popAdvice(q);
+            let foreign = false; try { foreign = detectCountries(String(q || '')).some(f => f.iso !== state.playerIso) && !/\b(our|my|us)\b/.test(s) && !/\b(buy|purchase|black market|smuggl\w*|sell)\b/.test(s); } catch (e) { }
+            const weap = /\b(nukes?|nuclear (weapons?|bombs?|warheads?|arsenal|program(me)?|deterren\w*|forces|tests?)|warheads?|icbms?|intercontinental|atomic bombs?|enriched uranium|uranium|enrich(ment|ed|ing uranium)|enrich uranium|npt|non.?proliferation|fissile)\b/.test(s);
+            if (weap && !foreign && !/\b(power plant|power station|reactor)\b/.test(s.replace(/reactor fuel/g, ''))) return nukeAdvice(q);
+            if (!/\b(build|construct)\b/.test(s) && !/\b(attack\w*|defen[cd]\w*|bomb\w*|strikes?|front|shell\w*|occup\w*|captur\w*)\b/.test(s)
+                && /\b(population|demograph\w*|birth ?rate|births|migra\w*|immigra\w*|emigra\w*|refugees?|how many (people|citizens)|(largest|biggest|main|major|our) cit(y|ies)|cities grow\w*|city (grow\w*|population|size)|urbani[sz]\w*|taxpayers?)\b/.test(s)) return popAdvice(q);
         } catch (e) { console.warn('advisor econ', e); }
         let r = _oa.apply(this, arguments);
-        try { if (/\b(nuclear power|power plant|reactor|npp)\b/.test(s) && /\bnuclear|reactor|npp\b/.test(s)) r += `<br><span class="text-slate-400">A nuclear power plant we build burns 2 EU of enriched uranium a month (or reactor fuel bought from a vendor); without fuel it goes offline. A Uranium Enrichment Factory makes 10 EU a month.</span>`; } catch (e) { }
+        try { if (/\b(nuclear power|power plant|reactor|npp)\b/.test(s) && /\bnuclear|reactor|npp\b/.test(s)) r += `<br><span class="text-slate-400">A nuclear power plant we build burns ${nukeNppUse()} EU of enriched uranium a month (or reactor fuel bought from a vendor); without fuel it goes offline. A Uranium Enrichment Factory makes 10 EU a month.</span>`; } catch (e) { }
         return r;
     };
 }
