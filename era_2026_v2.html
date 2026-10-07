@@ -15714,6 +15714,11 @@ function newsState() {
 function newsPlain(html) { return String(html == null ? '' : html).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\s+([.,;:!?)])/g, '$1').replace(/\s+/g, ' ').trim(); }
 function newsStrip(t) { return String(t || '').replace(/^[^\p{L}\p{N}"“'(]+/u, '').replace(/\s*\(([^)]*\b(approval|relations|pts|growth|stability|intensity)\b[^)]*)\)/gi, '').trim(); }   // no leading emoji, no game-number asides
 function newsKey(t) { return newsStrip(t).toLowerCase().replace(/[\d.,]+/g, '#').replace(/[^a-z#]+/g, ' ').trim().slice(0, 90); }
+function newsSim(a, b) {
+    // word overlap of two story keys (0..1); "#" stands for any number, so figures do not make two stories different
+    const w = t => new Set(String(t || '').split(' ').filter(x => x.length > 2 || x === '#')), A = w(a), B = w(b); if (!A.size || !B.size) return 0;
+    let n = 0; A.forEach(x => { if (B.has(x)) n++; }); return n / (A.size + B.size - n);
+}
 function newsHash(s) { let h = 0; s = String(s); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
 function newsName(iso) { try { return iso === state.playerIso ? state.player : shortName(iso); } catch (e) { return iso || ''; } }
 function newsNation(iso) { try { return (iso && (iso === state.playerIso || WORLD[iso])) ? nationIso(iso) : null; } catch (e) { return null; } }
@@ -15810,9 +15815,10 @@ function newsRoute(msg, type, cat) {
 function newsSeed(s) {
     const N = newsState(), key = newsKey(s.text), d = state.dayIndex || 0;
     if (!key) return;
-    const same = N.seeds.find(x => x.key === key); if (same) { same.n = (same.n || 1) + 1; same.w = Math.max(same.w, s.w); return; }
+    // near-duplicates too ("North Korea test-fires missiles into the sea" / "… into the Sea of Japan"): same story, counted once
+    const same = N.seeds.find(x => x.key === key || ((x.iso || null) === (s.iso || null) && newsSim(x.key, key) >= 0.75)); if (same) { same.n = (same.n || 1) + 1; same.w = Math.max(same.w, s.w); return; }
     // the same story was already published recently: count it on the article instead of printing it again
-    const pub = N.items.find(x => x.key === key && d - x.d <= 20);
+    const pub = N.items.find(x => x.kind === 'world' && (x.key === key || ((x.iso || null) === (s.iso || null) && newsSim(x.key, key) >= 0.75)) && d - x.d <= 20);
     if (pub) { pub.n = (pub.n || 1) + 1; if (d - (pub.upd || pub.d) >= 7) { pub.upd = d; pub.d = d; pub.date = state.date.toISOString(); pub.read = false; newsRender(); } return; }
     N.seeds.push({ ...s, key, d, date: state.date.toISOString(), n: 1 });
     if (N.seeds.length > 80) { N.seeds.sort((a, b) => b.w - a.w); N.seeds.length = 60; }
@@ -16307,6 +16313,13 @@ function terrWarm() {
         renderOrderLog = function () { const tab = document.getElementById('cc-log'); if (tab && tab.classList.contains('hidden')) { renderOrderLog.dirty = true; return; } renderOrderLog.dirty = false; return _rol.apply(this, arguments); };
     }
     try { const im = document.getElementById('target-portrait'); if (im) im.decoding = 'async'; } catch (e) { }
+    // selecting a non-state group (or leaving one) redraws the whole group canvas (100-200 ms; the first time it is also
+    // created): do it right after the panel has been painted, not inside the click, so the selection answers at once
+    if (typeof grpRefresh === 'function') {
+        const _gr = grpRefresh; let due = 0, frc = false;
+        const run = () => { if (!due) return; due = 0; const f = frc; frc = false; try { _gr(f); } catch (e) { console.warn('group tiles', e); } };
+        grpRefresh = function (force) { frc = frc || !!force; if (due) return; due = 1; requestAnimationFrame(() => setTimeout(run, 0)); setTimeout(run, 120); };   // after the next paint, at most 120 ms later
+    }
     // country-name detection scans every country name each call and runs dozens of times per resolved order with the
     // same order text: remember recent answers (cleared whenever the name list or the player changes)
     if (typeof detectCountries === 'function') {
