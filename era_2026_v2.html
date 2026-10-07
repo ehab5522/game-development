@@ -13820,8 +13820,8 @@ const POP_ARID = new Set(['SAU', 'ARE', 'QAT', 'KWT', 'BHR', 'OMN', 'YEM', 'JOR'
     'DJI', 'SOM', 'ERI', 'SDN', 'NER', 'MLI', 'TCD', 'ESH', 'NAM', 'BWA', 'AFG', 'PAK', 'TKM', 'UZB', 'KAZ', 'AUS', 'CPV', 'MDV', 'MLT', 'CYP']);
 // Population effect (% per year, while operational) for types whose catalogue entry has no popGrowth field
 const POP_SITE_DEFAULT = { desal: 0.08, housing: 0.03, hospital: 0.02 };
-const POP_POLICY_RX = /\b(baby bonus(es)?|birth ?rates?|natalis\w*|pro-?natal\w*|fertility|child (benefit|allowance)s?|family (allowance|benefit)s?|encourage (more )?(births|children|families)|population growth|grow (the|our) population|(attract|welcome|recruit|bring in) (more )?(skilled |foreign )?(immigrants|migrants|foreign workers|workers from abroad|talent)|(open|ease|relax|liberali[sz]e) .{0,20}immigration|immigration (reform|program\w*|quota)|(restrict|cut|reduce|limit|curb|stop|ban|halt|end) .{0,20}(immigration|migration|migrants|immigrants)|deport\w*)\b/;
-const POP_RESTRICT_RX = /\b((restrict|cut|reduce|limit|curb|stop|ban|halt|end) .{0,20}(immigration|migration|migrants|immigrants)|deport\w*)\b/;
+const POP_POLICY_RX = /\b(baby bonus(es)?|birth ?rates?|natalis\w*|pro-?natal\w*|fertility|child (benefit|allowance)s?|family (allowance|benefit)s?|encourage (more )?(births|children|families)|population growth|grow (the|our) population|(attract|welcome|recruit|bring in) (more )?(skilled |foreign )?(immigrants|migrants|foreign workers|workers from abroad|talent)|(open|ease|relax|liberali[sz]e|increase|raise|expand) .{0,20}immigration|immigration (reform|program\w*|quotas?)|(open|ease) .{0,20}borders? (to|for) (refugees|migrants|immigrants|foreign workers)|(grant|give|offer) (citizenship|visas|residency|work permits) to (foreign|migrants|immigrants|refugees)|(per|each|every) (child|baby|newborn)|child bonus\w*|(restrict|cut|reduce|limit|curb|stop|ban|halt|end) .{0,20}(immigration|migration|migrants|immigrants)|(close|seal|shut) .{0,20}borders? (to|for|against) (refugees|migrants|immigrants)|(deport|expel)\w* .{0,20}(migrants|immigrants|refugees|foreigners)|deport\w*)\b/;
+const POP_RESTRICT_RX = /\b((restrict|cut|reduce|limit|curb|stop|ban|halt|end) .{0,20}(immigration|migration|migrants|immigrants)|(close|seal|shut) .{0,20}borders? (to|for|against) (refugees|migrants|immigrants)|(deport|expel)\w*)\b/;
 ['popm'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 function popState() {
     if (!state.popm || typeof state.popm !== 'object') state.popm = {};
@@ -13884,8 +13884,20 @@ function cityPopNow(c) {
         const hp = socEligible(iso) ? socHP(iso) : 0.5;
         const u = (c[5] ? 1 : c[4] >= 5 ? 0.85 : c[4] >= 1 ? 0.6 : 0.35) * clamp(0.15 + 1.6 * (1 - hp), 0.1, 1.8) * (1 - share);
         const yrs = (state.dayIndex || 0) / 365.25, boost = (state.popm && state.popm.boost && state.popm.boost[cityKey(c)]) || 1;
-        return Math.max(0.001, Math.min(c[4] * ratio * Math.exp(u / 100 * yrs) * boost, n.pop / 1e6 * 0.95));
+        // a city cannot outgrow its country (a city-state such as Macau or Singapore simply follows the nation)
+        const cap = Math.min(n.pop / 1e6, Math.max(n.pop / 1e6 * 0.95, c[4] * ratio));
+        return Math.max(0.001, Math.min(c[4] * ratio * Math.exp(u / 100 * yrs) * boost, cap));
     } catch (e) { return c[4]; }
+}
+// where a desalination plant makes sense: the largest of our cities next to one of our ports or naval bases (the sea), else the capital
+function popCoastCity(iso) {
+    const cap = (capitalOf(iso) || {}).label || 'the capital';
+    try {
+        const sea = (state.sites || []).filter(x => x.owner === iso && ['naval', 'port'].includes(x.type) && typeof x.lat === 'number' && (!x.host || x.host === iso));
+        if (!sea.length) return cap;
+        const c = popTopCities(iso, 40).find(x => typeof x.c[2] === 'number' && sea.some(z => km({ lat: x.c[2], lng: x.c[3] }, z) < 40));
+        return c ? c.c[0] : cap;
+    } catch (e) { return cap; }
 }
 function popFmt(v) { return v >= 1 ? formatPop(v) : '0'; }
 function cityPopLabel(pop) { return pop >= 1 ? pop.toFixed(pop >= 10 ? 1 : 2) + 'M' : Math.max(1, Math.round(pop * 1000)).toLocaleString() + 'k'; }
@@ -13922,7 +13934,7 @@ function popPanelHTML() {
         <div class="text-[10.5px] text-slate-500 mt-1">About ${popFmt(Math.abs(n.pop * R.r / 1200))} people ${R.r >= 0 ? 'more' : 'fewer'} each month.${Math.abs(gdpPart) >= 0.01 ? ` The extra ${R.extra >= 0 ? 'workers and taxpayers add' : 'losses take'} ${gdpPart >= 0 ? '+' : ''}${gdpPart.toFixed(2)} pts to GDP growth, so income per person stays in step.` : ' Taxes and GDP follow the number of workers.'}</div></div>
         <div class="gs-stat" style="padding:8px 10px;font-size:11.5px"><div class="gs-stat-lbl mb-1">Largest cities (metro area)</div><table class="w-full"><tbody>${popTopCities(me, 12).map(x => { const ch = (x.now / x.start - 1) * 100; return `<tr><td class="py-0.5">${x.c[5] ? '◆ ' : ''}${esc(x.c[0])}</td><td class="text-right font-mono">${cityPopLabel(x.now)}</td><td class="text-right font-mono text-[10.5px]" style="color:${Math.abs(ch) < 0.05 ? '#7c7259' : ch >= 0 ? '#86efac' : '#fca5a5'}">${Math.abs(ch) < 0.05 ? '—' : (ch >= 0 ? '▲ ' : '▼ ') + Math.abs(ch).toFixed(1) + '%'}</td></tr>`; }).join('') || '<tr><td class="text-slate-500">No city data.</td></tr>'}</tbody></table>
         <div class="text-[10.5px] text-slate-500 mt-1">Cities grow with the country; the capital and big cities grow faster as people move from the countryside. A desalination plant, housing programme or hospital near a city makes it grow faster still.</div></div></div>
-        <div class="mt-3 text-[11px] text-slate-500">Orders work too: ${['Introduce a baby bonus to raise the birth rate', 'Attract skilled immigrants', 'Build a desalination plant in ' + ((capitalOf(me) || {}).label || 'the capital')].map(t => `<button type="button" class="cc-qchip !py-0.5" onclick='quickAddOrder(${JSON.stringify(t)})'>＋ ${esc(t)}</button>`).join(' ')}</div>`;
+        <div class="mt-3 text-[11px] text-slate-500">Orders work too: ${['Introduce a baby bonus to raise the birth rate', 'Attract skilled immigrants', POP_ARID.has(me) ? 'Build a desalination plant in ' + popCoastCity(me) : 'Build a housing program in ' + ((capitalOf(me) || {}).label || 'the capital')].map(t => `<button type="button" class="cc-qchip !py-0.5" onclick='quickAddOrder(${JSON.stringify(t)})'>＋ ${esc(t)}</button>`).join(' ')}</div>`;
     return h;
 }
 // extra Government tabs added by later systems: [key, label, html()]
@@ -13945,7 +13957,11 @@ const SOC_XTABS = [['people', '👥 Population', () => popPanelHTML()]];
     const _pol = policyOf;
     policyOf = function (text) {
         const s = ' ' + String(text || '').toLowerCase() + ' ';
-        if (POP_POLICY_RX.test(s)) return [{ k: 'pop', dir: POP_RESTRICT_RX.test(s) ? -1 : 1, mag: 1, mig: /migra|immigra|foreign workers|talent|deport|workers from abroad/.test(s) }];
+        if (POP_POLICY_RX.test(s)) {
+            // "cut taxes and introduce a baby bonus": the tax, rate, money-printing or austerity part of the same order still counts
+            let rest = []; try { rest = (_pol.apply(this, arguments) || []).filter(p => ['print', 'rate', 'tax', 'austerity'].includes(p.k)); } catch (e) { }
+            return [{ k: 'pop', dir: POP_RESTRICT_RX.test(s) ? -1 : 1, mag: 1, mig: /migra|immigra|refugee|foreign workers|foreigners|talent|deport|expel|citizenship|visas|residency|work permits|workers from abroad/.test(s) }].concat(rest);
+        }
         return _pol.apply(this, arguments);
     };
     const _sap = socApplyPolicy;
@@ -16779,7 +16795,7 @@ function nukeSeed() {
     const N = { v: 1, eu: S ? S[2] : 0, leu: 0, legacyT: S ? S[0] : 0, legacyI: S ? S[1] : 0, labs: S ? S[3] : 0, legacyCap: S ? S[4] : 0, tac: 0, icbm: 0,
         readiness: 100, short: 0, queue: [], ship: [], autoFuel: true, npt: NPT_NWS.includes(me) ? 'nws' : (NPT_OUT[me] || 'member'), nptExit: null,
         bm: { m: -1, q: 0 }, last: null, leaks: 0, seq: 0, tested: 0 };
-    if (!S && NUCLEAR.includes(me)) N.legacyT = 1;          // an older save in which your weapons facility had already produced its first weapons
+    if (NUCLEAR.includes(me) && !(S && S[0] + S[1] > 0)) N.legacyT = 1;   // an older save in which your weapons facility had already produced its first weapons (Iran too)
     return N;
 }
 function nukeOf() {
@@ -16802,7 +16818,7 @@ function nukeSites() {
         if (eu > 0) out.prod.push({ s, eu });
         if (s.type === 'enrichment') out.enrich.push(s);
         if (s.type === 'nuke_weapon') out.weapons.push(s);
-        if (s.type === 'icbm_silo' || (s.type === 'missile' && /icbm|silo/i.test(s.name || ''))) out.silos.push(s);
+        if (s.type === 'icbm_silo' || (s.type === 'missile' && (s.icbmSilo || /icbm|silo/i.test(s.name || '')))) out.silos.push(s);
         if (s.type === 'missile_factory') out.mfac.push(s);
         const use = isFinite(T.euUse) ? +T.euUse : s.type === 'nuclear' ? 2 : 0;
         if (use > 0 && s.fromGame) out.npp.push({ s, use });       // reactors you start with run on long-term vendor fuel contracts
@@ -17048,7 +17064,9 @@ function nukeReact(type, ctx = {}) {
             break;
         }
         case 'dismantle': {
-            const d = Math.min(4, Math.ceil(ctx.n / 10)); W.slice(0, 5).forEach(x => addRel(me, x, d));
+            // goodwill for arms cuts: at most +4 a month in all (ten "dismantle 1 warhead" orders are not ten gestures)
+            const mk = nukeMonthKey(); if (!N.dmGood || N.dmGood.m !== mk) N.dmGood = { m: mk, v: 0 };
+            const d = Math.min(4 - N.dmGood.v, Math.ceil(ctx.n / 10)); if (d > 0) { N.dmGood.v += d; W.slice(0, 5).forEach(x => addRel(me, x, d)); }
             if (ctx.n >= 10) logEvent(`☢ ${nm} dismantles ${nukePl(ctx.n, K ? K.label : 'nuclear weapon')}; arms-control groups welcome the cut.`, 'good');
             break;
         }
@@ -17086,16 +17104,17 @@ function nukeMonthly() {
         L.unfueled = S.npp.filter(x => x.s.unfueled).length;
         if (L.unfueled) logEvent(`⚠ ${L.unfueled} nuclear power plant${L.unfueled > 1 ? 's are' : ' is'} offline for lack of fuel: no power savings or growth from ${L.unfueled > 1 ? 'them' : 'it'} until you have enriched uranium (or reactor fuel).`, 'bad');
     }
+    // the arsenal you inherited is kept up by the defence budget: deep cuts erode it (and stop readiness from recovering)
+    let defCut = false; try { const s = socOf(me); defCut = N.legacyT + N.legacyI > 0 && s.b.def < 0.6 * s.b0.def; } catch (e) { }
     // 3. upkeep of the weapons you built: 1 EU + $5M each
     if (F.W > 0) {
         L.upkeepCost = F.upkeepCost; p.treasury -= F.upkeepCost;
         if (p.treasury < 0) { socOf(me).debt += -p.treasury; p.treasury = 0; }
         const need = F.upkeepEU, got = Math.min(N.eu, need); N.eu -= got; L.upkeepEU = got; L.missing = need - got;
         if (L.missing > 0) { const sf = L.missing / need; N.short++; N.readiness = clamp(N.readiness - 20 * sf - 5, 0, 100); }
-        else { N.short = 0; N.readiness = clamp(N.readiness + 5, 0, 100); }
-    } else { N.short = 0; N.readiness = clamp(N.readiness + 5, 0, 100); }
-    // the arsenal you inherited is kept up by the defence budget: deep cuts erode it
-    try { const s = socOf(me); if (N.legacyT + N.legacyI > 0 && s.b.def < 0.6 * s.b0.def) N.readiness = clamp(N.readiness - 4, 0, 100); } catch (e) { }
+        else { N.short = 0; if (!defCut) N.readiness = clamp(N.readiness + 5, 0, 100); }
+    } else { N.short = 0; if (!defCut) N.readiness = clamp(N.readiness + 5, 0, 100); }
+    if (defCut) N.readiness = clamp(N.readiness - 4, 0, 100);
     // 4. accidents and forced disarmament when weapons are neglected
     const W = nukeWeapons(N);
     if (W.total > 0 && (N.short > 0 || N.readiness < 50)) {
@@ -17133,9 +17152,12 @@ function nukeDaily() {
 //      "buy reactor fuel", "dismantle 10 warheads", "test a nuclear bomb", "withdraw from the NPT" ----
 const NUKE_WEAPON_RX = /\b(warheads?|nukes?|nuclear (bombs?|weapons?|warheads?|devices?)|atomic (bombs?|weapons?)|tactical nuclear|hydrogen bombs?|thermonuclear (bombs?|weapons?|warheads?))\b/;
 const NUKE_ICBM_RX = /\b(icbms?|intercontinental(?: ballistic)? missiles?|strategic (?:nuclear )?missiles?|nuclear missiles?)\b/;
-const NUKE_EU_RX = /\b(enriched uranium|weapons?.grade uranium|highly enriched uranium|heu|leu|low.enriched uranium|fissile material|\d+\s*eu|eu of (enriched )?uranium|uranium fuel|nuclear fuel|reactor fuel|fuel for (our|the) reactors?)\b/;
+const NUKE_EU_RX = /\b(enriched uranium|weapons?.grade uranium|highly enriched uranium|heu|leu|low.enriched uranium|fissile material|\d+\s*eu(?![-\s]*(?:made|built|countries|country|states|members?|nations|citizens|goods|products|bonds|cars|tanks|jets|funds?)\b)|eu of (enriched )?uranium|uranium fuel|nuclear fuel|reactor fuel|fuel for (our|the) reactors?)\b/;
 const NUKE_NUMW = { a: 1, an: 1, one: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, dozen: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, hundred: 100 };
-function nukeQty(s, def) {
+function nukeQty(s, def, noun) {
+    // the number that counts the weapons or the uranium ("in 2027 build 3 nukes" → 3), else the first number
+    const near = s.match(new RegExp('\\b(\\d+(?:,\\d{3})*)\\s*(?:x\\s*)?(?:[a-z-]+\\s+){0,3}?(?:' + (noun || 'warheads?|nukes?|bombs?|weapons?|devices?|icbms?|missiles?|eu\\b|uranium|units?\\b|kg\\b') + ')'));
+    if (near) return +near[1].replace(/,/g, '');
     const m = s.match(/\b(\d+(?:,\d{3})*)\s*(?:x\s*)?(?:new |more |extra |additional |tactical |strategic |nuclear |units? of |kg of |eu of )*/);
     if (m) return +m[1].replace(/,/g, '');
     const w = s.match(/\b(a|an|one|single|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred)\b/);
@@ -17149,7 +17171,8 @@ function nukeOrderOf(text) {
         if (/\b(withdraw|leave|exit|quit|pull out|abandon|renounce)\b/.test(s)) return { ...base, cat: 'diplomacy', act: 'npt_exit', covert: false };
         if (/\b(join|rejoin|re-join|sign|ratify|accede|return to|re-enter)\b/.test(s)) return { ...base, cat: 'diplomacy', act: 'npt_join', covert: false };
     }
-    if (/\b(test|detonate|explode)\b/.test(s) && /\b(nuclear|atomic|hydrogen|thermonuclear|nuke|warhead)\b/.test(s) && !/\b(missile test|test.?launch|test.?fire)\b/.test(s) && !foreign.length) return { ...base, act: 'test', covert: false };
+    if (/\b(test|detonate|explode)\b/.test(s) && (NUKE_WEAPON_RX.test(s) || /\b(nuclear|atomic) (test|tests|explosion|detonation|blast)\b|\b(test|detonate|explode) (a |an |our |one )?(nuclear|atomic)\b(?! (power|plants?|reactors?|sirens?|alarms?|shelters?|drills?|safety|emergency|response))/.test(s))
+        && !/\b(missile test|test.?launch|test.?fire|power plants?|power stations?|reactors?|sirens?|alarms?|drills?|safety|stress|exercises?|shelters?|emergency|response|simulation|simulated|computer)\b/.test(s) && !foreign.length) return { ...base, act: 'test', covert: false };
     if (/\b(buy|purchase|acquire|smuggle|import|obtain|procure|order|source)\b/.test(s) && NUKE_EU_RX.test(s)) {
         const legal = /\b(leu|low.enriched|reactor fuel|nuclear fuel|fuel for (our|the) reactors?|uranium fuel)\b/.test(s) && !/\b(black market|smuggl|illicit|weapons?.grade|heu|highly enriched)\b/.test(s);
         let seller = legal ? 'leu' : 'smuggle';
@@ -17157,16 +17180,34 @@ function nukeOrderOf(text) {
         const qty = nukeQty(s.replace(/\b(a|an) (black|nuclear|smuggling)\b/g, ' '), legal ? 0 : 50);
         return { ...base, cat: legal ? 'economy' : 'military', act: 'euBuy', seller, n: qty, covert: !legal };
     }
-    if (/\b(dismantle|scrap|decommission|disarm|eliminate|retire|give up|get rid of|destroy (all )?(our|my|some of our|\d+ of our))\b/.test(s) && (NUKE_WEAPON_RX.test(s) || NUKE_ICBM_RX.test(s) || /\bnuclear arsenal\b/.test(s)) && !foreign.length && !/\b(their|enemy|enemy's)\b/.test(s)) {
+    const reduce = /\b(reduce|cut|shrink|downsize|halve|trim)\b/.test(s) && /\b(our|my)\b|nuclear arsenal/.test(s) && !/\b(budget|funding|spending|costs?|risk|danger|reliance|dependence|tensions?|threat)\b/.test(s);
+    if ((reduce || /\b(dismantle|scrap|decommission|disarm|eliminate|retire|give up|get rid of|destroy (all )?(our|my|some of our|\d+ of our))\b/.test(s)) && (NUKE_WEAPON_RX.test(s) || NUKE_ICBM_RX.test(s) || /\bnuclear (arsenal|stockpile)\b/.test(s)) && !foreign.length && !/\b(their|enemy|enemy's)\b/.test(s)) {
         const kind = NUKE_ICBM_RX.test(s) ? 'icbm' : 'tactical', W = nukeWeapons();
-        const n = /\b(all|entire|whole|every)\b/.test(s) ? (/\bnuclear arsenal\b|\ball (our |my )?nuclear weapons\b/.test(s) ? W.total : (kind === 'icbm' ? W.icbm : W.tac)) : nukeQty(s, 1);
-        return { ...base, act: 'dismantle', nk: /\ball (our |my )?nuclear weapons\b|nuclear arsenal/.test(s) ? 'all' : kind, n: Math.max(1, n), covert: false };
+        if (/\b(half|halve)\b/.test(s)) return { ...base, act: 'dismantle', nk: kind, n: Math.max(1, Math.ceil((kind === 'icbm' ? W.icbm : W.tac) / 2)), covert: false };
+        // "give up our nuclear weapons", "disarm", "get rid of our nukes" with no number: the whole arsenal
+        const counted = /\d|\b(some|one|a few|several|part|two|three|four|five|six|seven|eight|nine|ten|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred)\b/.test(s);
+        const whole = /\ball (of )?(our |my )?nuclear weapons\b/.test(s) || (/nuclear arsenal/.test(s) && !counted && !reduce) || (/\b(give up|disarm|get rid of|eliminate|denucleari[sz]e)\b/.test(s) && !/\d|\b(some|one|a few|several|half|part)\b/.test(s) && !NUKE_ICBM_RX.test(s));
+        const n = whole ? W.total : /\b(all|entire|whole|every)\b/.test(s) ? (kind === 'icbm' ? W.icbm : W.tac) : nukeQty(s, 1);
+        return { ...base, act: 'dismantle', nk: whole ? 'all' : kind, n: Math.max(1, n), covert: false };
     }
-    const build = /\b(build|produce|make|assemble|manufacture|construct|create|forge|churn out|add|deploy new|field)\b/.test(s);
+    // "add sanctions on North Korea over its nukes", "make Iran give up its nukes", "build a museum about the atomic bomb" are not weapon orders
+    // "make our warheads safer", "produce a report on nuclear weapons", "build a bomb shelter", "help Ukraine build nukes" are not either:
+    // the weapon has to be the thing built ("build 3 nukes", "build our first nuclear bomb", "field 2 new ICBMs", "expand our arsenal by 20 warheads")
+    const FILL = '(?:(?:a|an|one|the|our|my|first|own|\\d[\\d,]*|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred|more|new|extra|additional|another|few|several|some|tactical|strategic|nuclear|atomic|thermonuclear|hydrogen|small|low-yield|high-yield|secret|ballistic|intercontinental|hypersonic|mobile|road-mobile|x|of|up to|about|around|dozens|hundreds)\\s+){0,5}';
+    const objRx = new RegExp('\\b(build|produce|make|assemble|manufacture|construct|create|forge|churn out|add|deploy new|field)\\s+' + FILL + '(warheads?|nukes?|bombs?|weapons?|devices?|icbms?|missiles?)\\b');
+    const grow = /\b(increase|expand|grow|enlarge|boost|double|triple|strengthen)\b.{0,25}\b(nuclear (arsenal|stockpile|forces)|(nuclear )?warheads|nukes|icbms?)\b/.test(s) && !/\b(security|safety|protection|readiness|alert|deterrence posture)\b/.test(s);
+    const build = (objRx.test(s) || grow || /\b(build|get|make) the bomb\b/.test(s))
+        && !/\b(sanction\w*|condemn\w*|protest\w*|denounce\w*|museum|memorial|monument|exhibit\w*|film|movie|documentary|treaty|talks|negotiat\w*|ban|free zone|shelters?|conventional|report|speech|plan|deal|doctrine|strategy|policy|safer|safety|secure|protect\w*|study|review|awareness|campaign|ready|readiness|alert)\b/.test(s)
+        && !(foreign.length && /\b(their|its|his|her|help|assist|aid|support|allow|let|enable|stop|prevent)\b/.test(s));
     const facility = /\b(facility|facilities|plant|factory|complex|site|program(me)?|laborator(y|ies)|lab|silos?|base|reactor|centrifuges?|enrichment|launch(er| pad| site)|bunker)\b/.test(s);
-    if (build && !facility && NUKE_ICBM_RX.test(s)) return { ...base, act: 'icbm', n: Math.round(clamp(nukeQty(s, 1), 1, 20)) };
-    if (build && !facility && NUKE_WEAPON_RX.test(s) && !/\b(missiles?)\b/.test(s.replace(NUKE_ICBM_RX, ''))) return { ...base, act: 'tactical', n: Math.round(clamp(nukeQty(s, 1), 1, 50)) };
-    return null;
+    if (!build || facility) return null;
+    const sb = s.replace(/\b(build|get|make) the bomb\b/, '$1 a nuclear bomb');
+    const iI = sb.search(NUKE_ICBM_RX), iT = sb.replace(NUKE_ICBM_RX, m => ' '.repeat(m.length)).search(NUKE_WEAPON_RX);
+    if (iI < 0 && iT < 0 && !grow) return null;
+    if (iT >= 0 && iI < 0 && /\bmissiles?\b/.test(sb)) return null;           // "build 100 ballistic missiles with nuclear warheads" is a missile order
+    const kind = iI >= 0 && (iT < 0 || iI < iT) ? 'icbm' : 'tactical', both = iI >= 0 && iT >= 0;
+    const q = nukeQty(sb, 1, kind === 'icbm' ? 'icbms?|intercontinental|strategic|nuclear missiles?|missiles?' : 'warheads?|nukes?|bombs?|weapons?|devices?');
+    return { ...base, act: kind, n: Math.round(clamp(q, 1, kind === 'icbm' ? 20 : 50)), asked: q, also: both ? (kind === 'icbm' ? 'tactical' : 'icbm') : null };
 }
 function nukeOrderPrice(o) {
     const N = nukeOf();
@@ -17184,7 +17225,8 @@ function nukeOrderNote(o) {
     const N = nukeOf();
     if (o.act === 'tactical' || o.act === 'icbm') {
         const K = NUKE_KIND[o.act], c = nukeCan(o.act), need = o.n * K.eu;
-        const warn = !c.ok ? c.why : N.eu < need ? `needs ${nukeNum(need)} EU, you have ${nukeNum(N.eu)}` : (o.act === 'icbm' && o.n > c.free) ? `only ${c.free} silo slot(s) free` : '';
+        const warn = !c.ok ? c.why : N.eu < need ? `needs ${nukeNum(need)} EU, you have ${nukeNum(N.eu)}` : (o.act === 'icbm' && o.n > c.free) ? `only ${c.free} silo slot(s) free`
+            : o.asked > o.n ? `one order builds at most ${o.n} — order again for the rest` : o.also ? `one kind per order — order the ${o.also === 'icbm' ? 'ICBMs' : 'warheads'} separately` : '';
         return { txt: `☢ ${nukeNum(need)} EU · ${nukePl(o.n, K.short)}`, warn };
     }
     if (o.act === 'euBuy') { const q = o.qty || o.n; return { txt: o.seller === 'leu' ? `☢ ${nukeNum(q)} EU reactor fuel (legal)` : `☢ ${nukeNum(q)} EU · ${o.seller === 'smuggle' ? 'smuggling network' : shortName(o.seller)} · ${Math.round(((NUKE_SELLERS[o.seller] || {}).risk || 0.3) * 100)}% exposure risk`, warn: '' }; }
@@ -17199,8 +17241,8 @@ function nukeResolve(o) {
         if (o.act === 'tactical' || o.act === 'icbm') r = nukeStart(o.act, o.n, { paid: true, covert: o.covert });
         else if (o.act === 'euBuy') r = nukeBuy(o.seller, o.qty || o.n, { paid: true });
         else if (o.act === 'dismantle') {
-            if (o.nk === 'all') { const W = nukeWeapons(); const a = W.tac ? nukeDismantle('tactical', W.tac) : { ok: true, msg: '' }, b = W.icbm ? nukeDismantle('icbm', W.icbm) : { ok: true, msg: '' }; r = { ok: !!(W.tac || W.icbm), msg: [a.msg, b.msg].filter(Boolean).join(' ') || 'You have no nuclear weapons.' }; }
-            else r = nukeDismantle(o.nk, o.n);
+            if (o.nk === 'all') { const W = nukeWeapons(); const a = W.tac ? nukeDismantle('tactical', W.tac) : { ok: true, msg: '' }, b = W.icbm ? nukeDismantle('icbm', W.icbm) : { ok: true, msg: '' }; r = { ok: !!(W.tac || W.icbm), msg: [a.msg, b.msg].filter(Boolean).join(' ') || 'You have no nuclear weapons.', cost: W.total * NUKE_DISMANTLE_COST }; }
+            else { const have = o.nk === 'icbm' ? nukeWeapons().icbm : nukeWeapons().tac; r = nukeDismantle(o.nk, o.n); r.cost = Math.min(o.n, have) * NUKE_DISMANTLE_COST; }
         }
         else if (o.act === 'test') r = nukeTest();
         else if (o.act === 'npt_exit') r = nukeNpt('exit');
@@ -17209,6 +17251,8 @@ function nukeResolve(o) {
     o.outcome = r.ok ? 'Success' : 'Failure';
     if (!r.ok && o.cost) { p.treasury += o.cost; fx(`${r.msg} The ${formatVal(o.cost)} was returned to the treasury.`, false); }
     else fx(r.msg, r.ok);
+    // less was delivered than was paid for (the black market's monthly limit was reached meanwhile, fewer warheads left to dismantle…): refund the rest
+    if (r.ok && isFinite(r.cost) && o.cost - Math.max(r.cost, 1e6) >= 1e6) { const back = o.cost - Math.max(r.cost, 1e6); p.treasury += back; fx(`${formatVal(back)} not needed was returned to the treasury.`, null); }
     if (r.ok && r.job) o.eta = r.when;
     o.effects = effects; o.doneDay = state.dayIndex; o.worldNoticed = true;   // the nuclear reactions above already answered for the world
     try { updateEconomyUI(); if (socTab === 'nuclear' && !document.getElementById('soc-modal').classList.contains('hidden')) renderSociety(); } catch (e) { }
@@ -17216,7 +17260,7 @@ function nukeResolve(o) {
 }
 
 // ---- the ☢ Nuclear tab (Government) ----
-function nukeBtn(label, call, tip, dis) { return `<button type="button" class="gs-btn${dis ? ' opacity-50' : ''}" style="padding:4px 9px" title="${esc(tip || '')}" onclick="${call}">${label}</button>`; }
+function nukeBtn(label, call, tip, dis) { return `<button type="button" class="gs-btn" style="padding:4px 9px${dis ? ';opacity:.45' : ''}" title="${esc(tip || '')}" onclick="${call}">${label}</button>`; }
 function nukeUI(fn, a, b) {
     let r; try { r = fn === 'build' ? nukeStart(a, b) : fn === 'buy' ? nukeBuy(a, +b) : fn === 'fuel' ? nukeBuy('leu', 0) : null; } catch (e) { r = { ok: false, msg: String(e.message || e) }; }
     if (fn === 'auto') { const N = nukeOf(); N.autoFuel = !N.autoFuel; r = { ok: true, msg: `Automatic reactor-fuel purchases ${N.autoFuel ? 'on' : 'off'}.` }; }
@@ -17338,7 +17382,7 @@ function popAdvice(q) {
     const L = [`<b>Population</b>: ${formatPop(n.pop)} (${n.pop >= start ? '+' : '−'}${popFmt(Math.abs(n.pop - start))} since January 2026), growing ${R.r >= 0 ? '+' : ''}${R.r.toFixed(2)}% a year — the 2025 rate is ${R.base >= 0 ? '+' : ''}${R.base.toFixed(2)}%${R.parts.length ? '; ' + R.parts.map(([k, v]) => `${esc(k.toLowerCase())} ${v >= 0 ? '+' : ''}${v.toFixed(2)}`).join(', ') : ''}. GDP per capita ${formatPerCapita(n.gdp, n.pop)}.`];
     if (top.length) L.push(`Largest cities: ${top.map(x => `${esc(x.c[0])} ${cityPopLabel(x.now)}`).join(', ')}.`);
     L.push(`To grow the taxpayer base: keep the country stable (instability drives people abroad), fund health care, ${POP_ARID.has(me) ? 'build desalination plants (they matter most in a dry country like ours)' : 'build housing and hospitals'}, or change policy — a baby bonus or opening to skilled immigrants. More people means more workers and more tax revenue.`);
-    L.push(`<div class="flex flex-col gap-1 mt-1">${[POP_ARID.has(me) ? 'Build a desalination plant in ' + cap : 'Build a housing program in ' + cap, 'Introduce a baby bonus to raise the birth rate', 'Attract skilled immigrants'].map(quick).join('')}</div>`);
+    L.push(`<div class="flex flex-col gap-1 mt-1">${[POP_ARID.has(me) ? 'Build a desalination plant in ' + popCoastCity(me) : 'Build a housing program in ' + cap, 'Introduce a baby bonus to raise the birth rate', 'Attract skilled immigrants'].map(quick).join('')}</div>`);
     return L.join('<br>');
 }
 {
@@ -17453,6 +17497,20 @@ function popAdvice(q) {
             bar.insertAdjacentHTML('beforeend', `<div class="gs-rchip${N.short || S.npp.some(x => x.s.unfueled) ? ' gs-rshort' : ''}" title="${esc(tip)}" onclick="openSociety('nuclear')"><span class="gs-rico">☢</span><span class="gs-rval">${nukeNum(N.eu)}</span>
                 <span class="gs-rrate" style="color:${Math.abs(F.net) < 0.5 ? '#7c7259' : F.net > 0 ? '#9cbf5a' : '#e08a72'}">${Math.abs(F.net) < 0.5 ? '±0' : (F.net > 0 ? '+' : '−') + nukeNum(Math.abs(F.net))}</span></div>`);
         } catch (e) { console.warn('eu chip', e); }
+    };
+    // "Build an ICBM launch silo near …" becomes a missile site: mark it as a silo (10 ICBM slots) and name it so
+    const _ssfo = startSiteFromOrder;
+    startSiteFromOrder = function (o) {
+        const site = _ssfo.apply(this, arguments);
+        try {
+            if (site && site.type === 'missile' && /\b(icbms?|intercontinental|silos?|strategic missiles?)\b/i.test(o.text || '')) {
+                site.icbmSilo = true;
+                if (!/(?:called|named)\s/i.test(o.text) && !/icbm|silo/i.test(site.name)) site.name = `${site.place || shortName(site.owner)} ICBM Launch Silo`;
+                site.specs = site.specs || {}; site.specs['ICBM slots'] = `${NUKE_SILO_CAP} strategic missiles`;
+                updateSiteMarker(site);
+            }
+        } catch (e) { console.warn('silo', e); }
+        return site;
     };
     // a finished weapons facility does not by itself make you nuclear-armed: it lets you assemble warheads from EU
     const _cs = completeSite;
