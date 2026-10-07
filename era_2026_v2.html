@@ -17128,14 +17128,19 @@ function nukeMonthly() {
             const was = NUCLEAR.includes(me); nukeSyncStatus(); if (was && !NUCLEAR.includes(me)) try { nukeReact('disarm', {}); } catch (e) { }
         }
     }
-    if (N.npt === 'exiting' && N.nptExit !== null && state.dayIndex >= N.nptExit) { N.npt = 'withdrawn'; N.nptExit = null; logEvent(`☢ ${esc(state.player)}'s withdrawal from the Non-Proliferation Treaty takes effect.`, 'bad'); }
+    nukeNptTick(N);
     N.last = Object.assign(L, { eu: N.eu, readiness: N.readiness, month: nukeMonthKey() });
     if (F.prod || F.fuel || F.W) logEvent(`⚙ Nuclear program: +${nukeNum(F.prod)} EU produced${L.fuel ? `, ${nukeNum(L.fuel)} used as reactor fuel${L.fuelBought ? ` (${nukeNum(L.fuelBought)} bought for ${formatVal(L.fuelCost)})` : ''}` : ''}${F.W ? `, upkeep of ${nukePl(F.W, 'weapon')} ${nukeNum(L.upkeepEU)} EU + ${formatVal(L.upkeepCost)}` : ''} · stock ${nukeNum(N.eu)} EU · readiness ${Math.round(N.readiness)}%.`, L.missing || L.unfueled ? 'bad' : 'neutral');
+}
+// the 90-day NPT withdrawal notice runs out on its day
+function nukeNptTick(N) {
+    if (N.npt === 'exiting' && N.nptExit !== null && state.dayIndex >= N.nptExit) { N.npt = 'withdrawn'; N.nptExit = null; logEvent(`☢ ${esc(state.player)}'s withdrawal from the Non-Proliferation Treaty takes effect.`, 'bad'); }
 }
 // ---- daily: production finishing, shipments arriving ----
 function nukeDaily() {
     if (state.phase !== 'playing' || !state.playerIso || !state.nuke) return;
     const N = nukeOf(), d = state.dayIndex;
+    nukeNptTick(N);
     const done = N.queue.filter(j => j.done <= d); if (done.length) { N.queue = N.queue.filter(j => j.done > d); done.forEach(nukeComplete); }
     const arr = N.ship.filter(x => x.day <= d);
     if (arr.length) {
@@ -17188,7 +17193,8 @@ function nukeOrderOf(text) {
         const counted = /\d|\b(some|one|a few|several|part|two|three|four|five|six|seven|eight|nine|ten|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred)\b/.test(s);
         const whole = /\ball (of )?(our |my )?nuclear weapons\b/.test(s) || (/nuclear arsenal/.test(s) && !counted && !reduce) || (/\b(give up|disarm|get rid of|eliminate|denucleari[sz]e)\b/.test(s) && !/\d|\b(some|one|a few|several|half|part)\b/.test(s) && !NUKE_ICBM_RX.test(s));
         const n = whole ? W.total : /\b(all|entire|whole|every)\b/.test(s) ? (kind === 'icbm' ? W.icbm : W.tac) : nukeQty(s, 1);
-        return { ...base, act: 'dismantle', nk: whole ? 'all' : kind, n: Math.max(1, n), covert: false };
+        const have = kind === 'icbm' ? W.icbm : W.tac;          // "dismantle 1,000 warheads" when we hold 242: the 242 (and their cost), not 1,000
+        return { ...base, act: 'dismantle', nk: whole ? 'all' : kind, n: Math.max(1, whole || !have ? n : Math.min(n, have)), covert: false };
     }
     // "add sanctions on North Korea over its nukes", "make Iran give up its nukes", "build a museum about the atomic bomb" are not weapon orders
     // "make our warheads safer", "produce a report on nuclear weapons", "build a bomb shelter", "help Ukraine build nukes" are not either:
