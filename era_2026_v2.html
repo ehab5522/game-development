@@ -91,6 +91,25 @@
         .ox-box { margin-top: 6px; padding: 4px 7px; border-left: 2px solid rgba(209,173,91,.45); background: rgba(0,0,0,.18); font-size: 10.5px; line-height: 1.35; }
         .ox-row { display: flex; gap: 10px; justify-content: space-between; padding: 1px 0; } .ox-row span:first-child { color: #94a3b8; white-space: nowrap; } .ox-row span:last-child { text-align: right; color: #e2e8f0; }
         .sp-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; } .sp-acts .gs-btn { font-size: 10.5px; padding: 3px 7px; }
+        .site-demo { border-color: #e0604a !important; color: #fca5a5 !important; background: rgba(224,96,74,.08); }
+        .sp-acts .demo-btn { border-color: #b4533f; color: #f3b4a6; }
+        .site-crumble .site-dot { animation: siteCrumble .9s ease-in forwards; }
+        @keyframes siteCrumble { 0% { transform: none; } 25% { transform: rotate(-7deg) scale(1.1); } 45% { transform: rotate(5deg); } 100% { transform: translateY(12px) scale(.25, .1); opacity: 0; } }
+        .demo-fx { position: relative; width: 90px; height: 90px; pointer-events: none; }
+        .demo-fx .demo-sink { position: absolute; left: 32px; top: 32px; animation: demoSink 1.2s ease-in .35s forwards; }
+        @keyframes demoSink { 0% { transform: none; opacity: 1; } 15% { transform: translateX(-2px) rotate(-5deg); } 30% { transform: translateX(2px) rotate(4deg); } 100% { transform: translateY(16px) scale(.35, .08); opacity: 0; } }
+        .demo-ring { position: absolute; left: 45px; top: 45px; width: 10px; height: 10px; margin: -5px; border-radius: 50%; border: 2px solid rgba(255, 214, 150, .95); box-shadow: 0 0 12px rgba(255, 190, 110, .8); animation: demoRing .7s ease-out .3s forwards; opacity: 0; }
+        @keyframes demoRing { 0% { opacity: 1; } 100% { width: 92px; height: 92px; margin: -46px; opacity: 0; border-width: 1px; } }
+        .demo-dust { position: absolute; left: 45px; top: 52px; width: 22px; height: 22px; margin: -11px; border-radius: 50%; opacity: 0;
+            background: radial-gradient(circle, rgba(120, 108, 88, .95), rgba(95, 86, 70, .7) 45%, rgba(70, 64, 52, 0) 72%); animation: demoDust 2.2s ease-out forwards; }
+        .demo-flash { position: absolute; left: 45px; top: 45px; width: 8px; height: 8px; margin: -4px; border-radius: 50%; opacity: 0;
+            background: radial-gradient(circle, #fff 0%, #ffd27a 35%, rgba(255, 120, 40, .6) 60%, rgba(255, 90, 20, 0) 75%); animation: demoFlash .45s ease-out .3s forwards; }
+        @keyframes demoFlash { 0% { opacity: 1; } 100% { width: 64px; height: 64px; margin: -32px; opacity: 0; } }
+        .demo-dust.d1 { animation-delay: .4s; } .demo-dust.d2 { animation-delay: .55s; left: 33px; } .demo-dust.d3 { animation-delay: .7s; left: 57px; }
+        @keyframes demoDust { 0% { transform: scale(.3); opacity: 0; } 15% { opacity: 1; } 60% { opacity: .85; } 100% { transform: scale(5.5) translateY(-9px); opacity: 0; } }
+        .demo-bit { position: absolute; left: 44px; top: 44px; width: 4px; height: 4px; background: #9a8762; border-radius: 1px; opacity: 0; animation: demoBit 1s ease-out .4s forwards; }
+        .demo-bit.b0 { --dx: -34px; --dy: -24px; } .demo-bit.b1 { --dx: 30px; --dy: -28px; } .demo-bit.b2 { --dx: -22px; --dy: 18px; } .demo-bit.b3 { --dx: 26px; --dy: 16px; } .demo-bit.b4 { --dx: 4px; --dy: -36px; } .demo-bit.b5 { --dx: -40px; --dy: -2px; }
+        @keyframes demoBit { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(200deg); } }
         .site-rush { border-color: #d1ad5b !important; color: #e6c66e !important; background: rgba(209,173,91,.08); }
         .bld-cats { display: flex; flex-wrap: nowrap; gap: 2px; padding: 0 2px 6px; overflow-x: auto; scrollbar-width: thin; }
         #bld-hint { display: none; position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 9000; max-width: 640px; padding: 8px 14px; font-size: 12.5px; color: #f3e7c9;
@@ -1985,6 +2004,31 @@
                 clickLayer(tl, { freq: 1700, q: 3.5, gain: 0.6, dur: 0.014 });
                 clickTone(tl, 150, 0.2, 0.03);
                 sfxQuietUntil = performance.now() + 700;                          // swallow the UI clicks fired by setup
+                lastClickAt = performance.now();
+            } catch (e) { console.warn('Audio skipped', e); }
+        }
+
+        // Demolition: a ripple of cutting charges, the main detonation, then the building's long collapse — rumble, grinding and falling debris
+        function sfxDemolish() {
+            try {
+                initSfxBus(); if (audioCtx.state !== 'running') audioCtx.resume();
+                const t = audioCtx.currentTime + 0.02;
+                [0, 0.09, 0.16, 0.27, 0.33].forEach((d, i) => {                      // linear cutting charges: sharp cracks
+                    sfxNoise(t + d, 0.07, 0.5 - i * 0.04, 3200, 900, 'bandpass', 1.2);
+                    clickLayer(t + d, { freq: 2600, q: 1, gain: 0.5, dur: 0.01 });
+                });
+                const tb = t + 0.45;
+                sfxTone(tb, 62, 'sine', 1.0, 0.004, 1.6, 26);                         // the main blast: sub thump
+                sfxNoise(tb, 0.5, 0.75, 1800, 160, 'lowpass', 0.7);                    // blast air
+                sfxTone(tb + 0.02, 110, 'triangle', 0.35, 0.01, 0.6, 45, 500);
+                const tc = tb + 0.35;
+                sfxNoise(tc, 3.2, 0.55, 520, 70, 'lowpass', 0.6);                      // the collapse: a long low rumble that settles
+                sfxNoise(tc + 0.2, 2.4, 0.22, 1400, 300, 'bandpass', 0.8);             // concrete grinding
+                for (let k = 0; k < 16; k++) {                                         // debris raining down, thinning out
+                    const at = tc + 0.15 + Math.pow(k / 16, 1.6) * 2.6 + Math.random() * 0.08;
+                    sfxNoise(at, 0.05 + Math.random() * 0.06, 0.22 * (1 - k / 20), 2500 + Math.random() * 2500, 700, 'bandpass', 1.5);
+                }
+                sfxNoise(tc + 2.2, 1.8, 0.1, 900, 2600, 'highpass', 0.5);               // dust hiss at the end
                 lastClickAt = performance.now();
             } catch (e) { console.warn('Audio skipped', e); }
         }
@@ -6657,9 +6701,10 @@
             const mineSite = site && (site.owner === state.playerIso || site.host === state.playerIso);
             // Demolish one of your own buildings (instant, 50% salvage) — before "shut down" and before budget policy ("scrap the university")
             { const dm = demolishOrderOf(text, s, site, mineSite, type); if (dm) return dm; }
-            // Manage one of our own facilities
-            if (mineSite && (SHUT_RX.test(s) || RESTART_RX.test(s) || REPAIR_RX.test(s)) && !STRIKE_RX.test(s)) {
-                return { cat: 'construction', kind: REPAIR_RX.test(s) ? 'repair' : RESTART_RX.test(s) ? 'restart' : 'shutdown', siteTarget: site.id, targets: [], scale: 1, covert: COVERT_RX.test(s), blocs: [] };
+            // Manage one of our own facilities ("shut down the tank factory" names it by its type)
+            const manage = (SHUT_RX.test(s) || RESTART_RX.test(s) || REPAIR_RX.test(s)) && !STRIKE_RX.test(s) && !DEMOLISH_POLICY_RX.test(s) ? (mineSite ? site : !site && type ? ownSiteFor(text, type) : null) : null;
+            if (manage) {
+                return { cat: 'construction', kind: REPAIR_RX.test(s) ? 'repair' : RESTART_RX.test(s) ? 'restart' : 'shutdown', siteTarget: manage.id, targets: [], scale: 1, covert: COVERT_RX.test(s), blocs: [] };
             }
             // Joint infrastructure with other countries ("Negotiate a rail line with Pakistan and Iran")
             { const jt = jointProjectOf(text, s, type); if (jt) return jt; }
@@ -6734,7 +6779,7 @@
             const kind = cat === 'military' ? (!aggressive ? (/(arms|weapons|ammunition|military aid|deliver|supply)/.test(s) && targets.length && !targets.some(t => t.stance === 'hostile') ? 'arms' : 'posture') :
                         WAR_RX.test(s) ? 'invasion' : (STRIKE_RX.test(s) || OFFENSIVE_RX.test(s)) ? 'strike' : /blockade|seize/.test(s) ? 'blockade' :
                         /(arms|weapons|ammunition|air.defen|military aid|deliver|supply)/.test(s) && targets.some(t => t.stance === 'friendly') ? 'arms' : 'posture') :
-                        cat === 'economy' ? (/(raise|increase|hike).{0,15}(tax|vat)|austerity|cut spending|privati/.test(s) ? 'revenue' :
+                        cat === 'economy' ? (/(raise|increase|hike).{0,15}(tax|vat)|austerity|cut spending|privati|\b(cut|scrap|abolish|end|remove|phase out|slash|reduce|lift)\w* .{0,20}subsid/.test(s) ? 'revenue' :
                                             /(bond|loan|borrow|imf|swap line)/.test(s) ? 'borrow' :
                                             /(tariff|embargo|ban)/.test(s) && targets.length ? 'tariff' :
                                             /(trade|agreement|deal|export|import)/.test(s) ? 'trade' : 'spend') :
@@ -6845,7 +6890,7 @@
             } else if (o.cat === 'diplomacy' && main) {
                 prob += getRel(me, main.iso) / 220 + (main.stance === 'hostile' ? 0.15 : 0);
             } else if (o.cat === 'intelligence') prob = 0.6 + (stab - 50) / 400;
-            else if (o.cat === 'construction') prob = o.started ? 0.95 : 0.84 + (stab - 50) / 300;
+            else if (o.cat === 'construction') prob = o.started || o.kind === 'demolish' ? 0.95 : 0.84 + (stab - 50) / 300;
             if (o.kind === 'move' || o.kind === 'withdraw') prob = 0.88 + (stab - 50) / 400;
             prob += (o.dirProb || 0) + D().prob;
             if (main && state.intel && state.intel[main.iso] && state.intel[main.iso].until > state.dayIndex) prob += 0.05 * (state.intel[main.iso].lvl || 1);
@@ -7489,12 +7534,14 @@
             const p = nationIso(state.playerIso);
             const run = [], skipped = [];
             state.orders.queue.forEach(o => {
+                if (o.dropped) { removeProposed(o.id); return; }                               // its building was demolished earlier in this batch
                 if (o.cost > 0 && o.cost > p.treasury) { skipped.push(o); return; }        // a free order is never blocked by an empty treasury
                 p.treasury -= o.cost;
                 o.status = 'active'; o.elapsed = 0; o.issued = state.date.toLocaleDateString();
                 state.orders.history.push(o); run.push(o);
                 removeProposed(o.id);
                 if (o.cat === 'construction' && o.kind === 'build') { const st = startSiteFromOrder(o); if (st && st.host === state.playerIso) beginConstruction(st, o); }   // own land: work starts now
+                if (o.cat === 'construction' && o.kind === 'demolish') demolishSite(o.siteTarget, { order: o });               // instant: salvage, sound, collapse
                 if (o.kind === 'move') startMoveFromOrder(o);
                 envoyNotice(o);
                 state.weekOrders++;
@@ -7838,7 +7885,10 @@
         const RND_RX = /\b(\d+(st|nd|rd|th)|sixth|fifth|seventh|next)[- ]?gen(eration)?\b|\b(prototype|design|develop|research)/;
         function isUnitProduction(s) { return UNIT_PROD_RX.test(s) && !FACILITY_RX.test(s) && !RND_RX.test(s); }
         // tearing down your own building (salvage) — "scrap" only counts when one of your sites is named
-        const DEMOLISH_RX = /\b(demolish\w*|raze|razing|tear (it |them )?down|tear down|bulldoze|knock (it )?down|flatten|level the|salvage|dismantle and sell)\b/;
+        const DEMOLISH_RX = /\b(demolish\w*|raze|razing|tear (it |them )?down|tear down|bulldoze\w*|knock (it )?down|pull down)\b/;
+        const DEMOLISH_WEAK_RX = /\b(scrap|dismantle|flatten|level the|salvage)\b/;            // only with one of your buildings named
+        // budget and policy words: "scrap the education budget", "scrap university tuition fees", "scrap the nuclear deal" are policies, not demolitions
+        const DEMOLISH_POLICY_RX = /\b(budgets?|spending|funding|subsid\w*|fees?|tuition|tax\w*|tariffs?|deals?|agreements?|treat(y|ies)|accords?|plans?|programmes?|programs?|polic(y|ies)|laws?|bills?|rules?|regulations?|reforms?|service|conscription|draft|sanctions?|barriers?|red tape|quotas?|bans?|grants?|schemes?|contracts?|economy|inflation|playing field|curve|opposition|protests?|corruption|monopoly|cartel)\b/;
         // a strong building verb with no catalogue match: the game (or the AI) defines a new type from the words
         const BUILD_INTENT_RX = /\b(build|building|construct|constructing|erect|put up|start work on|break ground on|lay the foundations? (of|for))\b/;
 
@@ -8666,6 +8716,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         // the checks a build order must pass before it is queued (command bar, advisor chips, Build menu)
         function buildValidateOrder(o) {
             if (!o || o.cat !== 'construction') return null;
+            if (o.kind === 'demolish' && o.notOurs) return `⛔ That building belongs to ${esc(shortName(o.notOurs))} — you can only demolish your own buildings.`;
             if (o.kind === 'demolish' && !o.siteTarget) return `⛔ No building of yours matches “${esc(o.text)}”. Name it as it appears in the Sites tab, or use its 🧨 Demolish button.`;
             if (o.kind !== 'build' || !o.loc || o.loc.lat === undefined) return null;
             const r = canBuildAt(o.siteType, o.loc.lat, o.loc.lng);
@@ -8755,7 +8806,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 <div style="margin-top:8px">${rows.map(([k, v]) => `<div class="sp-row"><span>${k}</span><span>${v}</span></div>`).join('')}</div>
                 ${site.desc ? `<div style="font-size:11px;color:#cbd5e1;margin-top:7px;font-style:italic">${esc(site.desc)}</div>` : ''}
                 ${notes ? `<div style="margin-top:6px">${notes}</div>` : ''}
-                ${site.owner === state.playerIso && site.status === 'construction' ? `<div class="sp-acts">${expediteButtons(site, 'gs-btn')}</div>` : ''}
+                ${canDemolish(site) ? `<div class="sp-acts">${expediteButtons(site, 'gs-btn')}<button type="button" class="gs-btn demo-btn" onclick="askDemolish('${site.id}')" title="Tear it down at once; 50% of its cost comes back">🧨 Demolish +${formatVal(salvageValue(site))}</button></div>` : ''}
             </div>`;
         }
         function siteIcon(site) {
@@ -8844,7 +8895,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                         <span class="cc-pill" style="border-color:${col};color:${col}">${STATUS_LABEL[s.status]}</span>
                     </div>
                     ${s.status === 'construction' ? `<div class="cc-bar mt-1.5"><div style="width:${Math.round(s.progress * 100)}%;background:${col}"></div></div>` : ''}
-                    ${s.status === 'construction' && s.owner === me && s.buildDays ? `<div class="flex flex-wrap items-center gap-1 mt-1.5"><span class="text-[10px] font-mono text-slate-400 mr-auto">${Math.round(s.progress * 100)}% · ready ~${fmtDate(dateIn(Math.max(1, Math.round(s.buildDays * (1 - s.progress)))))}</span>${expediteButtons(s, 'cc-pill cursor-pointer site-rush')}</div>` : ''}
+                    ${s.owner === me && canDemolish(s) ? `<div class="flex flex-wrap items-center gap-1 mt-1.5"><span class="text-[10px] font-mono text-slate-400 mr-auto">${s.status === 'construction' && s.buildDays ? `${Math.round(s.progress * 100)}% · ready ~${fmtDate(dateIn(Math.max(1, Math.round(s.buildDays * (1 - s.progress)))))}` : s.econ && (s.econ.rev || s.econ.upk) ? `+${fmtMoney(s.econ.rev)} / −${fmtMoney(s.econ.upk)} a month` : ''}</span>${expediteButtons(s, 'cc-pill cursor-pointer site-rush')}<button type="button" class="cc-pill cursor-pointer site-demo" onclick="event.stopPropagation();askDemolish('${s.id}')" title="Demolish: +${formatVal(salvageValue(s))} salvage">🧨</button></div>` : ''}
                 </div>`;
             }).join('');
         }
@@ -8997,8 +9048,12 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
 
         function resolveConstruction(o, outcome, m, fx) {
             const me = state.playerIso, p = nationIso(me);
+            if (o.kind === 'demolish') {                                       // done at Execute
+                if (!o.demoFx) { o.outcome = 'Failure'; fx('Nothing was demolished — the building was already gone', false); return; }
+                o.outcome = 'Success'; fx(o.demoFx, true); return;
+            }
             const site = state.sites.find(s => s.id === o.siteId || s.id === o.siteTarget);
-            if (!site) { fx('Site not found', false); return; }
+            if (!site) { if (o.voided) { o.outcome = 'Cancelled'; fx(`Cancelled — ${o.voided}${o.refunded ? ` (${formatVal(o.refunded)} refunded)` : ''}`, null); } else fx('Site not found', false); return; }
             const T = siteT(site.type);
             if (o.kind === 'build') {
                 const host = site.host;
@@ -9188,12 +9243,99 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             return L.find(x => x.place && t.includes(' ' + normName(x.place) + ' ')) || L[L.length - 1];
         }
         function demolishOrderOf(text, s, site, mineSite, type) {
-            const scrap = /\b(scrap|dismantle|decommission and demolish)\b/.test(s);
-            if (!DEMOLISH_RX.test(s) && !(scrap && (mineSite || (type && ownSiteFor(text, type))))) return null;
+            const strong = DEMOLISH_RX.test(s);
+            if (!strong && !DEMOLISH_WEAK_RX.test(s)) return null;
+            // a policy word that is not part of the building's own name → a policy order ("scrap the refinery subsidy")
+            const nm = site ? ' ' + normName(site.name) + ' ' : '';
+            if ((s.match(new RegExp(DEMOLISH_POLICY_RX.source, 'g')) || []).some(w => !nm.includes(' ' + w + ' '))) return null;
             if (site && !mineSite) return null;                                         // "flatten their air base" is a strike, not a demolition
+            const me = state.playerIso, out = x => ({ cat: 'construction', kind: 'demolish', siteTarget: x ? x.id : null, targets: [], scale: 1, covert: false, blocs: [], intel: null });
+            if (site && site.owner !== me) { const o = out(null); o.notOurs = site.owner; return o; }   // a foreign company's plant on your soil
             const target = mineSite ? site : type ? ownSiteFor(text, type) : null;
-            if (!target && (STRIKE_RX.test(s) || detectCountries(text).some(f => f.iso !== state.playerIso))) return null;
-            return { cat: 'construction', kind: 'demolish', siteTarget: target ? target.id : null, targets: [], scale: 1, covert: false, blocs: [], intel: null };
+            if (target) return out(target);
+            if (!strong || STRIKE_RX.test(s) || detectCountries(text).some(f => f.iso !== me)) return null;
+            // "demolish the old stadium" (you have none): say so; "demolish illegal slums" or "tear down the wall" are not about your buildings
+            return type || FACILITY_RX.test(s) || /\b(building|structure|tower|stadium|bridge|dam)\b/.test(s) ? out(null) : null;
+        }
+        function salvageValue(site) {
+            if (!site) return 0;
+            const paid = site.cost || Math.round(catalogBase(site.type, site.owner) * D().cost);
+            return Math.round(paid * (site.status === 'destroyed' ? 0.1 : site.status === 'damaged' ? 0.3 : 0.5));       // 50% back; a bombed building less, a ruin is worth scrap only
+        }
+        function canDemolish(site) { return !!site && site.owner === state.playerIso && !['cancelled'].includes(site.status); }
+        // the button on the project card / Sites tab asks once, then demolishes at once
+        function askDemolish(id) {
+            const site = (state.sites || []).find(s => s.id === id); if (!canDemolish(site)) return;
+            playClick();
+            try { const m = state.markers[id]; if (m && m.closePopup) m.closePopup(); } catch (e) { }
+            const gar = typeof army === 'function' && state.army ? army().units.filter(u => u.baseId === id).length : 0;
+            try { document.getElementById('command-center').classList.remove('hidden'); ccTab('orders'); } catch (e) { }       // the question shows where replies show
+            flashReply(`🧨 Demolish <b>${esc(site.name)}</b>? It is torn down at once and <b>${formatVal(salvageValue(site))}</b> (${site.status === 'destroyed' ? '10% of its cost: the ruin is scrap' : site.status === 'damaged' ? '30% of its cost: it is damaged' : '50% of its cost'}) returns to the treasury.${gar ? ` Its ${gar} garrisoned unit${gar === 1 ? '' : 's'} will move to another base.` : ''}${(state.orders.queue || []).some(o => o.siteTarget === id) ? ' Orders queued for it are dropped.' : ''}
+                <div class="flex gap-2 mt-2"><button type="button" class="gs-btn" style="border-color:#e0604a;color:#fca5a5" onclick="demolishSite('${id}')">🧨 Demolish now</button><button type="button" class="gs-btn" onclick="document.getElementById('cc-advisor-reply').classList.add('hidden')">Keep it</button></div>`);
+        }
+        // DEMOLITION: instant, 50% salvage, sound and a dust-and-collapse animation on the map; the site's effects and garrison go with it
+        function demolishSite(id, opt = {}) {
+            const me = state.playerIso, i = (state.sites || []).findIndex(s => s.id === id), site = state.sites[i];
+            if (!canDemolish(site)) { if (!opt.order) flashReply('⛔ Only your own buildings can be demolished.'); return null; }
+            const T = siteT(site.type), p = nationIso(me), v = salvageValue(site), extra = [];
+            p.treasury += v;
+            try { sfxDemolish(); } catch (e) { }
+            try { demolishFx(site); } catch (e) { }
+            // effects granted once on completion go with the building (revenue, upkeep, power, education, stability… are read from the live list of buildings)
+            if (site.fromGame && site.completed && T.defense && state.mods) state.mods.defense = Math.max(0, (state.mods.defense || 0) - T.defense);
+            // a base expansion still being built: its money comes back in full
+            if (site.expandDay && site.expandDay > (state.dayIndex || 0) && typeof expandCost === 'function') { const c = expandCost(site); p.treasury += c; extra.push(`${formatVal(c)} for the unfinished expansion refunded`); }
+            // garrison: to the nearest other base with room (ships to naval bases), else into the field where the base stood; recruits keep training
+            let moved = 0, field = 0;
+            try { if (typeof army === 'function' && state.army) {
+                const others = myBases().filter(b => b.id !== id);
+                army().units.forEach(u => {
+                    if (u.path && u.path.to && u.path.to.baseId === id) u.path.to.baseId = null;
+                    if (u.baseId !== id) return;
+                    const sea = !!(typeof BRIG !== 'undefined' && BRIG[u.type] && BRIG[u.type].sea), fits = b => (sea ? b.type === 'naval' : b.type !== 'naval') && baseLoad(b) + u.troops <= baseCap(b);
+                    const b = others.filter(fits).sort((a, c) => (a.type === site.type ? 0 : 1) - (c.type === site.type ? 0 : 1) || km(a, site) - km(c, site))[0];
+                    const training = u.status === 'training';
+                    if (b) { u.baseId = b.id; u.lat = b.lat; u.lng = b.lng; if (!training) u.status = 'garrison'; }
+                    else { u.baseId = null; if (!training) u.status = 'deployed'; u.lat = site.lat + rnd(-0.1, 0.1); u.lng = site.lng + rnd(-0.1, 0.1); field++; }
+                    moved++;
+                });
+                if (moved) { try { armyRefreshMap(); } catch (e) { } extra.push(`${moved} unit${moved === 1 ? '' : 's'} rehoused${field ? ` (${field} in the field — no other base had room)` : ''}`); }
+            } } catch (e) { console.warn('demolish garrison', e); }
+            // orders about this building: queued ones are dropped; paid ones still running are cancelled (repairs and restarts refunded)
+            const drop = state.orders.queue.filter(o => o !== opt.order && (o.siteTarget === id || o.siteId === id));
+            if (drop.length) { drop.forEach(o => { o.dropped = true; }); state.orders.queue = state.orders.queue.filter(o => !drop.includes(o)); extra.push(`${drop.length} queued order${drop.length === 1 ? '' : 's'} for it removed`); }
+            (state.orders.history || []).forEach(o => {
+                if (o === opt.order || o.status !== 'active' || (o.siteTarget !== id && o.siteId !== id)) return;
+                o.voided = 'the building was demolished';
+                if (['repair', 'restart'].includes(o.kind) && o.cost > 0) { p.treasury += o.cost; extra.push(`${formatVal(o.cost)} for the ${o.kind} refunded`); o.refunded = o.cost; }
+            });
+            // tearing down an enrichment or weapons plant reassures the IAEA and the West
+            if (['enrichment', 'nuke_weapon'].includes(site.type) && site.status !== 'destroyed') {
+                ['USA', 'GBR', 'FRA', 'DEU', 'ISR'].forEach(x => { if (x !== me) addRel(me, x, 8); });
+                logEvent(`🕊 IAEA welcomes ${esc(state.player)}'s decision to demolish ${esc(site.name)}.`, 'good');
+            }
+            // the marker crumbles, then goes
+            const mk = state.markers[id];
+            try { const el = mk && mk.getElement && mk.getElement(); if (el) el.classList.add('site-crumble'); if (mk && mk.closePopup) mk.closePopup(); } catch (e) { }
+            setTimeout(() => { try { if (mk) getLayerGroup(site.layer).removeLayer(mk); } catch (e) { } try { if (mk && mk.remove) mk.remove(); } catch (e) { } }, 900);
+            delete state.markers[id];
+            try { const ln = window.__siteLines && window.__siteLines[id]; if (ln) { map.removeLayer(ln); delete window.__siteLines[id]; } } catch (e) { }
+            state.sites.splice(i, 1);
+            const line = `${site.name} demolished — ${formatVal(v)} salvage returned to the treasury${extra.length ? '; ' + extra.join('; ') : ''}.`;
+            if (opt.order) opt.order.demoFx = line;
+            logEvent(`🧨 ${esc(line)}`, 'neutral', 'log');
+            if (!opt.order) flashReply(`🧨 ${esc(line)}`);
+            try { renderSitesTab(); renderOps(); updateSitesStat(); updateEconomyUI(); renderQueue(); updateCapacity(); if (typeof renderMilPanel === 'function') renderMilPanel(); } catch (e) { }
+            return v;
+        }
+        // dust cloud, debris and the building sinking — a temporary marker at the site (works the same in both map engines)
+        function demolishFx(site) {
+            if (typeof L === 'undefined' || typeof map === 'undefined') return;
+            const T = siteT(site.type);
+            const html = `<div class="demo-fx"><div class="demo-flash"></div><div class="demo-ring"></div><div class="demo-dust d1"></div><div class="demo-dust d2"></div><div class="demo-dust d3"></div>` +
+                `<div class="site-dot st-${site.status} demo-sink" style="width:26px;height:26px">${T.icon}</div>` + [0, 1, 2, 3, 4, 5].map(k => `<i class="demo-bit b${k}"></i>`).join('') + `</div>`;
+            const fx = L.marker([site.lat, site.lng], { interactive: false, zIndexOffset: 2000, icon: L.divIcon({ className: 'site-pin', html, iconSize: [90, 90], iconAnchor: [45, 45] }) }).addTo(map);
+            setTimeout(() => { try { map.removeLayer(fx); } catch (e) { } try { fx.remove && fx.remove(); } catch (e) { } }, 2600);
         }
 
         // Daily: construction progress, covert discovery
@@ -19324,7 +19466,7 @@ function armyTick() {              // runs on every game-clock tick; movement fo
     if (dt <= 0) return;
     let changed = false;
     A.units.forEach(u => {
-        if (u.status === 'training' && state.dayIndex >= u.readyDay) { u.status = 'garrison'; changed = true; logEvent(`🎖 ${esc(u.name)} has finished training (${u.troops.toLocaleString()} troops).`, 'good'); }
+        if (u.status === 'training' && state.dayIndex >= u.readyDay) { u.status = u.baseId ? 'garrison' : 'deployed'; changed = true; logEvent(`🎖 ${esc(u.name)} has finished training (${u.troops.toLocaleString()} troops).`, 'good'); }
         if (u.status !== 'moving' || !u.path) return;
         const step = BRIG[u.type].speed * dt, d = km(u, u.path.to);
         if (d <= step) {
