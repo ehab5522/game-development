@@ -9548,6 +9548,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (e && e.code === 'empty') return `${m} Try again, or choose another model.`;
             if (e && e.code === 'budget') return `${m} The model spent its whole token budget (probably thinking) before answering, even after a retry with a larger budget. Try again or choose a faster model.`;
             if (e && e.code === 'json') return `${m} The model did not follow the reply format, even after a retry. A larger model usually does.`;
+            if (((e && e.code === 'network') || /Failed to fetch|NetworkError|Load failed|network error/i.test(m)) && AI.provider !== 'ollama' && typeof navigator !== 'undefined' && navigator.onLine === false) return `This computer is offline — no internet connection, so ${aiHost()} cannot be reached.`;
             if ((e && e.code === 'network') || /Failed to fetch|NetworkError|Load failed|network error/i.test(m)) return AI.provider === 'ollama' ? `Cannot reach Ollama at ${AI.ollamaUrl}. Is it running, and started with OLLAMA_ORIGINS="*"?`
                 : `The browser could not reach ${aiHost()} — the request was blocked (CORS) or the network is down. Usual causes: an ad-blocker or privacy extension, a corporate proxy/firewall, or no internet. Try disabling extensions for this page or another browser profile.`;
             if (st === 401 || /invalid.*(x-api-key|api.?key)|authentication|API key not valid|incorrect api key|unauthori[sz]ed/i.test(m)) return `${aiHost()} rejected the API key${st ? ' (' + st + ')' : ''}. Check that you pasted the whole key, for the right provider, and that it is still active.`;
@@ -9575,13 +9576,15 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         async function aiFetchJSON(url, init = {}, ms = 30000) {
             const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
             const tm = ac ? setTimeout(() => ac.abort(), ms) : null;
-            let r;
-            try { r = await fetch(url, ac ? { ...init, signal: ac.signal } : init); }
-            catch (e) {
+            let r, d = null;
+            try {
+                r = await fetch(url, ac ? { ...init, signal: ac.signal } : init);
+                try { d = await r.json(); } catch (e) { if (e && e.name === 'AbortError') throw e; }   // the body read is covered by the same timeout
+            } catch (e) {
                 if (e && e.name === 'AbortError') throw aiErr('No answer after ' + Math.round(ms / 1000) + ' s.', { code: 'timeout', ms });
                 throw aiErr(String((e && e.message) || e), { code: 'network' });
             } finally { if (tm) clearTimeout(tm); }
-            let d = null; try { d = await r.json(); } catch (e) { }
+            if (r.ok && (d === null || typeof d !== 'object')) throw aiErr('The AI server sent a reply the game could not read (not JSON) — check the address / proxy.', { code: 'badreply', status: r.status });
             if (!r.ok) {
                 const ra = parseFloat(r.headers && r.headers.get && r.headers.get('retry-after'));
                 const er = d && d.error, em = er && (er.message || (typeof er === 'string' ? er : '')) || (d && d.message);
@@ -9838,6 +9841,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             } catch (e) { }
         }
         try { document.getElementById('deploy-btn').addEventListener('click', () => setTimeout(aiStartNotice, 2500)); } catch (e) { }
+        { const _asAI = applySave; applySave = function (d) { _asAI(d); setTimeout(aiStartNotice, 1500); }; }   // a loaded campaign gets the same notice
         setTimeout(renderAIIndicator, 0);
 
         // =====================================================================
@@ -11964,7 +11968,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const c = I.c;
             // 0) Small talk / greetings — no decision needed; let the AI answer naturally, offline give a style-flavoured line
             if (/^\s*(hi|hello|hey|yo|greetings|good (morning|afternoon|evening|day)|how are you|how'?s it going|sal;?am|bonjour|nice to (meet|see)|pleasure)\b/.test(s) && text.trim().length < 60 && !/\b(trade|deal|sanction|war|peace|weapon|alliance|threat|nuclear)\b/.test(s)) {
-                const greet = (typeof fpLine === 'function') ? fpLine(iso, 'greet') : 'We receive your message.';
+                const greet = rel > 40 ? pick([`Good to hear from you, friend. What can we do together?`, `Always a pleasure to hear from ${state.player}. What is on your mind?`]) : (typeof fpLine === 'function') ? fpLine(iso, 'greet') : 'We receive your message.';
                 const cold = rel < -40 ? ` Relations are at ${rel}; words alone will not change that.` : '';
                 return out(c && I.enemy ? `${greet} Though the ${c.name} still stands between us.${cold}` : `${greet}${cold}`, rel > 20 ? 1 : 0, ['Let us talk about trade.', c ? 'What are your terms?' : 'What matters most to you right now?'], false);
             }
@@ -13002,6 +13006,13 @@ function resolveIntelOp(o, outcome, m, fx) {
             n.stability = clamp(n.stability - Math.round(5 * m), 0, 100); state.mods.defense += 0.2;
             fx(`The operation against ${tN} succeeds — leadership shaken (its stability −${Math.round(5 * m)})`, true);
         }
+        // military targets (air defences, bases, command networks, missile sites, generals): a temporary hit to the target's armed forces
+        if (['cyber', 'sabotage', 'assassinate'].includes(type) && /\b(military|army|armed forces|air.?defen[cs]e|radar|navy|naval|fleet|air ?base|base|missile|drone|command|general|commander|officer|weapons?|arms depot|ammunition|munitions?|nuclear)/.test((o.text || '').toLowerCase())) {
+            try {   // covert ops can wear a force down only so far (at most ~10% of its strength, fading over months)
+                const so = socOf(iso), cur = so.milAtt || 0, hit = Math.min((type === 'assassinate' ? 0.06 : 0.1) * m, Math.max(0, 0.4 - cur));
+                if (hit > 0.005) { so.milAtt = cur + hit; fx(`${tN}'s armed forces set back (strength −${Math.max(1, Math.round(hit * 25))}% for a few months)`, true); }
+            } catch (e) { }
+        }
     } else fx(`The operation against ${tN} failed`, false);
     // ----- exposure: scaled by covertness, outcome, the target's capacity and type (never starts a war) -----
     let cap = 1; try { cap = clamp(power(iso) / Math.max(1, power(me)), 0.3, 2.2); } catch (e) { }
@@ -13015,7 +13026,7 @@ function resolveIntelOp(o, outcome, m, fx) {
         fx(`Operation EXPOSED — ${tN} reacts (relations −${pen})`, false);
         (o.worldReaction = o.worldReaction || []).push({ iso, stance: 'oppose', action: 'expel', text: `${tN} exposes the operation and expels intelligence officers.` });
         try { if (typeof fpLine === 'function') queueMessage(iso, fpLine(iso, 'exposed')); else queueMessage(iso, `Our counter-intelligence has exposed your operation. Your officers have 48 hours to leave.`); } catch (e) { }
-        try { state.counterOn[iso] = state.dayIndex + 90; if (typeof reactDo === 'function' && Math.random() < 0.6) reactDo(iso, 'expel', { intel: true }); } catch (e) { }
+        try { state.counterOn[iso] = state.dayIndex + 90; if (typeof reactDo === 'function' && Math.random() < 0.6) reactDo(iso, 'expel', { intel: true, noMem: true }); } catch (e) { }
     } else if (good) fx('The operation stayed deniable', true);
 }
 
@@ -15147,7 +15158,7 @@ function reactRecord(o) {
             const exposed = o.intelExposed;
             T.filter(t => t.stance !== 'friendly').map(t => t.iso).concat(hostile).forEach(i => {
                 reactAdd(i, 'i', base * m * (1 - 0.6 * fpOf(i).intelTol) * (exposed ? 1.8 : 1));
-                if (exposed && ['sabotage', 'assassinate'].includes(typ)) reactAdd(i, 'g', 5 * m);   // an exposed attack that kills/destroys does breed some open grievance
+                if (exposed && ['sabotage', 'assassinate'].includes(typ)) reactAdd(i, 'i', 8 * m);   // an exposed attack that kills/destroys is resented more — still never a war-grievance
             });
         }
     } else if (o.cat === 'humanitarian') friendly.concat(hostile).forEach(i => reactAdd(i, 'w', 15 * m));
@@ -15175,7 +15186,7 @@ function worldNotice(o, skip) {
     // nobody directly involved: our closest partner still takes note (a light line, spam-controlled)
     if (!cast.length && !skip && o.cat !== 'intelligence') {
         try {
-            const ob = Object.keys(WORLD).filter(x => x !== me && !NON_SOVEREIGN.has(x)).map(x => [x, getRel(me, x)]).sort((a, b) => b[1] - a[1])[0];
+            const ob = Object.keys(WORLD).filter(x => x !== me && !NON_SOVEREIGN.has(x) && (WORLD[x][2] || 0) >= 30).map(x => [x, getRel(me, x)]).sort((a, b) => b[1] - a[1])[0];
             if (ob) add(ob[0], 'note');
         } catch (e) { }
     }
@@ -15195,7 +15206,7 @@ function worldNotice(o, skip) {
         // one light, spam-controlled line (don't flood every order)
         try {
             if (typeof routineAllowed === 'function' && routineAllowed(i, o.text.slice(0, 40))) {
-                reactDo(i, action, { order: o.text.slice(0, 60) });
+                reactDo(i, action, { order: o.text.slice(0, 60), noMem: true });   // reactRecord already booked the grievance/goodwill
                 if (Math.random() < 0.5 && action !== 'note') queueMessage(i, fpLine(i, kind === 'praise' ? 'praise' : kind === 'hitback' ? 'hitback' : 'concern'));
                 spoke++;
             }
@@ -15264,7 +15275,10 @@ const REACT_NONKINETIC = ['protest', 'summon', 'expel', 'counter_intel', 'cybera
 function reactDo(iso, action, ctx = {}) {
     const fn = REACT_ACT[action] || REACT_ACT.statement;
     const c = Object.assign({ me: state.playerIso, p: nationIso(state.playerIso), nm: esc(state.player), en: esc(shortName(iso)), atWar: false, intel: false }, ctx);
+    // noMem: the caller already booked (or is cooling) this country's grievance — acting must not feed its own anger back (no escalation loop)
+    const R = reactState(), keep = ctx.noMem ? ['g', 'f', 'w', 'i'].map(k => [k, R[k][iso]]) : null;
     try { const r = fn(iso, c); if (r && r[0]) { reactLog(iso, r[0], r[1]); return true; } } catch (e) { console.warn('reactDo', action, e); }
+    finally { if (keep) keep.forEach(([k, v]) => { if (v === undefined) delete R[k][iso]; else R[k][iso] = v; }); }
     return false;
 }
 // pick a realistic answer to an intelligence operation for this country (never kinetic, never war)
@@ -15272,7 +15286,7 @@ function fpRespondIntel(iso, sev) {
     const f = fpOf(iso), opts = f.covert.slice();
     if (sev > 1.1 && f.style === 'hawk') opts.push('cyberattack');
     const a = pick(opts);
-    reactDo(iso, a, { intel: true });
+    reactDo(iso, a, { intel: true, noMem: true });
     queueMessage(iso, fpLine(iso, 'exposed'));
 }
 
@@ -15332,7 +15346,7 @@ function reactWeekly() {
             else if (canStrike && Math.random() < f.kinetic) t = pick(['strike', 'strike', 'cyberattack']);
             else if (Math.random() < f.econ) t = pick(['sanctions', 'tariffs', 'freeze', 'embargo']);
             else t = pick(f.style === 'dove' ? ['protest', 'recall', 'rally'] : ['expel', 'rally', 'recall']);
-            reactDo(i, t, { atWar });
+            reactDo(i, t, { atWar, noMem: true });
             if (!['war', 'strike', 'retaliatory_strike'].includes(t)) queueMessage(i, fpLine(i, 'hitback'));
             R.g[i] = (R.g[i] || 0) * (t === 'war' ? 0.5 : 0.75);
         }
