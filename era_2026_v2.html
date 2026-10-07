@@ -113,6 +113,37 @@
         .feed-unread { flex-shrink: 0; min-width: 20px; height: 18px; padding: 0 5px; border-radius: 2px; background: #b8432f; color: #fff; font-size: 10.5px; font-weight: 700;
             display: inline-flex; align-items: center; justify-content: center; font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; }
         .feed-unread.hidden { display: none; }
+        /* Global News: headline cards + article reader; the Activity log keeps the player's own bookkeeping */
+        .news-tabs { display: flex; gap: 2px; padding: 4px 6px 0; background: rgba(12,13,9,.92); border-bottom: 1px solid var(--gs-line2, #3b3726); }
+        .news-tab { font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--gs-dim, #7c7259); padding: 3px 9px 4px; border: 1px solid transparent; border-bottom: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+        .news-tab:hover { color: var(--gs-ink2, #d6ccb0); }
+        .news-tab.on { color: var(--gs-gold, #d1ad5b); border-color: var(--gs-line2, #3b3726); background: rgba(52,52,40,.55); }
+        .news-tab-n { min-width: 15px; height: 14px; padding: 0 4px; border-radius: 2px; background: #b8432f; color: #fff; font-size: 9.5px; line-height: 14px; text-align: center; letter-spacing: 0; }
+        .news-tab-n.hidden { display: none; }
+        #news-list { background: rgba(12,13,9,.88); padding: 6px; display: flex; flex-direction: column; gap: 5px; }
+        .news-card { position: relative; padding: 6px 8px 6px 9px; border: 1px solid var(--gs-line2, #3b3726); border-left: 3px solid var(--gs-line, #5e553c); background: linear-gradient(180deg, rgba(44,44,34,.85), rgba(30,31,24,.85)); cursor: pointer; }
+        .news-card:hover { border-color: var(--gs-gold2, #9c8040); }
+        .news-card.t-bad { border-left-color: #b8432f; } .news-card.t-good { border-left-color: #6f9a3e; } .news-card.k-order { border-left-color: var(--gs-gold, #d1ad5b); }
+        .news-card.unread::after { content: ''; position: absolute; top: 7px; right: 7px; width: 6px; height: 6px; border-radius: 50%; background: #e0a458; }
+        .news-kick { font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--gs-gold, #d1ad5b); display: flex; align-items: center; gap: 5px; }
+        .news-kick .upd { color: #e0a458; }
+        .news-hl { font-family: 'Roboto Condensed', 'Arial Narrow', Arial, sans-serif; font-size: 12.5px; font-weight: 700; line-height: 1.25; color: var(--gs-ink, #ece2c4); margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .news-dek { font-size: 11px; color: var(--gs-muted, #ab9f80); line-height: 1.3; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .news-meta { font-size: 9.5px; color: var(--gs-dim, #7c7259); margin-top: 2px; }
+        .news-empty { font-size: 11px; color: var(--gs-dim, #7c7259); padding: 10px 4px; text-align: center; }
+        .news-art { font-family: Georgia, 'Times New Roman', serif; color: #e9e1c9; }
+        .news-mast { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px double var(--gs-line, #5e553c); padding-bottom: 4px; margin-bottom: 8px; font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; letter-spacing: .14em; text-transform: uppercase; }
+        .news-mast b { font-size: 15px; color: var(--gs-gold, #d1ad5b); } .news-mast span { font-size: 10px; color: var(--gs-muted, #ab9f80); }
+        .news-art h2 { font-size: 22px; line-height: 1.2; font-weight: 700; margin: 4px 0 6px; color: #f4ecd2; }
+        .news-art .dek { font-size: 14px; font-style: italic; color: #cfc4a4; margin-bottom: 8px; }
+        .news-art .by { font-family: 'Roboto Condensed', 'Arial Narrow', Arial, sans-serif; font-size: 10.5px; color: var(--gs-dim, #7c7259); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 8px; }
+        .news-art p { font-size: 13.5px; line-height: 1.55; margin: 0 0 9px; }
+        .news-art .dl { font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+        .news-art blockquote { margin: 10px 0; padding: 6px 12px; border-left: 3px solid var(--gs-gold2, #9c8040); background: rgba(209,173,91,.07); font-size: 14px; font-style: italic; }
+        .news-art blockquote cite { display: block; margin-top: 3px; font-style: normal; font-size: 11px; color: var(--gs-muted, #ab9f80); font-family: 'Roboto Condensed', 'Arial Narrow', Arial, sans-serif; }
+        .news-art h4 { font-family: 'Oswald', 'Arial Narrow', Arial, sans-serif; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--gs-gold, #d1ad5b); margin: 12px 0 5px; }
+        .news-art ul { margin: 0 0 8px; padding-left: 0; list-style: none; } .news-art li { font-size: 13px; line-height: 1.45; margin-bottom: 5px; }
+        .news-art .upd { border-top: 1px solid var(--gs-line2, #3b3726); padding-top: 8px; }
 
         .gs-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .gs-stat { background: rgba(0,0,0,.28); border: 1px solid var(--gs-line2, #3b3726); padding: 6px 8px 7px; }
@@ -758,6 +789,15 @@
             </div>
         </div>
 
+        <!-- NEWS ARTICLE READER -->
+        <div id="news-modal" class="gs-modal hidden" onclick="if(event.target===this)newsClose()">
+            <div class="ui-panel gs-modal-box w-[640px] max-w-[96vw]">
+                <div class="gs-head"><span class="gs-title">📰 Global News</span>
+                    <span class="flex items-center gap-1.5"><button type="button" id="news-prev" class="gs-btn !py-0.5" onclick="newsStep(1)" title="Older article">‹ Older</button><button type="button" id="news-next" class="gs-btn !py-0.5" onclick="newsStep(-1)" title="Newer article">Newer ›</button><button type="button" class="panel-min-btn" onclick="newsClose()" title="Close">✕</button></span></div>
+                <div id="news-body" class="p-4 gs-modal-scroll"></div>
+            </div>
+        </div>
+
         <!-- DIRECTIVE MODAL -->
         <div id="dir-modal" class="gs-modal hidden">
             <div class="ui-panel gs-modal-box w-[980px] max-w-[96vw]">
@@ -1006,14 +1046,16 @@
         <!-- Global Intel Feed: docked bottom-left; the bar stays visible, the feed opens upward -->
         <div id="event-feed-container" class="hidden absolute bottom-3 left-3 feed-dock feed-open flex flex-col text-white pointer-events-auto z-40">
             <div id="feed-body" class="feed-body ui-panel">
-                <div id="event-feed-content" class="p-3 overflow-y-auto flex flex-col gap-1.5 text-xs font-mono h-56 custom-scrollbar">
+                <div class="news-tabs"><span class="news-tab on" data-t="news" onclick="newsTab('news')" title="News articles about your commands and other countries' politics">Headlines <span id="news-tab-n" class="news-tab-n hidden">0</span></span><span class="news-tab" data-t="log" onclick="newsTab('log')" title="Your government's own log: orders, construction, units, trade, alerts">Activity log <span id="log-tab-n" class="news-tab-n hidden">0</span></span></div>
+                <div id="news-list" class="overflow-y-auto h-56 custom-scrollbar"><div class="news-empty">No news yet.</div></div>
+                <div id="event-feed-content" style="display:none" class="p-3 overflow-y-auto flex flex-col gap-1.5 text-xs font-mono h-56 custom-scrollbar">
                     <!-- Events spawn here -->
                 </div>
             </div>
             <div id="event-feed-header" class="feed-bar ui-panel" onclick="toggleFeed()" title="Open / close the intel feed">
                 <span class="cc-chevron feed-chevron">▲</span>
                 <div class="flex flex-col min-w-0 flex-1 leading-tight">
-                    <span class="gs-title">Global Intel Feed</span>
+                    <span class="gs-title">Global News</span>
                     <span id="feed-latest" class="feed-latest">No reports yet.</span>
                 </div>
                 <span id="feed-unread" class="feed-unread hidden">0</span>
@@ -15642,6 +15684,515 @@ function aiReactTick() {
     resolveOrder = function (o) { const r = _ro2(o); try { if ((r || o).ai) aiOrderApply(r || o); } catch (e) { console.warn('ai apply', e); } return r; };
     const _dt = dailyTick;
     dailyTick = function () { const r = _dt.apply(this, arguments); try { aiReactTick(); } catch (e) { console.warn('ai react', e); } return r; };
+}
+
+
+// =====================================================================
+//  NEWS DESK — the Global News reports only (a) what you command (command bar, quick orders) and (b) the politics
+//  of other countries, written as short articles: headline, dateline, body, quotes, reactions. Click a headline to
+//  read it. Your own bookkeeping (order outcomes, construction, unit moves, trade, saves, alerts) goes to the
+//  Activity log tab next to it, so nothing is lost. The rules write every article from the event data; with an AI
+//  connected, the AI rewrites them in its own words (the rules version stays if the AI fails).
+// =====================================================================
+['news'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+let NEWS_TAB = 'news', NEWS_CTX = null, NEWS_OPEN = null, NEWS_ISO2 = null, NEWS_LOGN = 0, NEWS_CLOSEDN = 0;
+const NEWS_OUTLETS = ['ERA World Service', 'Global Wire', 'The Meridian Post', 'Atlas Press Agency', 'Continental Dispatch', 'The Evening Ledger'];
+const NEWS_MAX = 60;
+// routing table — your own bookkeeping → Activity log (checked first, on the plain text of the line)
+const NEWS_LOG_RX = [/^(✔|◐|✖)\s*Order /, /^📜 Order issued/, /^🤖/, /^🏗 (Construction begins|Expanding)/, /expansion complete/i, /^✅/, /^(🎖|🛒|📦|📍|🏠|🗺|💾|⚙|📑|✉|📊|📈|📉|🎓|📌|🌍 World situation|🛡|🤝)/,
+    /^🪖 (?!Coup)/, /^🕵 Intel report/, /^(Command skipped|Timeline can only|Commander deployed|Search:|Sandbox mode)/, /^⚠ (Payment|Not enough|The treasury|Treaty call)/, /^(✔|✖) .*\b(deal|agreement|Agreement)\b/,
+    /^🕊 Talks (scheduled|in )/, /^📜 (?!.*\b(peace treaty|Treaty broken)\b)/, /^🚨 (?!UN Security Council)/, /^There is no African conflict/];
+// lines about other countries that are news even without a flag in front
+const NEWS_WORLD_RX = [/^🪖 Coup/, /^🏳/, /^(💥|🕊|🛢|☢|🛰|💰|🎪|⚡|⚰)/, /^🚨 UN Security Council/, /^⚠ (NATO|.* moves .* toward its border|.* was a close partner)/, /^🏗 .* breaks ground/,
+    /peace treaty|Treaty broken|Security Council|General Assembly|\bcondemns\b|expresses understanding|\bsanctions?\b|retaliat|cyberattack|expels our diplomats|has taken up positions near|counter-tariffs/i,
+    /\b(OPEC\+|African Union|Arab League|European Union|BRICS|NATO)\b/, /\bsummit in\b/i, /^World commodity prices/, /^(Houthi missile|Mineral smuggling)/, /answers the call|joins the war|declines to join|holds back from joining|will not send troops/];
+function newsState() {
+    if (!state.news || !Array.isArray(state.news.items)) state.news = { seq: 0, items: [], seeds: [], lastAI: -99, lastBrief: state.dayIndex || 0 };
+    const N = state.news; if (!Array.isArray(N.seeds)) N.seeds = []; if (N.lastAI === undefined) N.lastAI = -99; if (N.lastBrief === undefined) N.lastBrief = state.dayIndex || 0;
+    return N;
+}
+function newsPlain(html) { return String(html == null ? '' : html).replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/\s+([.,;:!?)])/g, '$1').replace(/\s+/g, ' ').trim(); }
+function newsStrip(t) { return String(t || '').replace(/^[^\p{L}\p{N}"“'(]+/u, '').replace(/\s*\(([^)]*\b(approval|relations|pts|growth|stability|intensity)\b[^)]*)\)/gi, '').trim(); }   // no leading emoji, no game-number asides
+function newsKey(t) { return newsStrip(t).toLowerCase().replace(/[\d.,]+/g, '#').replace(/[^a-z#]+/g, ' ').trim().slice(0, 90); }
+function newsHash(s) { let h = 0; s = String(s); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); }
+function newsName(iso) { try { return iso === state.playerIso ? state.player : shortName(iso); } catch (e) { return iso || ''; } }
+function newsNation(iso) { try { return (iso && (iso === state.playerIso || WORLD[iso])) ? nationIso(iso) : null; } catch (e) { return null; } }
+function newsLeadIso(raw) {
+    const m = String(raw).match(/^\s*<img[^>]*\balt="([A-Za-z]{2})"/); if (!m) return null;
+    if (!NEWS_ISO2) { NEWS_ISO2 = {}; Object.keys(WORLD).forEach(k => { const c = WORLD[k] && WORLD[k][0]; if (c && !NEWS_ISO2[String(c).toLowerCase()]) NEWS_ISO2[String(c).toLowerCase()] = k; }); }
+    const iso = NEWS_ISO2[m[1].toLowerCase()]; if (!iso) return null;
+    try { const p = nationIso(state.playerIso); if (p && p.iso2 && String(p.iso2).toLowerCase() === m[1].toLowerCase()) return state.playerIso; } catch (e) { }
+    return iso;
+}
+function newsFlavorCid(txt) { for (const c of state.conflicts || []) if ((c.flavor || []).includes(txt)) return c.id; return null; }
+function newsConfOf(txt) { const t = String(txt).toLowerCase(); const c = (state.conflicts || []).find(c => c.name && t.includes(c.name.toLowerCase())); return c ? c.id : null; }
+function newsConf(cid) { return cid ? ((state.conflicts || []).find(c => c.id === cid) || CONFLICTS_2026.find(c => c.id === cid) || null) : null; }
+function newsCountries(txt, lead) {
+    const out = lead ? [lead] : [];
+    try { detectCountries(txt).slice(0, 4).forEach(f => { if (!out.includes(f.iso) && WORLD[f.iso]) out.push(f.iso); }); } catch (e) { }
+    return out.slice(0, 4);
+}
+function newsKicker(t) {
+    const s = String(t).toLowerCase();
+    if (/coup|election|vote|government|protest|parliament|president|junta|crackdown|referendum/.test(s)) return 'Politics';
+    if (/ceasefire|truce|talks|mediat|summit|agree|treaty|envoy|prisoner exchange|peace/.test(s)) return 'Diplomacy';
+    if (/sanction|tariff|trade|oil|price|economy|debt|imf|bank|export|import|shipping|insurer/.test(s)) return 'Economy';
+    if (/nuclear|iaea|uranium|warhead|reactor|enrichment/.test(s)) return 'Nuclear';
+    if (/strike|offensive|attack|fighting|clash|drone|missile|troops|forces|war|ambush|rebels|militant|shell|barrage|army/.test(s)) return 'Conflict';
+    return 'World';
+}
+// first sentence of a seed, cleaned into a headline
+function newsHeadline(t) {
+    let h = newsStrip(t).replace(/\s+/g, ' ');
+    // first sentence — but "Lt. Col. Smith" or "U.S." do not end one
+    const rx = /[.!?](?=\s+[A-Z"“]|\s*$)/g; let m;
+    while ((m = rx.exec(h))) { const pre = h.slice(0, m.index).split(/\s+/).pop(); if (m.index >= 20 && !/^(Lt|Col|Gen|Maj|Capt|Cpt|Sgt|Brig|Adm|Cdr|Dr|Mr|Mrs|Ms|St|Jr|Sr|No|Gov|Sen|Rep|Prof|vs|[A-Z]|[A-Z]\.[A-Z]|U\.S|U\.N)$/.test(pre)) { h = h.slice(0, m.index + 1); break; } }
+    h = h.replace(/[.]+$/, '');
+    if (h.length > 110) { const cut = Math.max(h.lastIndexOf(' — ', 105), h.lastIndexOf('; ', 105), h.lastIndexOf(': ', 105), h.lastIndexOf(', ', 105)); h = cut > 40 ? h.slice(0, cut) : h.slice(0, h.lastIndexOf(' ', 105)) + '…'; }
+    return h.charAt(0).toUpperCase() + h.slice(1);
+}
+function newsSentence(t) { let s = newsStrip(t); if (!s) return ''; s = s.charAt(0).toUpperCase() + s.slice(1); return /[.!?…"”]$/.test(s) ? s : s + '.'; }
+function newsPlayerVoice(t) {
+    // reaction lines are written from your side ("our diplomats"); news is written from outside
+    const P = state.player || 'the government';
+    return String(t).replace(/\bour (diplomats|exports|military sites|banks|government|forces|country|allies)\b/gi, `${P}'s $1`).replace(/\bagainst us\b/gi, `against ${P}`).replace(/\bon us\b/gi, `on ${P}`)
+        .replace(/\byour\b/g, `${P}'s`).replace(/(\S\s)you\b/g, `$1${P}`);
+}
+function newsWeekday(d) { return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()]; }
+function newsGet(id) { const N = newsState(); return N.items.find(x => x.id === id) || null; }
+function newsUnread() { const N = state.news; return N && N.items ? N.items.filter(x => !x.read).length : 0; }
+
+// ---- routing: every logEvent line passes through here first ----
+function newsRoute(msg, type, cat) {
+    if (state.phase !== 'playing' || !state.playerIso) return false;
+    if (cat === 'log' || cat === 'ops') return false;
+    const raw = String(msg == null ? '' : msg), txt = newsPlain(raw), me = state.playerIso;
+    if (!txt) return false;
+    if (/^📰/.test(txt)) return newsAIHeadline(newsStrip(txt));          // the AI judge's one-line headline for one of your orders
+    if (cat !== 'world' && cat !== 'news' && NEWS_LOG_RX.some(r => r.test(txt))) return false;
+    const lead = newsLeadIso(raw);
+    const art = NEWS_CTX && NEWS_CTX.newsId ? newsGet(NEWS_CTX.newsId) : null;
+    if (art) { newsReact(art, lead, txt, type); return true; }           // anything that happens while your order resolves belongs to its article
+    // a foreign government answering one of your recent commands: the reaction is added to that command's article
+    const voiced = newsPlayerVoice(txt);
+    if (cat !== 'world' && state.player && voiced.includes(state.player)) {
+        const actor = lead && lead !== me ? lead : newsCountries(voiced)[0];
+        const recent = actor && newsState().items.find(x => x.kind === 'order' && (state.dayIndex || 0) - x.d <= 14 && (x.isos || []).includes(actor));
+        if (recent) { newsReact(recent, actor, txt, type); return true; }
+    }
+    const cid = newsFlavorCid(txt);
+    const world = cat === 'world' || cat === 'news' || cid || (lead && lead !== me) || NEWS_WORLD_RX.some(r => r.test(txt));
+    if (!world || (lead === me && cat !== 'world')) return false;
+    let w = 1;
+    if (cid) w = 0.55;
+    else if (/^World commodity prices/.test(txt)) w = 0.15;
+    else if (/^🪖 Coup|^🏳|peace treaty|joins the war|Treaty broken|Security Council/.test(txt)) w = 2.2;
+    else if (/^(⚡|🏗)/.test(txt)) w = 0.35;
+    const proxy = !cid && (state.proxies || []).some(p => p && p.short && txt.includes(p.short));
+    if (proxy) w *= 0.5;
+    const isos = newsCountries(txt, lead && lead !== me ? lead : null);
+    if (txt.includes(state.player) || isos.some(i => { try { return Math.abs(getRel(me, i)) >= 40 || atWarWith(i); } catch (e) { return false; } })) w *= 1.5;
+    if (type === 'bad') w *= 1.25;
+    newsSeed({ iso: isos[0] || null, isos, text: newsPlayerVoice(txt), type, cid: cid || newsConfOf(txt), w, flavor: !!cid || proxy, gov: !!(lead && lead !== me && !proxy) });
+    return true;
+}
+function newsSeed(s) {
+    const N = newsState(), key = newsKey(s.text), d = state.dayIndex || 0;
+    if (!key) return;
+    const same = N.seeds.find(x => x.key === key); if (same) { same.n = (same.n || 1) + 1; same.w = Math.max(same.w, s.w); return; }
+    // the same story was already published recently: count it on the article instead of printing it again
+    const pub = N.items.find(x => x.key === key && d - x.d <= 20);
+    if (pub) { pub.n = (pub.n || 1) + 1; if (d - (pub.upd || pub.d) >= 7) { pub.upd = d; pub.d = d; pub.date = state.date.toISOString(); pub.read = false; newsRender(); } return; }
+    N.seeds.push({ ...s, key, d, date: state.date.toISOString(), n: 1 });
+    if (N.seeds.length > 80) { N.seeds.sort((a, b) => b.w - a.w); N.seeds.length = 60; }
+}
+
+// ---- writing ----
+function newsOutlet(seed) { return NEWS_OUTLETS[newsHash(seed) % NEWS_OUTLETS.length]; }
+function newsDateline(iso) {
+    try { if (iso && (WORLD[iso] || iso === state.playerIso)) { const c = capitalOf(iso); if (c && c.label) return c.label; } } catch (e) { }
+    return iso ? newsName(iso) : 'Geneva';
+}
+function newsCountryFacts(iso) {
+    const n = newsNation(iso); if (!n) return '';
+    let reg = ''; try { reg = regimeLabel(iso).toLowerCase(); } catch (e) { }
+    let lead = ''; try { const ph = powerHolder(iso, n); lead = `${ph.role} ${cleanLeaderName(ph.name) || ph.name}`; } catch (e) { lead = n.hog || ''; }
+    const st = n.stability;
+    const mood = st >= 65 ? 'a broadly stable domestic scene' : st >= 45 ? 'simmering public discontent' : st >= 25 ? 'deep unrest at home' : 'a government struggling to hold on';
+    return `${newsName(iso)}${reg ? `, a ${reg}` : ''}${lead ? ` led by ${lead}` : ''}, has an economy of about ${formatVal(n.gdp)} and faces ${mood}.`;
+}
+function newsForYou(isos, cid) {
+    const me = state.playerIso, P = state.player; const out = [];
+    const c = newsConf(cid);
+    try { if (c && [].concat(c.sideA || [], c.sideB || []).includes(me)) out.push(`${P} is itself a party to the ${c.name}, and officials there are expected to study the development closely.`);
+          else if (c && [].concat(c.backA || [], c.backB || []).includes(me)) out.push(`${P}, a backer of one side in the ${c.name}, is watching the fighting closely.`); } catch (e) { }
+    const i = (isos || []).find(x => x && x !== me && WORLD[x]);
+    if (i && !out.length) try {
+        const r = getRel(me, i), [lab] = relLabel(r);
+        if (atWarWith(i)) out.push(`${newsName(i)} remains at war with ${P}.`);
+        else if (r >= 40) out.push(`${newsName(i)} is a close partner of ${P}; diplomats in ${newsDateline(me)} said they were following events closely.`);
+        else if (r <= -40) out.push(`Relations between ${newsName(i)} and ${P} remain ${lab.toLowerCase()}, and the move is likely to be read in ${newsDateline(me)} as a signal.`);
+        else out.push(`Relations between ${P} and ${newsName(i)} are ${lab.toLowerCase()}.`);
+    } catch (e) { }
+    return out.join(' ');
+}
+const NEWS_QUOTES = {
+    Conflict: ['We will defend our people and our territory with every means available.', 'Those responsible for this escalation will bear the consequences.', 'Our forces are acting in self-defence and within international law.'],
+    Diplomacy: ['Dialogue is the only path to a lasting settlement.', 'This is a first step, and a fragile one, but it is a step.', 'We are ready to talk, but not at any price.'],
+    Politics: ['The government will respect the will of the people.', 'Order will be maintained and the constitution upheld.', 'We are listening to our citizens.'],
+    Economy: ['We will protect our economy and our workers.', 'These measures are necessary and proportionate.', 'Markets will adjust; our fundamentals remain strong.'],
+    Nuclear: ['Our programme is peaceful and fully within our rights.', 'We call on all sides to exercise maximum restraint.'],
+    World: ['We are following the situation closely.', 'We call on all parties to act responsibly.']
+};
+function newsWriteWorld(group) {
+    const s0 = group[0], iso = s0.iso, me = state.playerIso, c = newsConf(s0.cid), isos = [...new Set(group.flatMap(s => s.isos || []))].slice(0, 4);
+    const kick = newsKicker(group.map(s => s.text).join(' '));
+    const body = [];
+    const attrib = s0.gov ? ['the government said', 'officials announced', 'state media reported', 'according to a government statement'] : ['according to reports from the region', 'local officials and witnesses said', 'according to regional security sources', 'humanitarian workers on the ground reported'];
+    const lede = newsSentence(s0.text).replace(/[.!]$/, ''), a1 = attrib[newsHash(s0.key) % attrib.length];
+    body.push(`${/[?"”…]$/.test(lede) ? lede : `${lede}, ${a1}.`}${group.slice(1, 4).map(s => ' ' + newsSentence(s.text)).join('')}${s0.n > 1 ? ` It is the ${s0.n === 2 ? 'second' : s0.n === 3 ? 'third' : s0.n + 'th'} such report in recent days.` : ''}`);
+    if (c && c.brief) body.push(`Background: ${c.brief}`);
+    else if (iso && iso !== me) { const f = newsCountryFacts(iso); if (f) body.push(f); }
+    const you = newsForYou(isos, s0.cid); if (you) body.push(you);
+    const quotes = [];
+    if (s0.gov && iso && iso !== me && newsNation(iso) && kick !== 'World' && (newsHash(s0.key) % 3 !== 0)) {
+        const pool = NEWS_QUOTES[kick] || NEWS_QUOTES.World, n = newsNation(iso);
+        let who = 'A government spokesperson'; try { const ph = powerHolder(iso, n); if (newsHash(s0.key) % 2) who = `${ph.role} ${cleanLeaderName(ph.name) || ph.name}`; } catch (e) { }
+        quotes.push({ iso, who, text: pool[newsHash(s0.key + 'q') % pool.length] });
+    }
+    return { kind: 'world', kicker: c ? c.name : kick, iso: iso || (c && (c.location || c.sideA || [])[0]) || null, isos, headline: newsHeadline(s0.text), dek: c ? `${c.name} · ${c.type === 'war' ? 'active war' : c.type === 'ceasefire' ? 'fragile ceasefire' : 'crisis'}` : (iso && iso !== me ? `${newsName(iso)}${(() => { try { return ' · ' + regimeLabel(iso); } catch (e) { return ''; } })()}` : 'International'), body, quotes, tone: group.some(s => s.type === 'bad') ? 'bad' : group.some(s => s.type === 'good') ? 'good' : 'neutral', key: s0.key, cid: s0.cid || null, n: s0.n || 1 };
+}
+function newsPost(a) {
+    const N = newsState(), d = state.dayIndex || 0;
+    const it = Object.assign({ id: ++N.seq, d, date: state.date.toISOString(), read: false, src: 'rules', outlet: newsOutlet(a.headline + N.seq), rx: [], updates: [], quotes: [], body: [] }, a);
+    N.items.unshift(it);
+    if (N.items.length > NEWS_MAX) {
+        // drop read world news first, keep your own order articles longer
+        for (let k = N.items.length - 1; k >= 0 && N.items.length > NEWS_MAX; k--) if (N.items[k].read && N.items[k].kind !== 'order') N.items.splice(k, 1);
+        N.items.length = Math.min(N.items.length, NEWS_MAX);
+    }
+    const dock = document.getElementById('event-feed-container');
+    if (dock && (!dock.classList.contains('feed-open') || NEWS_TAB !== 'news')) NEWS_CLOSEDN++;
+    newsRender();
+    return it;
+}
+// ---- your commands ----
+const NEWS_VERBS = new Set('build construct establish create open launch deploy send move station position withdraw pull evacuate strike bomb attack invade blockade seize capture occupy annex impose lift sanction ban embargo raise lower cut increase reduce boost invest fund spend subsidize subsidise privatize privatise nationalize nationalise sell buy export import sign negotiate propose offer request ask demand recognize recognise expel recall summon condemn warn support back aid help provide supply arm train recruit mobilize mobilise conscript hold call declare announce ban reform crack arrest release pardon hire start begin expand upgrade modernize modernise repair restart shut close stop end halt freeze sponsor host join leave form ally partner cooperate develop research test produce manufacture order purchase acquire lease grant give donate reopen resume suspend restore enforce introduce pass approve veto legalize legalise tax'.split(' '));
+function newsOrderHeadline(o) {
+    const P = state.player, T = (o.targets || []).filter(t => t.iso && t.iso !== state.playerIso && WORLD[t.iso]).map(t => newsName(t.iso)), t0 = T[0];
+    const k = o.kind, c = o.cat;
+    try {
+        if (c === 'construction' && k === 'build' && o.siteType && SITE_TYPES[o.siteType]) { const nm = SITE_TYPES[o.siteType].name, place = o.loc && o.loc.place; return `${P} to build ${/^[aeiou]/i.test(nm) ? 'an' : 'a'} ${nm.toLowerCase()}${place ? ' near ' + place : ''}${o.loc && o.loc.host && o.loc.host !== state.playerIso ? ' in ' + newsName(o.loc.host) : ''}`; }
+        if (c === 'construction' && k === 'joint') return `${P} and ${T.join(' and ') || 'partners'} in talks on joint ${SITE_TYPES[o.siteType] ? SITE_TYPES[o.siteType].name.toLowerCase() : 'infrastructure'} project`;
+        if (c === 'military' && t0) { if (k === 'strike') return `${P} launches strikes on ${t0}`; if (k === 'invasion') return `${P} launches military offensive against ${t0}`; if (k === 'blockade') return `${P} moves to blockade ${t0}`; if (k === 'arms') return `${P} to send weapons to ${t0}`; }
+        if (c === 'diplomacy' && t0) { if (k === 'sanction') return `${P} imposes sanctions on ${t0}`; if (k === 'protest') return `${P} issues sharp warning to ${t0}`; }
+        if (c === 'economy' && t0 && k === 'tariff') return `${P} slaps tariffs on ${t0}`;
+        if (c === 'humanitarian' && t0) return `${P} sends humanitarian aid to ${t0}`;
+    } catch (e) { }
+    // otherwise the command itself, in news style: "build a dam on the Rhone" → "France to build a dam on the Rhone"
+    let t = String(o.text || '').trim().replace(/\s+/g, ' ').replace(/[.!]+$/, '').replace(/^(please|kindly|i want to|i want|we want to|we will|we must|we should|let's|lets|let us|i order|order|command:?)\s+/i, '').replace(/^(the government (will|to)|our government (will|to))\s+/i, '');
+    const w = (t.split(' ')[0] || '').toLowerCase().replace(/[^a-z]/g, '');
+    let h = NEWS_VERBS.has(w) ? `${P} to ${t.charAt(0).toLowerCase() + t.slice(1)}` : `${P} orders ${t.charAt(0).toLowerCase() + t.slice(1)}`;
+    if (h.length > 100) h = h.slice(0, h.lastIndexOf(' ', 97)) + '…';
+    return h;
+}
+const NEWS_ORDER_QUOTES = {
+    military: ['We will not hesitate to defend our people and our interests.', 'Our armed forces are ready, and our resolve is clear.'],
+    diplomacy: ['We want results, not statements.', 'Our hand is extended, but our patience is not unlimited.'],
+    economy: ['This is about jobs and growth for every family.', 'We are putting our economy on a stronger footing.'],
+    domestic: ['Our citizens deserve a government that delivers.', 'This is what we promised, and this is what we are doing.'],
+    construction: ['This project is an investment in our future.', 'We are building the country our children will inherit.'],
+    humanitarian: ['We will stand with those in need.', 'No one should be left behind.'],
+    general: ['We are acting in the national interest.']
+};
+function newsOrderIssued(o) {
+    if (!o || o.newsId || o.covert || o.cat === 'intelligence' || o.status !== 'active') return null;   // secret operations never make the public news
+    const me = state.playerIso, n = newsNation(me) || {}, P = state.player, cap = newsDateline(me);
+    const T = (o.targets || []).filter(t => t.iso && t.iso !== me && WORLD[t.iso]);
+    const leader = n.hog && n.hog !== 'Commander' ? n.hog : `a government spokesperson`;
+    const what = String(o.text || '').trim().replace(/\s+/g, ' ').replace(/[.!]+$/, '');
+    const body = [];
+    let p1 = `The government of ${P} has ordered officials to “${what}”, ${leader} announced on ${newsWeekday(state.date)}.`;
+    if (o.cat === 'construction' && o.kind === 'build' && o.siteType && SITE_TYPES[o.siteType]) p1 += ` The ${SITE_TYPES[o.siteType].name.toLowerCase()} is planned${o.loc && o.loc.place ? ' near ' + o.loc.place : ''}${o.eta ? `, with completion expected around ${o.eta}` : ''}.`;
+    else if (o.kind === 'move' && o.loc && o.loc.place) p1 += ` Forces are due to arrive near ${o.loc.place}${o.eta ? ' around ' + o.eta : ''}.`;
+    if (o.cost >= 5e7) p1 += ` The measure is budgeted at about ${formatVal(o.cost)}.`;
+    body.push(p1);
+    if (T.length) {
+        body.push(T.slice(0, 2).map(t => {
+            let r = 0; try { r = getRel(me, t.iso); } catch (e) { }
+            const lab = relLabel(r)[0].toLowerCase(), war = (() => { try { return atWarWith(t.iso); } catch (e) { return false; } })();
+            return t.stance === 'hostile' ? `The step is aimed squarely at ${newsName(t.iso)}${war ? ', with which ' + P + ' is at war' : `, with which relations are ${lab}`}; analysts warned it could trigger a response.`
+                : t.stance === 'friendly' ? `${newsName(t.iso)}, with which ${P} has ${lab} relations, is expected to welcome the move.`
+                : `${newsName(t.iso)} is directly concerned; relations between the two countries are ${lab}.`;
+        }).join(' '));
+    } else body.push(['domestic', 'economy', 'construction'].includes(o.cat) ? `The decision is mainly domestic and drew little immediate reaction abroad.` : `Foreign governments were weighing their response.`);
+    try { const st = n.stability, wars = playerAtWar(); body.push(`At home, the government's approval stands at ${st}%${wars.length ? `, with the country at war in the ${wars[0].name}` : ''}.${o.cost > (n.treasury || 0) * 0.25 && o.cost > 1e9 ? ' Opposition figures questioned the cost.' : ''}`); } catch (e) { }
+    const pool = NEWS_ORDER_QUOTES[o.cat] || NEWS_ORDER_QUOTES.general;
+    const it = newsPost({ kind: 'order', oid: o.id, iso: me, isos: [me].concat(T.map(t => t.iso)).slice(0, 4), kicker: `${P} · ${({ military: 'Defence', diplomacy: 'Foreign policy', economy: 'Economy', domestic: 'Home affairs', construction: 'Infrastructure', humanitarian: 'Aid' })[o.cat] || 'Government'}`,
+        headline: newsOrderHeadline(o), dek: `${({ military: 'Defence', diplomacy: 'Diplomacy', economy: 'Economy', domestic: 'Domestic policy', construction: 'Construction', humanitarian: 'Humanitarian' })[o.cat] || 'Government'} · expected to take about ${o.days} day${o.days === 1 ? '' : 's'}`,
+        body, quotes: [{ iso: me, who: n.hog && n.hog !== 'Commander' ? `${n.hog}, leader of ${P}` : `A government spokesperson in ${cap}`, text: pool[newsHash(o.id) % pool.length] }], tone: T.some(t => t.stance === 'hostile') ? 'bad' : 'neutral', key: 'order ' + o.id });
+    o.newsId = it.id;
+    newsAIOrder(it.id, o);
+    return it;
+}
+const NEWS_OUTCOME = { 'Major success': ['was carried out with results beyond expectations, officials said', 'good'], 'Success': ['was carried out as planned, officials confirmed', 'good'], 'Partial': ['was only partly carried out, officials conceded', 'neutral'], 'Failure': ['failed, dealing a setback to the government', 'bad'] };
+function newsOrderResolved(o) {
+    const it = o && o.newsId && newsGet(o.newsId); if (!it || it.resolved) return;
+    it.resolved = true;
+    const [ph, tone] = NEWS_OUTCOME[o.outcome] || ['has been completed', 'neutral'];
+    const facts = (o.effects || []).filter(e => e && e.txt && !/^\s*🤖/.test(e.txt)).map(e => newsStrip(newsPlain(e.txt))).filter(Boolean).slice(0, 4);
+    it.updates.push({ d: state.dayIndex, date: state.date.toISOString(), text: `The ${({ military: 'operation', construction: 'project', economy: 'measure', domestic: 'measure', diplomacy: 'initiative', humanitarian: 'aid mission' })[o.cat] || 'plan'} ${ph}.${facts.length ? ' Key facts: ' + facts.map(newsSentence).join(' ') : ''}` });
+    it.outcome = o.outcome; it.tone = tone === 'bad' ? 'bad' : it.tone === 'bad' ? 'bad' : tone;
+    it.dek = `${it.dek.split(' · ')[0]} · ${o.outcome}`;
+    it.upd = state.dayIndex; it.read = false;
+    newsRender();
+}
+function newsReact(it, iso, txt, type) {
+    const t = newsSentence(newsPlayerVoice(txt)); if (!t) return;
+    const key = newsKey(t); if (it.rx.some(r => newsKey(r.t) === key)) return;
+    it.rx.push({ iso: iso || (newsCountries(t)[0] || null), t, tone: type || 'neutral', d: state.dayIndex });
+    if (it.rx.length > 10) it.rx.shift();
+    if (iso && !it.isos.includes(iso) && it.isos.length < 5) it.isos.push(iso);
+    if (type === 'bad' && it.kind === 'order') it.tone = 'bad';
+    if (state.dayIndex > it.d) { it.upd = state.dayIndex; it.read = false; }
+    newsRender();
+}
+function newsAIHeadline(h) {
+    // the AI judge's headline: becomes the headline of that order's article (if the AI has not written the article itself)
+    if (!h) return true;
+    let o = NEWS_CTX;
+    if (!o || !o.newsId) o = (state.orders.history || []).slice().reverse().find(x => x.newsId && x.ai && x.ai.headline && newsStrip(x.ai.headline) === h) || null;
+    const it = o && newsGet(o.newsId);
+    if (it && it.src !== 'ai') { it.headline = h.slice(0, 140); newsRender(); }
+    return true;      // never a feed line of its own
+}
+// a world event the world's governments may not even notice: when the player's own line ends up nowhere (no flag, no match), it stays in the log
+
+// ---- daily desk: publish the best stories, a weekly briefing for the rest ----
+function newsDeskTick(catchUp) {
+    if (state.phase !== 'playing') return;
+    const N = newsState(), d = state.dayIndex || 0;
+    if (catchUp) return;                       // skipped days: stories wait for the next live day
+    N.seeds = N.seeds.filter(s => d - s.d <= 14);
+    let made = 0;
+    for (let pass = 0; pass < 3 && N.seeds.length; pass++) {
+        // conflict colour lines make at most one article every other day; the rest wait for the weekly briefing
+        const best = N.seeds.filter(s => !(s.flavor && d - (N.lastFlavor === undefined ? -9 : N.lastFlavor) < 3)).sort((a, b) => b.w - a.w)[0];
+        const need = pass === 0 ? (d - (N.lastWorld === undefined ? -9 : N.lastWorld) >= 2 ? 0.5 : 0.95) : pass === 1 ? 2.0 : 2.6;
+        if (!best || best.w < need) break;
+        // one article per story: other fresh reports on the same conflict / country go into it
+        const grp = [best].concat(N.seeds.filter(s => s !== best && d - s.d <= 2 && ((best.cid && s.cid === best.cid) || (!best.cid && best.iso && s.iso === best.iso && !s.cid))).slice(0, 3));
+        N.seeds = N.seeds.filter(s => !grp.includes(s));
+        if (best.flavor) N.lastFlavor = d; N.lastWorld = d;
+        newsPost(newsWriteWorld(grp)); made++;
+    }
+    // weekly round-up of everything else
+    if (d - N.lastBrief >= 7) {
+        const rest = N.seeds.slice().sort((a, b) => b.w - a.w).slice(0, 10);
+        N.lastBrief = d;
+        if (rest.length >= 2) {
+            N.seeds = [];
+            const isos = [...new Set(rest.map(s => s.iso).filter(Boolean))].slice(0, 5);
+            newsPost({ kind: 'brief', kicker: 'Weekly briefing', iso: null, isos, headline: `The week in world politics: ${rest.length} stories you may have missed`,
+                dek: rest.slice(0, 2).map(s => newsHeadline(s.text)).join(' · '), body: [`Here is what else happened around the world this week.`], rx: rest.map(s => ({ iso: s.iso, t: newsSentence(s.text), tone: s.type, d: s.d })), tone: 'neutral', key: 'brief ' + d });
+        }
+    }
+    try { newsAIWorld(); } catch (e) { console.warn('news ai', e); }
+}
+function newsFirstEdition() {
+    const N = newsState(); if (N.items.length) return;
+    (state.conflicts || []).slice().sort((a, b) => b.intensity - a.intensity).slice(0, 3).reverse().forEach(c => {
+        const iso = (c.location || c.sideA || [])[0] || (c.sideB || [])[0] || null;
+        const lede = String(c.brief || '').split(/(?<=[.!?])\s+/);
+        const hl = lede[0] && !/^(After|Since|Following|With|As|Despite|While|Although)\b/.test(lede[0]) ? newsHeadline(lede[0]) : (c.flavor && c.flavor[0] ? newsHeadline(c.flavor[0]) : `${c.name}: the situation as 2026 begins`);
+        newsPost({ kind: 'world', kicker: c.name, iso, isos: [].concat(c.sideA || [], c.sideB || []).filter(i => WORLD[i]).slice(0, 4), headline: hl, dek: `${c.name} · ${c.type === 'war' ? 'active war' : c.type === 'ceasefire' ? 'fragile ceasefire' : 'crisis'} · situation on 1 January 2026`,
+            body: [lede.slice(0, 2).join(' '), lede.slice(2).join(' '), newsForYou([iso], c.id)].filter(Boolean), quotes: [], tone: c.intensity > 70 ? 'bad' : 'neutral', key: 'first ' + c.id, cid: c.id, read: false });
+    });
+}
+
+// ---- AI: rewrites the rules articles in its own words ----
+function newsAIFields(it, r) {
+    if (!r || typeof r !== 'object') return false;
+    const s = (v, n) => typeof v === 'string' && v.trim() ? v.replace(/\s+/g, ' ').trim().slice(0, n) : '';
+    const h = s(r.headline, 150); const body = (Array.isArray(r.body) ? r.body : typeof r.body === 'string' ? [r.body] : []).map(p => s(p, 900)).filter(Boolean).slice(0, 4);
+    if (!h || !body.length) return false;
+    it.headline = h; it.body = body; const dk = s(r.dek, 240); if (dk) it.dek = it.kind === 'order' && it.outcome ? `${dk.slice(0, 200)}` : dk;
+    const q = Array.isArray(r.quotes) ? r.quotes : r.quote ? [r.quote] : [];
+    const qs = q.map(x => x && ({ iso: aioIso(x.country) || null, who: s(x.speaker || x.who, 80), text: s(x.text || x.quote, 300) })).filter(x => x && x.text && x.who).slice(0, 2);
+    if (qs.length) it.quotes = qs;
+    it.src = 'ai'; it.ai = 'done';
+    return true;
+}
+const NEWS_AI_SYS = () => `You are an experienced wire-service correspondent. Write short, realistic news articles in English about events in a geopolitical strategy game set on ${fmtDate(state.date)} (it began on 1 January 2026). ` +
+    `Style: neutral, factual, news-agency prose; the first paragraph states the news, the next give context and consequences. Do not name real news agencies. Never use game words (player, game, order points, approval points, relations score). ` +
+    `Keep every number in the facts exactly as given. Do not invent deaths, battles, votes or other events that are not in the facts. Quotes must be plausible for the named official and must not add new facts.`;
+async function newsAIOrder(id, o) {
+    try {
+        if (typeof aiReady !== 'function' || !aiReady()) return;
+        const it = newsGet(id); if (!it || it.ai) return; it.ai = 'pending';
+        const me = state.playerIso, n = newsNation(me) || {}, small = AI.provider === 'builtin';
+        const T = (o.targets || []).filter(t => t.iso && WORLD[t.iso] && t.iso !== me);
+        const facts = `Country: ${state.player} (capital ${newsDateline(me)}), leader ${n.hog || 'unknown'}, approval ${n.stability}%, treasury ${formatVal(n.treasury || 0)}.\n` +
+            `Decision announced today: "${o.text}"\nType: ${o.cat}${o.kind ? ' / ' + o.kind : ''}; budget ${formatVal(o.cost || 0)}; expected to take ${o.days} days${o.eta ? ', ready around ' + o.eta : ''}${o.loc && o.loc.place ? '; location ' + o.loc.place : ''}${o.siteType && SITE_TYPES[o.siteType] ? '; facility type ' + SITE_TYPES[o.siteType].name : ''}.\n` +
+            (T.length ? `Countries concerned: ${T.map(t => { let r = 0; try { r = getRel(me, t.iso); } catch (e) { } return `${newsName(t.iso)} (${t.stance}, relations ${relLabel(r)[0].toLowerCase()}${(() => { try { return atWarWith(t.iso) ? ', at war' : ''; } catch (e) { return ''; } })()})`; }).join('; ')}.\n` : 'No foreign country is directly concerned.\n') +
+            (() => { try { const w = playerAtWar(); return w.length ? `${state.player} is at war: ${w.map(c => c.name).join(', ')}.\n` : ''; } catch (e) { return ''; } })();
+        const user = `${facts}\nWrite the news article about this decision. Return JSON: {"headline":"news headline, max 90 characters","dek":"one-sentence standfirst","body":["${small ? '1-2' : '2-3'} short paragraphs"],"quote":{"speaker":"name and title of a ${state.player} official or a foreign official","country":"ISO3","text":"one sentence"}}`;
+        const r = await callAI(NEWS_AI_SYS(), user, true, { maxTokens: small ? 450 : 750 });
+        const cur = newsGet(id); if (!cur) return;
+        if (!newsAIFields(cur, r)) { cur.ai = 'failed'; return; }
+        newsRender(); if (NEWS_OPEN === id) newsOpen(id, true);
+    } catch (e) { console.warn('news ai order', e); const it = newsGet(id); if (it && it.ai === 'pending') it.ai = 'failed'; }
+}
+async function newsAIWorld() {
+    if (typeof aiReady !== 'function' || !aiReady() || AI.busy > 0) return;
+    const N = newsState(), d = state.dayIndex || 0, small = AI.provider === 'builtin';
+    if (d - N.lastAI < (small ? 6 : 2)) return;
+    const cand = N.items.filter(x => x.kind === 'world' && x.src === 'rules' && !x.ai && d - x.d <= 3).slice(0, small ? 1 : 3);
+    if (!cand.length) return;
+    N.lastAI = d; cand.forEach(x => x.ai = 'pending');
+    const me = state.playerIso;
+    const user = `The reader is the government of ${state.player}. Rewrite each report below as a proper news article.\n\n` + cand.map(x => {
+        const c = newsConf(x.cid);
+        return `REF ${x.id}\nDateline: ${newsDateline(x.iso).toUpperCase()}\nReport: ${x.headline}. ${x.body[0] || ''}\n${c && c.brief ? 'Background: ' + c.brief + '\n' : x.iso && x.iso !== me ? 'Country: ' + newsCountryFacts(x.iso) + '\n' : ''}${(() => { const y = newsForYou(x.isos, x.cid); return y ? 'Angle for ' + state.player + ': ' + y + '\n' : ''; })()}`;
+    }).join('\n') + `\nReturn JSON: {"articles":[{"ref":<REF number>,"headline":"max 90 characters","dek":"one sentence","body":["${small ? '1-2' : '2-3'} short paragraphs"],"quote":{"speaker":"name and title","country":"ISO3","text":"one sentence"}}]}`;
+    let r = null;
+    try { r = await callAI(NEWS_AI_SYS(), user, true, { maxTokens: small ? 600 : 1600 }); } catch (e) { }
+    const arts = r && (Array.isArray(r.articles) ? r.articles : Array.isArray(r) ? r : null);
+    cand.forEach(x => { const cur = newsGet(x.id); if (!cur) return; const a = arts && (arts.find(z => z && +String(z.ref).replace(/\D/g, '') === x.id) || (cand.length === 1 ? arts[0] : null)); if (!newsAIFields(cur, a)) cur.ai = 'failed'; });
+    newsRender(); if (NEWS_OPEN && cand.some(x => x.id === NEWS_OPEN)) newsOpen(NEWS_OPEN, true);
+}
+
+// ---- UI: dock tabs, headline cards, article reader ----
+function newsBadges() {
+    const nu = newsUnread(), a = document.getElementById('news-tab-n'), b = document.getElementById('log-tab-n');
+    if (a) { a.textContent = nu > 99 ? '99+' : nu; a.classList.toggle('hidden', !nu); }
+    if (b) { b.textContent = NEWS_LOGN > 99 ? '99+' : NEWS_LOGN; b.classList.toggle('hidden', !NEWS_LOGN); }
+    const dock = document.getElementById('event-feed-container'), u = document.getElementById('feed-unread');
+    if (dock && u && !dock.classList.contains('feed-open')) { const t = feedUnread + NEWS_CLOSEDN; u.textContent = t > 99 ? '99+' : t; u.classList.toggle('hidden', !t); }
+}
+function newsFlags(it, h) { return [...new Set([it.iso].concat(it.isos || []).filter(i => i && (WORLD[i] || i === state.playerIso)))].slice(0, 3).map(i => { try { return flagHTML(nationIso(i), h || 10); } catch (e) { return ''; } }).join(''); }
+function newsRender() {
+    try {
+        const N = state.news; newsBadges();
+        const latest = document.getElementById('feed-latest');
+        if (latest && N && N.items[0] && !newsRender._log) { latest.textContent = N.items[0].headline; latest.className = 'feed-latest ' + (N.items[0].tone === 'bad' ? 'feed-bad' : N.items[0].tone === 'good' ? 'feed-good' : ''); }
+        const box = document.getElementById('news-list'), dock = document.getElementById('event-feed-container');
+        if (!box || !N || NEWS_TAB !== 'news' || !dock || !dock.classList.contains('feed-open')) { newsRender.dirty = true; return; }
+        newsRender.dirty = false;
+        const items = N.items.slice().sort((a, b) => (b.upd || b.d) - (a.upd || a.d) || b.id - a.id);
+        box.innerHTML = items.length ? items.map(it => `<div class="news-card k-${it.kind} t-${it.tone}${it.read ? '' : ' unread'}" onclick="newsOpen(${it.id})" title="Read the article">
+            <div class="news-kick">${newsFlags(it, 9)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd">· Updated</span>' : ''}</div>
+            <div class="news-hl">${esc(it.headline)}</div>${it.dek ? `<div class="news-dek">${esc(it.dek)}</div>` : ''}
+            <div class="news-meta">${esc(it.outlet)} · ${fmtDate(new Date(it.date))}${it.n > 1 ? ` · ${it.n} reports` : ''}${it.src === 'ai' ? ' · ✍ AI' : ''}</div></div>`).join('') : '<div class="news-empty">No news yet. Issue a command or wait for world events.</div>';
+    } catch (e) { console.warn('news render', e); }
+}
+function newsTab(t, quiet) {
+    if (!quiet) try { playClick(); } catch (e) { }
+    NEWS_TAB = t === 'log' ? 'log' : 'news';
+    document.querySelectorAll('#feed-body .news-tab').forEach(x => x.classList.toggle('on', x.dataset.t === NEWS_TAB));
+    const l = document.getElementById('news-list'), f = document.getElementById('event-feed-content');
+    if (l) l.style.display = NEWS_TAB === 'news' ? '' : 'none';
+    if (f) f.style.display = NEWS_TAB === 'log' ? '' : 'none';
+    if (NEWS_TAB === 'log') NEWS_LOGN = 0;
+    newsRender();
+}
+function newsOrdered() { const N = newsState(); return N.items.slice().sort((a, b) => (b.upd || b.d) - (a.upd || a.d) || b.id - a.id); }
+function newsOpen(id, keep) {
+    const it = newsGet(id); if (!it) return;
+    const m = document.getElementById('news-modal'), box = document.getElementById('news-body'); if (!m || !box) return;
+    if (!keep) try { playClick(); } catch (e) { }
+    NEWS_OPEN = id; it.read = true;
+    const me = state.playerIso, date = new Date(it.date);
+    const dl = it.kind === 'brief' ? 'WORLD' : newsDateline(it.iso).toUpperCase();
+    const q = (it.quotes || []).map(x => `<blockquote>“${esc(x.text)}”<cite>— ${esc(x.who)}${x.iso && x.iso !== me && (WORLD[x.iso]) ? ', ' + esc(newsName(x.iso)) : ''}</cite></blockquote>`).join('');
+    const paras = (it.body || []).map((p, k) => `<p>${k === 0 ? `<span class="dl">${esc(dl)}, ${fmtDate(date)} —</span> ` : ''}${esc(p)}</p>${k === 0 ? q : ''}`).join('') + (!(it.body || []).length ? q : '');
+    const rx = (it.rx || []).length ? `<h4>${it.kind === 'brief' ? 'In brief' : it.kind === 'order' ? 'Reactions and developments' : 'Developments'}</h4><ul>${it.rx.map(r => `<li>${r.iso && WORLD[r.iso] ? flagHTML(nationIso(r.iso), 10) + ' ' : ''}${esc(r.t)}${r.d !== undefined && r.d !== it.d ? ` <span style="color:#7c7259;font-size:11px">(${fmtDate(new Date(state.date.getTime() - (state.dayIndex - r.d) * 864e5))})</span>` : ''}</li>`).join('')}</ul>` : '';
+    const up = (it.updates || []).map(u => `<div class="upd"><p><b>Update, ${fmtDate(new Date(u.date))}:</b> ${esc(u.text)}</p></div>`).join('');
+    const sel = [...new Set([it.iso].concat(it.isos || []))].filter(i => i && i !== me && WORLD[i]).slice(0, 2);
+    const btns = (it.kind === 'order' ? `<button type="button" class="gs-btn" onclick="newsClose();newsOrderLog()">📜 Open Order Log</button>` : '') + sel.map(i => `<button type="button" class="gs-btn" onclick="newsClose();newsSelect('${i}')">🎯 ${esc(newsName(i))}</button>`).join('');
+    box.innerHTML = `<div class="news-art"><div class="news-mast"><b>${esc(it.outlet)}</b><span>${esc(newsWeekday(date))}, ${fmtDate(date)}</span></div>
+        <div class="news-kick">${newsFlags(it, 11)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd">· Updated</span>' : ''}</div>
+        <h2>${esc(it.headline)}</h2>${it.dek ? `<div class="dek">${esc(it.dek)}</div>` : ''}
+        <div class="by">${it.src === 'ai' ? 'By our correspondent · written with AI' : 'Staff report'}${it.n > 1 ? ` · ${it.n} reports` : ''}</div>
+        ${paras}${rx}${up}${btns ? `<div class="flex flex-wrap gap-1.5 mt-3">${btns}</div>` : ''}</div>`;
+    const L = newsOrdered(), k = L.findIndex(x => x.id === id);
+    const pv = document.getElementById('news-prev'), nx = document.getElementById('news-next');
+    if (pv) pv.disabled = k >= L.length - 1; if (nx) nx.disabled = k <= 0;
+    if (m.classList.contains('hidden')) { m.classList.remove('hidden'); try { modalPause(); } catch (e) { } }
+    newsRender();
+}
+function newsStep(dir) { const L = newsOrdered(), k = L.findIndex(x => x.id === NEWS_OPEN), n = L[k + dir]; if (n) newsOpen(n.id); }
+function newsClose() { const m = document.getElementById('news-modal'); if (!m || m.classList.contains('hidden')) return; m.classList.add('hidden'); NEWS_OPEN = null; try { modalResume(); } catch (e) { } }
+function newsOrderLog() { try { const cc = document.getElementById('command-center'); cc.classList.remove('hidden'); ccTab('log'); } catch (e) { } }
+function newsSelect(iso) {
+    try { const l = countryLayerFor(iso), c = capitalOf(iso); if (l) l.fire('click', { latlng: L.latLng(c.lat, c.lng), _now: true, _exact: true, target: l }); else updateTargetUI(isoToName(iso)); } catch (e) { console.warn('news select', e); }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = document.getElementById('news-modal'); if (m && !m.classList.contains('hidden')) { e.stopImmediatePropagation(); newsClose(); } } }, true);
+{
+    // the feed writer: news lines become articles, the rest stays in the Activity log (with its own unread count)
+    const _le = logEvent;
+    logEvent = function (msg, type = 'neutral', cat) {
+        let routed = false;
+        try { routed = newsRoute(msg, type, cat); } catch (e) { console.warn('news route', e); }
+        if (routed) return;
+        newsRender._log = true;
+        const latest = document.getElementById('feed-latest'), keep = latest && state.news && state.news.items.length && type !== 'bad' ? [latest.innerHTML, latest.className] : null;
+        try { _le.call(this, msg, type); } finally { newsRender._log = false; }
+        if (keep) { latest.innerHTML = keep[0]; latest.className = keep[1]; }      // the collapsed bar keeps the latest headline; only alerts replace it
+        const dock = document.getElementById('event-feed-container');
+        if (type !== 'neutral' && state.phase === 'playing' && (NEWS_TAB !== 'log' || (dock && !dock.classList.contains('feed-open')))) NEWS_LOGN++;
+        newsBadges();
+    };
+    const _tf = toggleFeed;
+    toggleFeed = function (force) { _tf.apply(this, arguments); const dock = document.getElementById('event-feed-container'); if (dock && dock.classList.contains('feed-open')) { NEWS_CLOSEDN = 0; if (NEWS_TAB === 'log') NEWS_LOGN = 0; newsRender(); } newsBadges(); };
+    const _mr = modalResume;
+    modalResume = function () { const m = document.getElementById('news-modal'); if (m && !m.classList.contains('hidden')) return; return _mr.apply(this, arguments); };
+    const _amo = anyModalOpen;
+    anyModalOpen = function () { const m = document.getElementById('news-modal'); return (m && !m.classList.contains('hidden')) || _amo.apply(this, arguments); };
+    // your commands → one article per order, opened when it is issued and updated when it resolves
+    const _ex = executeOrders;
+    executeOrders = function () {
+        const before = new Set(state.orders.history.map(o => o.id));
+        const r = _ex.apply(this, arguments);
+        try { state.orders.history.filter(o => !before.has(o.id)).forEach(o => newsOrderIssued(o)); } catch (e) { console.warn('news orders', e); }
+        return r;
+    };
+    const _ro = resolveOrder;
+    resolveOrder = function (o) {
+        const prev = NEWS_CTX; NEWS_CTX = o;
+        try { return _ro.apply(this, arguments); }
+        finally { NEWS_CTX = prev; try { newsOrderResolved(o); } catch (e) { console.warn('news resolve', e); } }
+    };
+    // late reactions to one of your orders (AI-decided) are added to that order's article
+    if (typeof aiReactTick === 'function') {
+        const _rt = aiReactTick;
+        aiReactTick = function () {
+            const L = state.aiReact;
+            if (!Array.isArray(L) || !L.some(x => x && x.day <= state.dayIndex)) return _rt.apply(this, arguments);
+            const due = L.filter(x => x && x.day <= state.dayIndex), rest = L.filter(x => !(x && x.day <= state.dayIndex));
+            let r;
+            due.forEach(x => {
+                const o = x.oid ? state.orders.history.find(k => k.id === x.oid) : (state.orders.history || []).slice().reverse().find(k => k.newsId && x.order && String(k.text || '').slice(0, 80) === x.order);
+                const prev = NEWS_CTX; NEWS_CTX = o || null; state.aiReact = [x];
+                try { r = _rt.apply(this, arguments); } catch (e) { console.warn('ai react', e); } finally { NEWS_CTX = prev; }
+                rest.push(...(state.aiReact || []));      // unprocessed (game not running) or newly added entries stay queued
+            });
+            state.aiReact = rest;
+            return r;
+        };
+    }
+    const _dt = dailyTick;
+    dailyTick = function (catchUp) { const r = _dt.apply(this, arguments); try { newsDeskTick(catchUp); } catch (e) { console.warn('news desk', e); } return r; };
+    const _iw = initWorld;
+    initWorld = function () { const r = _iw.apply(this, arguments); try { state.news = null; NEWS_LOGN = 0; NEWS_CLOSEDN = 0; newsState(); newsFirstEdition(); newsTab('news', true); } catch (e) { console.warn('news init', e); } return r; };
+    const _as = applySave;
+    applySave = function (d) {
+        const had = !!(d && d.state && d.state.news && Array.isArray(d.state.news.items));
+        if (!had) state.news = null;                 // a save from before the news desk: start a fresh edition
+        const r = _as.apply(this, arguments);
+        try { if (!had) state.news = null; newsState(); if (!state.news.items.length) newsFirstEdition(); NEWS_LOGN = 0; newsTab('news', true); } catch (e) { console.warn('news load', e); }
+        return r;
+    };
 }
 
 
