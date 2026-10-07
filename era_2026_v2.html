@@ -664,6 +664,7 @@
         .map-city i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: #efe4c4; box-shadow: 0 0 0 1px rgba(0,0,0,.75); transition: transform .12s; }
         .map-city i::after { content: ''; position: absolute; left: -4px; top: -4px; right: -4px; bottom: -4px; border-radius: 50%; }
         .map-city b { position: absolute; left: 6px; top: -8px; white-space: nowrap; font: 500 10.5px 'Roboto Condensed','Arial Narrow',Arial,sans-serif; color: #f1e8cf; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+        .map-city b { pointer-events: none; }        /* only the dot selects the city: its name often lies over a neighbouring country, whose click it would steal */
         .map-city.t2 b { font-size: 11.5px; font-weight: 700; }
         .map-cap i { left: -4.5px; top: -4.5px; width: 9px; height: 9px; border-radius: 1px; transform: rotate(45deg); background: #e6c766; box-shadow: 0 0 0 1.5px rgba(20,14,4,.9); }
         .map-cap b { left: 8px; font-weight: 700; font-size: 11.5px; color: #f6e7b4; }
@@ -1543,7 +1544,8 @@
                 if (M._ll) { const q = MAP.project([M._ll.lng, M._ll.lat]); if (Math.abs(q.x - pt.x) > 90 || Math.abs(q.y - pt.y) > 90) return; }   // far from the click: no layout read
                 const h = M.getElement(); if (!h.isConnected) return;
                 const els = [h].concat([...h.querySelectorAll('*')].slice(0, 6));
-                for (const el of els) { const r = el.getBoundingClientRect(); if (r.width < 1 && r.height < 1) continue; const pad = r.width < 14 ? 5 : 1;
+                for (const el of els) { if (el.tagName === 'B' && el.parentElement && el.parentElement.classList.contains('map-city')) continue;   // a city's name is not a click target (it lies over its neighbours)
+                    const r = el.getBoundingClientRect(); if (r.width < 1 && r.height < 1) continue; const pad = r.width < 14 ? 4 : 1;
                     if (x >= r.left - pad && x <= r.right + pad && y >= r.top - pad && y <= r.bottom + pad) { const z = +h.style.zIndex || 0; if (z >= bz) { bz = z; best = M; } break; } }
             });
             return best;
@@ -2897,7 +2899,7 @@
                 const diam = 2 * L1.r * ppd / Math.cos(L1.lat * Math.PI / 180);
                 let ls = 0.2, fs = diam * 1.12 / (labelEm(L1, ls) + 0.5);         // measured width, so the name fits inside its country
                 if (fs <= 16) { ls = 0.1; fs = diam * 1.12 / (labelEm(L1, ls) + 0.5); }
-                L1.raw = fs; L1.fs = Math.min(cap, fs); L1.ls = ls;
+                L1.raw = fs; L1.fs = L1.fit = Math.min(cap, fs); L1.ls = ls;
                 L1.want = L1.fs >= (L1.on ? 8 : 9);                              // hysteresis: no popping in and out at one exact zoom
                 if (L1.want) live.push(L1);
             });
@@ -2917,7 +2919,7 @@
             });
             LABELS.forEach(L1 => {
                 const el = L1.el; if (!el) return;
-                if (L1.want) { el.style.fontSize = L1.fs.toFixed(1) + 'px'; el.style.letterSpacing = L1.ls + 'em'; el.style.setProperty('--kx', (cap / L1.fs).toFixed(3)); el.style.setProperty('--kr', (L1.raw / L1.fs).toFixed(3)); }
+                if (L1.want) { el.style.fontSize = L1.fs.toFixed(1) + 'px'; el.style.letterSpacing = L1.ls + 'em'; el.style.setProperty('--kx', (cap / L1.fit).toFixed(3)); el.style.setProperty('--kr', (L1.raw / L1.fit).toFixed(3)); }     // --kx/--kr are relative to the size before the collision shrink, so a shrunk name stays shrunk
                 if (L1.want !== L1.on) { el.classList.toggle('lbl-off', !L1.want); L1.on = L1.want; }
                 if (el.style.display) el.style.display = '';
             });
@@ -2973,7 +2975,7 @@
         function cityClick(i) {
             const C = CITY_MK[i]; if (!C) return;
             const [name, iso, lat, lng] = C.c, ll = { lat, lng };
-            try { selectRegionAt(iso, ll); } catch (e) { }          // outline this city's area
+            let reg = null; try { reg = selectRegionAt(iso, ll) || (regionAt(iso, ll)); } catch (e) { }          // outline this city's province
             if (state.pinMode && state.phase === 'playing') { playClick(); setPin(ll, iso, name); return; }
             if (state.phase === 'playing') { try { const l = countryLayerFor(iso); if (l && l !== targetFeature) l.fire('click', { latlng: L.latLng(lat, lng), _now: true, _exact: true, target: l }); } catch (e) { } }
             playClick();
@@ -2995,7 +2997,7 @@
             const btns = state.phase === 'playing'
                 ? btn('sel', '🎯 Select ' + esc(cn), 'Show this country in the target panel') + btn('pin', '📍 Pin here', 'Pin this city for your next order (e.g. “Build an air base here”)') + btn('order', '✍ Use in order', 'Put this city into the command bar')
                 : btn('sel', '🏳 Play as ' + esc(cn), 'Choose this country');
-            const html = `<div style="font-weight:800;font-size:14px">${C.c[5] ? '◆ ' : ''}${esc(name)}</div><div style="color:#7c7259;font-size:10.5px">City area outlined on the map</div>${rows.join('')}<div class="city-btns">${btns}</div>`;
+            const html = `<div style="font-weight:800;font-size:14px">${C.c[5] ? '◆ ' : ''}${esc(name)}</div><div style="color:#7c7259;font-size:10.5px">${reg && reg.prov ? `${esc(reg.name)}${reg.type ? ' · ' + esc(reg.type.toLowerCase()) : ''}${reg.region && reg.region !== reg.name ? ' · ' + esc(reg.region) : ''}${regionSelLayer ? ' — outlined on the map' : ''}` : 'City area outlined on the map'}</div>${rows.join('')}<div class="city-btns">${btns}</div>`;
             try { if (!map._cityCloseHook) { map._cityCloseHook = 1; map.on('popupclose', ev => { if (ev && ev.popup === cityPopup && regionSelLayer) { try { map.removeLayer(regionSelLayer); } catch (e) { } regionSelLayer = null; } }); }
             } catch (e) { }
             try { cityPopup = L.popup({ className: 'site-popup city-popup', maxWidth: 280, offset: [0, -4], autoPanPadding: [40, 40] }).setLatLng([lat, lng]).setContent(html).openOn(map); } catch (e) { }
