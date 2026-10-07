@@ -17182,7 +17182,9 @@ function nukeOrderOf(text) {
         const legal = /\b(leu|low.enriched|reactor fuel|nuclear fuel|fuel for (our|the) reactors?|uranium fuel)\b/.test(s) && !/\b(black market|smuggl|illicit|weapons?.grade|heu|highly enriched)\b/.test(s);
         let seller = legal ? 'leu' : 'smuggle';
         if (!legal) { const f = foreign.find(i => NUKE_SELLERS[i]); if (f) seller = f; }
-        const qty = nukeQty(s.replace(/\b(a|an) (black|nuclear|smuggling)\b/g, ' '), legal ? 0 : 50);
+        let qty = nukeQty(s.replace(/\b(a|an) (black|nuclear|smuggling)\b/g, ' '), legal ? 0 : 50);
+        // a weapon's 50 EU is about 25 kg of weapons-grade uranium: "50 kg" is 100 EU, "2 tonnes" 4,000 (the black market caps a month anyway)
+        if (/\d\s*(kg|kilo(gram)?s?)\b/.test(s)) qty *= 2; else if (/\d\s*(tonnes?|tons?|t)\b/.test(s)) qty *= 2000;
         return { ...base, cat: legal ? 'economy' : 'military', act: 'euBuy', seller, n: qty, covert: !legal };
     }
     const reduce = /\b(reduce|cut|shrink|downsize|halve|trim)\b/.test(s) && /\b(our|my)\b|nuclear arsenal/.test(s) && !/\b(budget|funding|spending|costs?|risk|danger|reliance|dependence|tensions?|threat)\b/.test(s);
@@ -17199,8 +17201,8 @@ function nukeOrderOf(text) {
     // "add sanctions on North Korea over its nukes", "make Iran give up its nukes", "build a museum about the atomic bomb" are not weapon orders
     // "make our warheads safer", "produce a report on nuclear weapons", "build a bomb shelter", "help Ukraine build nukes" are not either:
     // the weapon has to be the thing built ("build 3 nukes", "build our first nuclear bomb", "field 2 new ICBMs", "expand our arsenal by 20 warheads")
-    const FILL = '(?:(?:a|an|one|the|our|my|first|own|\\d[\\d,]*|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred|more|new|extra|additional|another|few|several|some|tactical|strategic|nuclear|atomic|thermonuclear|hydrogen|small|low-yield|high-yield|secret|ballistic|intercontinental|hypersonic|mobile|road-mobile|x|of|up to|about|around|dozens|hundreds)\\s+){0,5}';
-    const objRx = new RegExp('\\b(build|produce|make|assemble|manufacture|construct|create|forge|churn out|add|deploy new|field)\\s+' + FILL + '(warheads?|nukes?|bombs?|weapons?|devices?|icbms?|missiles?)\\b');
+    const FILL = '(?:(?:a|an|one|the|our|my|first|own|\\d[\\d,]*|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen|fifteen|twenty|thirty|forty|fifty|hundred|more|new|extra|additional|another|few|several|some|tactical|strategic|nuclear|atomic|thermonuclear|hydrogen|small|low-yield|high-yield|secret|ballistic|intercontinental|hypersonic|mobile|road-mobile|x|of|up to|about|around|dozens|hundreds|production of|construction of|manufacture of)\\s+){0,5}';
+    const objRx = new RegExp('\\b(build|produce|make|assemble|manufacture|construct|create|forge|churn out|add|deploy new|field|order|commission|(?:start|begin|launch|ramp up) (?:the )?(?:production|manufacture|construction) of)\\s+' + FILL + '(warheads?|nukes?|bombs?|weapons?|devices?|icbms?|missiles?)\\b');
     const grow = /\b(increase|expand|grow|enlarge|boost|double|triple|strengthen)\b.{0,25}\b(nuclear (arsenal|stockpile|forces)|(nuclear )?warheads|nukes|icbms?)\b/.test(s) && !/\b(security|safety|protection|readiness|alert|deterrence posture)\b/.test(s);
     const build = (objRx.test(s) || grow || /\b(build|get|make) the bomb\b/.test(s))
         && !/\b(sanction\w*|condemn\w*|protest\w*|denounce\w*|museum|memorial|monument|exhibit\w*|film|movie|documentary|treaty|talks|negotiat\w*|ban|free zone|shelters?|conventional|report|speech|plan|deal|doctrine|strategy|policy|safer|safety|secure|protect\w*|study|review|awareness|campaign|ready|readiness|alert)\b/.test(s)
@@ -17219,7 +17221,7 @@ function nukeOrderPrice(o) {
     const N = nukeOf();
     if (o.act === 'tactical' || o.act === 'icbm') { const K = NUKE_KIND[o.act]; return { cost: o.n * K.cost, eu: o.n * K.eu, days: 2 }; }
     if (o.act === 'euBuy') {
-        if (o.seller === 'leu') { const F = nukeFlows(N); const q = o.n || Math.max(0, Math.ceil(12 * F.fuel - N.leu)); return { cost: Math.max(1e6, q * NUKE_LEU_PRICE), days: rint(2, 4), qty: q }; }
+        if (o.seller === 'leu') { const F = nukeFlows(N), inc = N.ship.filter(x => x.kind === 'leu').reduce((a, x) => a + x.qty, 0), room = Math.max(0, Math.ceil(12 * F.fuel - N.leu - inc)); const q = o.n ? Math.min(o.n, room) : room; return { cost: Math.max(1e6, q * NUKE_LEU_PRICE), days: rint(2, 4), qty: q }; }
         const S = nukeSellerList().find(x => x.k === o.seller) || nukeSellerList()[0]; const q = Math.min(o.n || 50, NUKE_BM_MONTH);
         return { cost: Math.round(q * S.price), days: rint(3, 7), qty: q };
     }
@@ -17235,7 +17237,7 @@ function nukeOrderNote(o) {
             : o.asked > o.n ? `one order builds at most ${o.n} — order again for the rest` : o.also ? `one kind per order — order the ${o.also === 'icbm' ? 'ICBMs' : 'warheads'} separately` : '';
         return { txt: `☢ ${nukeNum(need)} EU · ${nukePl(o.n, K.short)}`, warn };
     }
-    if (o.act === 'euBuy') { const q = o.qty || o.n; return { txt: o.seller === 'leu' ? `☢ ${nukeNum(q)} EU reactor fuel (legal)` : `☢ ${nukeNum(q)} EU · ${o.seller === 'smuggle' ? 'smuggling network' : shortName(o.seller)} · ${Math.round(((NUKE_SELLERS[o.seller] || {}).risk || 0.3) * 100)}% exposure risk`, warn: '' }; }
+    if (o.act === 'euBuy') { const q = o.qty || o.n; return { txt: o.seller === 'leu' ? `☢ ${nukeNum(q)} EU reactor fuel (legal)` : `☢ ${nukeNum(q)} EU · ${o.seller === 'smuggle' ? 'smuggling network' : shortName(o.seller)} · ${Math.round(((NUKE_SELLERS[o.seller] || {}).risk || 0.3) * 100)}% exposure risk`, warn: o.seller !== 'leu' && o.n > q ? `the black market moves at most ${NUKE_BM_MONTH} EU a month — order the rest next month` : '' }; }
     if (o.act === 'dismantle') return { txt: `☢ dismantle ${o.nk === 'all' ? 'the whole arsenal' : nukePl(o.n, NUKE_KIND[o.nk].short)} (+50% EU back)`, warn: nukeWeapons(N).total ? '' : 'you have no nuclear weapons' };
     if (o.act === 'test') return { txt: '☢ nuclear test (uses 1 weapon)', warn: nukeWeapons(N).total ? '' : 'you have no nuclear weapon to test' };
     return { txt: '☢ ' + (o.act === 'npt_exit' ? 'NPT withdrawal (90 days)' : 'join the NPT'), warn: '' };
