@@ -17100,7 +17100,7 @@ function nukeMonthly() {
         if (need > 0 && N.autoFuel) { const v = nukeLeuVendor(); if (v && v[1] >= -20 && (state.sanctionsOnMe || 0) < 10) { const c = need * NUKE_LEU_PRICE * 1.5; if (p.treasury >= c) { p.treasury -= c; L.fuelBought = need; L.fuelCost = c; need = 0; } } }
         L.fuel = F.fuel - need;
         // plants without fuel stop (largest shortfall first)
-        let gap = need; S.npp.forEach(x => { const off = gap > 0; x.s.unfueled = off; if (off) gap -= x.use; x.s.specs = x.s.specs || {}; x.s.specs['Fuel'] = off ? 'NO FUEL — offline (needs EU)' : `${x.use} EU/month — fuelled`; });
+        let gap = need; S.npp.forEach(x => { const off = gap > 0; x.s.unfueled = off; x.s.unfuelled = off; if (off) gap -= x.use; x.s.specs = x.s.specs || {}; x.s.specs['Fuel'] = off ? 'NO FUEL — offline (needs EU)' : `${x.use} EU/month — fuelled`; });
         L.unfueled = S.npp.filter(x => x.s.unfueled).length;
         if (L.unfueled) logEvent(`⚠ ${L.unfueled} nuclear power plant${L.unfueled > 1 ? 's are' : ' is'} offline for lack of fuel: no power savings or growth from ${L.unfueled > 1 ? 'them' : 'it'} until you have enriched uranium (or reactor fuel).`, 'bad');
     }
@@ -17500,6 +17500,11 @@ function popAdvice(q) {
         } catch (e) { }
         return G;
     };
+    // the build track's building ledger (when present) reads s.unfuelled for power; an unfuelled reactor earns nothing either
+    if (typeof siteMonthlyOf === 'function') {
+        const _smo = siteMonthlyOf;
+        siteMonthlyOf = function (s) { const m = _smo.apply(this, arguments); try { if (s && (s.unfueled || s.unfuelled) && m && m.rev) m.rev = 0; } catch (e) { } return m; };
+    }
     // the ☢ chip in the resource strip
     const _rb = renderResourceBar;
     renderResourceBar = function () {
