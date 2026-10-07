@@ -16080,6 +16080,9 @@ function newsRender() {
         const box = document.getElementById('news-list'), dock = document.getElementById('event-feed-container');
         if (!box || !N || NEWS_TAB !== 'news' || !dock || !dock.classList.contains('feed-open')) { newsRender.dirty = true; return; }
         newsRender.dirty = false;
+        const sig = N.items.length + '|' + N.seq + '|' + N.items.reduce((a, x) => a + (x.upd || 0) + (x.read ? 1 : 0) + (x.src === 'ai' ? 2 : 0) + (x.n || 1) + x.headline.length, 0);
+        if (box.dataset.sig === sig && box.childElementCount) return;        // nothing new: keep the cards (no re-layout, no scroll jump)
+        box.dataset.sig = sig;
         const items = N.items.slice().sort((a, b) => (b.upd || b.d) - (a.upd || a.d) || b.id - a.id);
         box.innerHTML = items.length ? items.map(it => `<div class="news-card k-${it.kind} t-${it.tone}${it.read ? '' : ' unread'}" onclick="newsOpen(${it.id})" title="Read the article">
             <div class="news-kick">${newsFlags(it, 9)}<span>${esc(it.kicker || 'World')}</span>${it.upd && it.upd > it.d ? '<span class="upd">· Updated</span>' : ''}</div>
@@ -16194,6 +16197,56 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { const m = 
         try { if (!had) state.news = null; newsState(); if (!state.news.items.length) newsFirstEdition(); NEWS_LOGN = 0; newsTab('news', true); } catch (e) { console.warn('news load', e); }
         return r;
     };
+}
+
+// ---- country panel speed: selecting a country must never stall the game ----
+// Measured (see the news track notes): the panel's own JS is ~3-8 ms, but the FIRST click after a start / load /
+// front-line change re-sampled every contested country's territory (~10 ms each, 200+ ms in total) in the click
+// itself; country centres were re-scanned from the full border geometry on every call; the hidden Order Log and the
+// news list were rebuilt every game day. These are now cached, pre-computed in idle time, or skipped while hidden.
+const NEWS_IDLE = window.requestIdleCallback ? (f => requestIdleCallback(f, { timeout: 250 })) : (f => setTimeout(f, 40));
+function terrStale() {
+    if (typeof territoryOf !== 'function' || typeof CTRL_LAYERS === 'undefined' || state.phase !== 'playing') return [];
+    const isos = [...new Set(Object.keys(CTRL_LAYERS).concat((state.occ || []).map(o => o.iso)))];
+    return isos.filter(iso => { const sig = JSON.stringify((state.control || {})[iso] || {}) + '|' + (state.occ || []).filter(o => o.iso === iso).map(o => o.by).join(','); const c0 = TERR.cache[iso]; return !(c0 && c0.sig === sig); });
+}
+function terrWarm() {
+    if (terrWarm.busy) return; const q = terrStale(); if (!q.length) return;
+    terrWarm.busy = true;
+    // small slices (~10 ms) in idle time, so neither the frame nor the click pays for it
+    const step = () => { const t0 = performance.now(); try { do { const iso = q.shift(); if (iso) territoryOf(iso); } while (q.length && performance.now() - t0 < 8); } catch (e) { q.length = 0; } if (q.length && state.phase === 'playing') NEWS_IDLE(step); else terrWarm.busy = false; };
+    NEWS_IDLE(step);
+}
+{
+    // the main ring of a border never changes once the map is loaded: scan it once per geometry
+    if (typeof mainRing === 'function') {
+        const _mr = mainRing, RING = new WeakMap();
+        mainRing = function (geom) { if (!geom || typeof geom !== 'object' || !geom.coordinates) return _mr(geom); const k = geom.coordinates.length; let c = RING.get(geom); if (!c || c.k !== k || c.c !== geom.coordinates) { c = { k, c: geom.coordinates, v: _mr(geom) }; RING.set(geom, c); } return c.v; };   // re-scanned if the border is replaced (annexation)
+    }
+    // the Order Log is rebuilt only while its tab is shown (opening the tab renders it anyway)
+    if (typeof renderOrderLog === 'function') {
+        const _rol = renderOrderLog;
+        renderOrderLog = function () { const tab = document.getElementById('cc-log'); if (tab && tab.classList.contains('hidden')) { renderOrderLog.dirty = true; return; } renderOrderLog.dirty = false; return _rol.apply(this, arguments); };
+    }
+    try { const im = document.getElementById('target-portrait'); if (im) im.decoding = 'async'; } catch (e) { }
+    // country-name detection scans every country name each call and runs dozens of times per resolved order with the
+    // same order text: remember recent answers (cleared whenever the name list or the player changes)
+    if (typeof detectCountries === 'function') {
+        const _dc = detectCountries, DC = new Map(); let dcTerms = null, dcMe = null;
+        detectCountries = function (text) {
+            if (typeof text !== 'string' || text.length > 2000) return _dc(text);
+            if (dcTerms !== DETECT_TERMS || dcMe !== state.playerIso) { DC.clear(); dcTerms = DETECT_TERMS; dcMe = state.playerIso; }
+            let r = DC.get(text);
+            if (!r) { r = _dc(text); dcTerms = DETECT_TERMS; if (DC.size > 600) DC.clear(); DC.set(text, r); }
+            return r.map(x => ({ ...x }));
+        };
+    }
+    const _dt = dailyTick;
+    dailyTick = function (catchUp) { const r = _dt.apply(this, arguments); if (!catchUp) try { terrWarm(); } catch (e) { } return r; };
+    const _iw = initWorld;
+    initWorld = function () { const r = _iw.apply(this, arguments); setTimeout(() => { try { terrWarm(); } catch (e) { } }, 1500); return r; };
+    const _as = applySave;
+    applySave = function () { const r = _as.apply(this, arguments); setTimeout(() => { try { terrWarm(); } catch (e) { } }, 1500); return r; };
 }
 
 
