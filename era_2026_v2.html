@@ -2741,9 +2741,13 @@
         setTimeout(() => { try { if (isStrategy()) loadingStep('img', true); else preloadWorld(); } catch (e) { loadingStep('img', false); } }, 0);
         const imageryOn = () => !isStrategy() && (IMAGERY === 'cached' || IMAGERY === 'stream');   // the strategy map never uses photos: one steady blue ocean, nothing to download
 
-        [['oceanPane', 190], ['haloPane', 395], ['waterPane', 401], ['regionPane', 403], ['reliefPane', 420], ['labelPane', 450], ['cityPane', 470]].forEach(([n, z]) => {
+        [['oceanPane', 190], ['haloPane', 395], ['waterPane', 401], ['regionPane', 403], ['lineDefPane', 404], ['reliefPane', 420], ['labelPane', 450], ['cityPane', 470]].forEach(([n, z]) => {
             try { const p = map.createPane(n); p.style.zIndex = z; p.style.pointerEvents = 'none'; if (n === 'reliefPane') p.style.mixBlendMode = 'overlay'; } catch (e) { }
         });
+        // Classic map: lines drawn without a renderer of their own (unit routes, aid convoys, pipelines, railways) used to get Leaflet's
+        // default canvas, stacked ON TOP of the countries' canvas in the same pane — from the first such line on, every click on a country
+        // landed on that empty canvas and nothing could be selected any more. They now get a canvas in a pane that never takes the pointer.
+        try { if (window.MAP_ENGINE !== 'gpu' && L.canvas && !map.options.renderer) map.options.renderer = L.canvas({ pane: 'lineDefPane', padding: 0.3 }); } catch (e) { }
         const haloRenderer = L.canvas ? L.canvas({ pane: 'haloPane', padding: 0.3 }) : undefined;
         const WORLD_BOUNDS = [[-85.0511, -180], [85.0511, 180]];
         const mercY = lat => { const s = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); };
