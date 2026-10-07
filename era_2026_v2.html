@@ -2524,7 +2524,7 @@
                 try { map.removeLayer(geojsonLayer); } catch (e) { }
                 playerFeature = null; targetFeature = null;
                 geojsonLayer = L.geoJSON(simplifyGeo(RAW_GEO), COUNTRY_OPTS).addTo(map);
-                if (state.phase === 'playing') highlightPlayerCountry();
+                if (state.phase === 'playing') { highlightPlayerCountry(); try { highlightTargetCountry(); } catch (e) { } }
                 else if (state.player && nameLayer[state.player]) { playerFeature = nameLayer[state.player]; playerFeature.setStyle(getHighlightStyle('player')); }
             }
             document.querySelectorAll('input[name="gfx-mode"]').forEach(r => r.checked = r.value === k);
@@ -4650,14 +4650,17 @@
         //  · Bir Tawil (claimed by neither Egypt nor Sudan) is shown as part of Sudan, which borders it on three sides — no separate territory
         //  · Egypt's outline has three stray holes in the Halaib triangle (data artefacts that drew loose border lines): filled
         //  · slivers that are not countries go to the state that holds them; disputed reefs with no land of note are left off the map
+        const GEO_MERGED_INTO = { 'Bir Tawil': 'Sudan', 'US Naval Base Guantanamo Bay': 'Cuba', 'Brazilian Island': 'Brazil', 'Southern Patagonian Ice Field': 'Argentina',
+            'Indian Ocean Territories': 'Australia', 'Coral Sea Islands': 'Australia', 'Ashmore and Cartier Islands': 'Australia', 'Clipperton Island': 'France',
+            'Bajo Nuevo Bank (Petrel Is.)': 'Colombia', 'Serranilla Bank': 'Colombia', 'Spratly Islands': null, 'Scarborough Reef': null };
+        // older saves may still target a territory that is now merged into its neighbour (or left off the map)
+        function remapMergedTarget() { if (state.target && Object.prototype.hasOwnProperty.call(GEO_MERGED_INTO, state.target) && !(typeof nameLayer !== 'undefined' && nameLayer[state.target])) state.target = GEO_MERGED_INTO[state.target]; }
         function geoFixups2026(F, byName, polysOf) {
             const ISO_FIX = { France: ['FRA', 'FR'], Norway: ['NOR', 'NO'], 'Northern Cyprus': ['CYN', ''], Kosovo: ['XKX', 'XK'], Somaliland: ['SOL', ''] };
             Object.keys(ISO_FIX).forEach(n => { const f = byName(n); if (f && !/^[A-Z]{3}$/.test(f.properties['ISO3166-1-Alpha-3'] || '')) f.properties = { ...f.properties, 'ISO3166-1-Alpha-3': ISO_FIX[n][0], 'ISO3166-1-Alpha-2': ISO_FIX[n][1] || f.properties['ISO3166-1-Alpha-2'] }; });
             const eg = byName('Egypt');
             if (eg) eg.geometry = { type: 'MultiPolygon', coordinates: polysOf(eg.geometry).map(pl => [pl[0]].concat(pl.slice(1).filter(h => !h.every(c => c[0] > 33.5 && c[0] < 36.5 && c[1] > 21.5 && c[1] < 23.5)))) };
-            const into = { 'Bir Tawil': 'Sudan', 'US Naval Base Guantanamo Bay': 'Cuba', 'Brazilian Island': 'Brazil', 'Southern Patagonian Ice Field': 'Argentina',
-                'Indian Ocean Territories': 'Australia', 'Coral Sea Islands': 'Australia', 'Ashmore and Cartier Islands': 'Australia', 'Clipperton Island': 'France',
-                'Bajo Nuevo Bank (Petrel Is.)': 'Colombia', 'Serranilla Bank': 'Colombia', 'Spratly Islands': null, 'Scarborough Reef': null };
+            const into = GEO_MERGED_INTO;
             Object.keys(into).forEach(n => { const g = byName(n); if (!g) return; const f = into[n] && byName(into[n]); if (f) absorbInto(f, g, polysOf); F.splice(F.indexOf(g), 1); });
         }
         function geoFixups(data) {
@@ -4813,8 +4816,8 @@
                         });
                     }
                 })).addTo(map);
-                if (state.target === 'Bir Tawil' && !nameLayer[state.target]) state.target = 'Sudan';    // older saves: Bir Tawil is part of Sudan now
-                if (state.phase === 'playing') highlightPlayerCountry();   // a save loaded before the borders arrived
+                remapMergedTarget();    // older saves: Bir Tawil is part of Sudan now (and the other merged slivers)
+                if (state.phase === 'playing') { highlightPlayerCountry(); try { highlightTargetCountry(); } catch (e) { } }   // a save loaded before the borders arrived
             }).catch(e => console.error("GeoJSON failed to load", e));
 
         function updateTargetUI(cName) {
@@ -8761,6 +8764,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             clearMapObjects();
             ['army', 'aiReact', 'advChips', 'armyUpkeep', 'advChat'].forEach(k => { delete state[k]; });     // newer fields: never carry them over from the session you were in
             SAVE_FIELDS.forEach(k => { if (d.state[k] !== undefined) state[k] = d.state[k]; });
+            try { remapMergedTarget(); } catch (e) { }          // a target that is now part of a neighbour (Bir Tawil -> Sudan)
             try { if (state.army) state.army.lastT = 0; } catch (e) { }
             state.date = new Date(d.date);
             state.lastDayKey = state.date.toDateString();
@@ -8789,7 +8793,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             // UI
             state.phase = 'playing';
             showGameUI();
-            highlightPlayerCountry();
+            highlightPlayerCountry(); try { highlightTargetCountry(); } catch (e) { }
             updateTopbarNation(); updateTimeUI(); updateEconomyUI();
             openCommandCenter(false, false);
             renderQueue(); renderOrderLog(); renderWorldTab(); renderSituation(); renderSitesTab(); renderOps(); renderDiplomacyMenu(); updateCapacity(); renderResourceBar();
@@ -8807,6 +8811,15 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (playerFeature && playerFeature !== l) { try { geojsonLayer.resetStyle(playerFeature); } catch (e) {} }
             playerFeature = l;
             try { playerFeature.setStyle(getHighlightStyle('player')); } catch (e) {}
+            if (typeof hlFront === 'function') hlFront();
+        }
+        // the target's outline follows state.target after a load (otherwise the previous session's target stayed outlined, the loaded one not at all)
+        function highlightTargetCountry() {
+            if (typeof geojsonLayer === 'undefined' || !geojsonLayer) return;
+            const l = (state.target && nameLayer[state.target]) || null;
+            if (targetFeature && targetFeature !== l && targetFeature !== playerFeature) { try { geojsonLayer.resetStyle(targetFeature); } catch (e) {} }
+            targetFeature = l;
+            if (targetFeature && targetFeature !== playerFeature) { try { targetFeature.setStyle(getHighlightStyle('target')); } catch (e) {} }
             if (typeof hlFront === 'function') hlFront();
         }
 
