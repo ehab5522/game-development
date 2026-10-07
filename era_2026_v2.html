@@ -92,6 +92,14 @@
         .ox-row { display: flex; gap: 10px; justify-content: space-between; padding: 1px 0; } .ox-row span:first-child { color: #94a3b8; white-space: nowrap; } .ox-row span:last-child { text-align: right; color: #e2e8f0; }
         .sp-acts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; } .sp-acts .gs-btn { font-size: 10.5px; padding: 3px 7px; }
         .site-rush { border-color: #d1ad5b !important; color: #e6c66e !important; background: rgba(209,173,91,.08); }
+        .bld-cats { display: flex; flex-wrap: nowrap; gap: 2px; padding: 0 2px 6px; overflow-x: auto; scrollbar-width: thin; }
+        #bld-hint { display: none; position: fixed; top: 92px; left: 50%; transform: translateX(-50%); z-index: 9000; max-width: 640px; padding: 8px 14px; font-size: 12.5px; color: #f3e7c9;
+            background: rgba(30,28,18,.95); border: 1px solid #d1ad5b; border-radius: 2px; box-shadow: 0 6px 24px rgba(0,0,0,.6); pointer-events: auto; }
+        #bld-hint.bad { border-color: #e0604a; }
+        .bld-cats .cc-tab { font-size: 9.5px; padding: 3px 6px; }
+        .bld-search { height: 28px !important; font-size: 12px !important; padding: 2px 10px !important; }
+        .bld-card .bld-place { font-size: 10px; padding: 2px 7px; }
+        .bld-on { outline: 1px solid #d1ad5b; }
         .ox-num { color: #a3e635; font-family: ui-monospace, monospace; font-size: 10px; }
         .site-dot.small { width: 20px; height: 20px; font-size: 10px; border-width: 1.5px; }
         .unit-dot { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; background: #0b1220; border: 2px solid #f59e0b; box-shadow: 0 2px 8px rgba(0,0,0,.7); }
@@ -1149,6 +1157,7 @@
                         <button type="button" data-cctab="orders" onclick="ccTab('orders')" class="cc-tab cc-tab-active">Orders</button>
                         <button type="button" data-cctab="log" onclick="ccTab('log')" class="cc-tab">Order Log <span id="cc-log-badge" class="hidden ml-1 bg-[#818cf8] text-black rounded-full px-1.5 text-[9px] font-bold">0</span></button>
                         <button type="button" data-cctab="sites" onclick="ccTab('sites')" class="cc-tab">Sites</button>
+                        <button type="button" data-cctab="build" onclick="ccTab('build')" class="cc-tab" title="Build anything from the catalogue — no AI needed">Build</button>
                         <button type="button" data-cctab="trade" onclick="ccTab('trade')" class="cc-tab">Trade</button>
                         <button type="button" data-cctab="world" onclick="ccTab('world')" class="cc-tab">World</button>
                     </div>
@@ -1184,6 +1193,13 @@
                         <button type="button" data-sitefilter="all" onclick="setSiteFilter('all')" class="cc-tab">All known sites</button>
                     </div>
                     <div id="cc-sites-list" class="flex flex-col gap-1.5 max-h-[320px] overflow-y-auto custom-scrollbar pr-1"></div>
+                </div>
+
+                <!-- BUILD TAB: the buildings catalogue, placed on the map -->
+                <div id="cc-build" class="hidden px-3 pb-2">
+                    <div class="flex items-center gap-2 px-1 mb-1.5"><input type="text" id="cc-build-q" autocomplete="off" placeholder="Search buildings (e.g. shipyard, solar, hospital)…" class="cc-input bld-search flex-1" oninput="renderBuildTab()"><span id="cc-build-n" class="text-[10px] text-slate-500 whitespace-nowrap"></span></div>
+                    <div id="cc-build-cats" class="bld-cats"></div>
+                    <div id="cc-build-list" class="flex flex-col gap-1.5 max-h-[330px] overflow-y-auto custom-scrollbar pr-1"></div>
                 </div>
 
                 <!-- TRADE TAB -->
@@ -4440,6 +4456,7 @@
                 wars.forEach(c => { const en = warEnemies(c, iso); if (en.length) { const a = sidePower([iso, ...warAllies(c, iso)], backersFor(c, iso)), b = sidePower(en, backersAgainst(c, iso)); if (a / (a + b) < 0.4) losing = true; } });
                 f.push([losing ? 'Losing a war' : 'At war', (losing ? 12 : 3) * mult]);
             }
+            if (iso === state.playerIso) { const rb = rebelSuppress(); if (rb > 0) f.push(['Army bases keep order in the provinces', -Math.round(rb * 8)]); }
             const heat = C.heat[iso] || 0; if (heat > 1) f.push(['Recent plots and purges', heat * mult]);
             const guard = C.guard[iso] || 0; if (guard > 1) f.push(['Army loyalty measures', -guard]);
             const risk = clamp(Math.round(f.reduce((a, x) => a + x[1], 0)), 0, 90);
@@ -7150,7 +7167,7 @@
                     updateEconomyUI(); return;
                 }
                 if (t === 'strike') {
-                    const dmg = 0.003 * s.sev * clamp(theirPower / mine, 0.3, 2);
+                    const dmg = 0.003 * s.sev * clamp(theirPower / mine, 0.3, 2) * (1 - airShield());   // air force bases protect industry
                     p.gdp *= (1 - dmg); p.stability = clamp(p.stability - 3, 0, 100);
                     logEvent(`💥 ${nm} retaliates with missile and drone strikes on our military sites (GDP −${(dmg * 100).toFixed(1)}%).`, 'bad');
                     const mySites = state.sites.filter(x => x.owner === me && x.host === me && ['active', 'construction'].includes(x.status) && ['military', 'enrich', 'weapons', 'nuclear'].includes(siteT(x.type).sens));
@@ -7158,7 +7175,7 @@
                     const c = state.conflicts.find(k => (k.sideA.includes(me) && k.sideB.includes(s.iso)) || (k.sideB.includes(me) && k.sideA.includes(s.iso)));
                     if (c) c.intensity = clamp(c.intensity + 8, 0, 100);
                 } else if (t === 'cyber') {
-                    const loss = p.treasury * 0.01; p.treasury -= loss;
+                    const loss = Math.max(0, p.treasury) * 0.01 * (1 - cyberShield()); p.treasury -= loss;   // cyber hubs block much of it
                     logEvent(`🖥 Suspected ${nm}-linked cyberattack disrupts banks and ministries (${formatVal(loss)} in damage).`, 'bad');
                 } else if (t === 'sanctions' || t === 'tariffs') {
                     p.gdp *= 0.998; state.mods.growth -= 0.001;
@@ -7266,6 +7283,7 @@
             marketTick();
             worldGrowthTick();
             aiProjectsTick();
+            try { sitesMonthly(); } catch (e) { console.warn('sites monthly', e); }     // your buildings: revenue, upkeep, power, effects
             aiAgencyTick(Math.max(1, Math.round(rint(2, 3) * D().aiActs)));
             rivalPressureTick(); domesticCrisisTick();
             let growth = getGrowth(me).g / 100;
@@ -7343,13 +7361,14 @@
         function ccTab(t) {
             playClick();
             document.getElementById('command-center').classList.add('cc-open');
-            ['orders', 'log', 'sites', 'trade', 'world'].forEach(k => {
+            ['orders', 'log', 'sites', 'build', 'trade', 'world'].forEach(k => {
                 document.getElementById('cc-' + k).classList.toggle('hidden', k !== t);
                 document.querySelector(`[data-cctab="${k}"]`).classList.toggle('cc-tab-active', k === t);
             });
             if (t === 'log') { state.logUnseen = 0; renderOrderLog(); }
             if (t === 'world') renderWorldTab();
             if (t === 'sites') renderSitesTab();
+            if (t === 'build') renderBuildTab();
             if (t === 'trade') renderTradeTab();
             updateCapacity();
         }
@@ -7837,10 +7856,11 @@
         function typeTimeText(T) { return `${fmtBuildTime(T.days[0])}–${fmtBuildTime(T.days[1])}`.replace(/ (months|years)–(\d)/, '–$2').replace(/ days–(\d+) days/, '–$1 days'); }
         // monthly revenue / upkeep of a type at a given list price (before conditions: sanctions, war, prices…)
         function typeMonthly(T, base) { return { rev: Math.round(base * (T.y || 0) / 12), upk: Math.round(base * (T.u || 0) / 12) }; }
+        function fmtMoney(v) { v = Math.round(v || 0); return Math.abs(v) >= 1e6 ? formatVal(v) : (v < 0 ? '−' : '') + '$' + Math.round(Math.abs(v) / 1e3) + 'K'; }
         function typeEconLine(key, iso) {
             const T = siteT(key), base = catalogBase(key, iso), m = typeMonthly(T, base), out = [];
-            if (m.rev) out.push(`+${formatVal(m.rev)}/mo`);
-            if (m.upk) out.push(`upkeep ${formatVal(m.upk)}/mo`); else if (T.cat === 'military' && !T.u) out.push('upkeep: military budget');
+            if (m.rev) out.push(`+${fmtMoney(m.rev)}/mo`);
+            if (m.upk) out.push(`upkeep ${fmtMoney(m.upk)}/mo`); else if (T.cat === 'military' && !T.u) out.push('upkeep: military budget');
             if (T.mw) out.push(T.mw > 0 ? `+${T.mw.toLocaleString()} MW` : `${T.mw} MW`);
             if (T.eu) out.push(`+${T.eu} EU/mo`); if (T.euUse) out.push(`uses ${T.euUse} EU/mo`);
             if (T.popGrowth) out.push(`+${T.popGrowth}% pop/yr`);
@@ -8375,7 +8395,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             // "near the Taiwan Strait", "facing X", "on the X border" means on OUR side, close to X
             const inCountry = t => new RegExp('\\bin (the )?' + normName(shortName(t.iso)).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b').test(normName(o.text));
             const nearOnly = /\b(near|facing|opposite|across from|along|on the .{1,30} border|bordering|close to|next to|strait|coast)\b/i.test(o.text);
-            const friendlyTarget = o.targets.find(t => t.stance !== 'hostile' && t.iso !== me && (inCountry(t) || (!nearOnly && getRel(me, t.iso) > -20)));
+            const friendlyTarget = o.targets.find(t => t.stance !== 'hostile' && t.iso !== me && (inCountry(t) || (!nearOnly && !siteT(o.siteType).homeOnly && getRel(me, t.iso) > -20)));   // a factory "with Russian help" is still built at home
             const nearTarget = !friendlyTarget && nearOnly ? o.targets.find(t => t.iso !== me) : null;
             let host = me, lat, lng, place;
             if (state.pin) {
@@ -8395,7 +8415,58 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 const nc = nearestCity(lat, lng, 120);
                 place = nc && nc.iso === host ? nc.name : regionWord(host, lat, lng) + ' ' + shortName(host);
             }
+            // a valid spot on your own government-held land (on the coast for ports and shipyards) when the first guess is not one
+            if (host === me && o.siteType && !state.pin) {
+                const ok = (la, ln) => canBuildAt(o.siteType, la, ln).ok;
+                if (!ok(lat, lng)) {
+                    let found = false;
+                    if (city && city.iso === me) for (let k = 1; k <= 16 && !found; k++) { const la = city.lat + rnd(-0.1, 0.1) * k / 8, ln = city.lng + rnd(-0.1, 0.1) * k / 8; if (ok(la, ln)) { lat = la; lng = ln; found = true; } }
+                    if (!found && (!city || city.iso !== me)) { const sp = findBuildSpot(o.siteType, me); lat = sp.lat; lng = sp.lng; place = sp.place || buildPlaceName(me, lat, lng); }
+                }
+            }
             return { host, lat, lng, place };
+        }
+        // ---------- Where may it be built? Your own government-held land; coastal types need a coast (both map engines: pure geometry) ----------
+        function isoAtPoint(ll) {
+            try { const pc = preciseCountryAt(ll); if (pc) { const i = nameToIso[pc.name] || resolveIso(pc.name) || null; return i && typeof annexFinal === 'function' ? annexFinal(i) : i; } return (GEO_INDEX || buildGeoIndex()) ? null : countryAt(ll.lat, ll.lng); }
+            catch (e) { return countryAt(ll.lat, ll.lng); }
+        }
+        function nearCoast(lat, lng) {
+            try { if (!(GEO_INDEX || buildGeoIndex())) return true; } catch (e) { return true; }
+            const kx = 111 * Math.max(0.2, Math.cos(lat * Math.PI / 180));
+            for (const d of [10, 22, 35]) for (let a = 0; a < 12; a++) { const br = a * Math.PI / 6; if (!preciseCountryAt({ lat: lat + d / 111 * Math.cos(br), lng: lng + d / kx * Math.sin(br) })) return true; }
+            return false;
+        }
+        function buildPlaceName(iso, lat, lng) { const nc = nearestCity(lat, lng, 120); return nc && nc.iso === iso ? nc.name : `${regionWord(iso, lat, lng)} ${shortName(iso)}`; }
+        function canBuildAt(key, lat, lng, opts = {}) {
+            const me = state.playerIso, T = siteT(key), ll = { lat, lng };
+            const iso = isoAtPoint(ll);
+            if (!iso) return { ok: false, reason: `That spot is open sea — pick a place on land${T.coastal ? ', on your coast' : ''}.` };
+            let own = false, host = iso;
+            if (iso === me) {
+                let k = 'GOV'; try { k = keyAtPoint(me, ll); } catch (e) { }
+                if (k && k !== 'GOV' && k !== me) { let who = 'rebels'; try { who = ctlMeta(k, me)[0]; } catch (e) { } return { ok: false, host, reason: `That area is held by ${who} — you can only build where your government is in control.` }; }
+                own = true;
+            } else { let k = null; try { k = keyAtPoint(iso, ll); } catch (e) { } if (k === me) { own = true; host = me; } }   // land your forces hold counts as yours
+            if (!own && (opts.menu || T.homeOnly)) return { ok: false, host, reason: `${T.name}: only on your own territory — that spot is in ${shortName(iso)}.` };
+            if (T.coastal && !nearCoast(lat, lng)) return { ok: false, host, reason: `${T.name} needs a coastline — pick a spot on your coast.` };
+            return { ok: true, host, own, place: buildPlaceName(host === me ? iso : host, lat, lng) };
+        }
+        // a good spot for a type in a country: its cities first (coastal ones for ports and shipyards), then random points
+        function findBuildSpot(key, iso) {
+            const me = state.playerIso, T = siteT(key), home = iso === me, test = (la, ln) => !home || canBuildAt(key, la, ln).ok;
+            if (T.coastal) { const cs = CITIES.filter(c => c[1] === iso && !c[6]).slice(0, 40).sort(() => Math.random() - 0.5);
+                for (const c of cs) { const la = c[2] + rnd(-0.05, 0.05), ln = c[3] + rnd(-0.05, 0.05); if (nearCoast(la, ln) && test(la, ln)) return { lat: la, lng: ln, place: c[0] }; } }
+            for (let k = 0; k < 40; k++) { const pt = randomPointIn(iso); if ((!T.coastal || nearCoast(pt.lat, pt.lng)) && test(pt.lat, pt.lng)) return pt; }
+            return randomPointIn(iso);
+        }
+        // the checks a build order must pass before it is queued (command bar, advisor chips, Build menu)
+        function buildValidateOrder(o) {
+            if (!o || o.cat !== 'construction') return null;
+            if (o.kind === 'demolish' && !o.siteTarget) return `⛔ No building of yours matches “${esc(o.text)}”. Name it as it appears in the Sites tab, or use its 🧨 Demolish button.`;
+            if (o.kind !== 'build' || !o.loc || o.loc.lat === undefined) return null;
+            const r = canBuildAt(o.siteType, o.loc.lat, o.loc.lng);
+            return r.ok ? null : `⛔ ${esc(r.reason)} Name a place inside your country, or pin one with 📍.`;
         }
         // A queued build order after its place, type or price changed: one price, one build-time roll, one name, the real completion date
         function refreshBuildOrder(o, reroll) {
@@ -8460,6 +8531,13 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 rows.push(['Expected completion', host !== site.owner ? `~${fmtDate(dateIn(site.buildDays + wait))} (once ${esc(shortName(host))} agrees)` : `~${fmtDate(dateIn(site.buildDays + wait))}`]); }
             if (site.status === 'construction' && site.buildDays) rows.push(['Build time', `${fmtBuildTime(site.buildDays)}${site.expedited ? ` (rushed ×${site.expedited.n})` : ''}${site.owner === state.playerIso && state.resShort && state.resShort.metals > 0.05 ? ' · <span style="color:#fca5a5">slowed by a metals shortage</span>' : ''}`]);
             if (site.cost) rows.push(['Investment', formatVal(site.cost)]);
+            if (site.owner === state.playerIso && site.fromGame && T.desc) {      // what the building does for you, and what it earns and costs a month
+                rows.push(['Effect', `<span style="font-weight:500">${esc(T.desc)}</span>`]);
+                const m = site.status === 'active' || site.status === 'damaged' ? (site.econ || typeMonthly(T, siteBase(site))) : typeMonthly(T, siteBase(site));
+                if (m.rev || m.upk) rows.push([site.status === 'active' || site.status === 'damaged' ? 'Per month' : 'Per month (once open)', `${m.rev ? `<span style="color:#86efac">+${fmtMoney(m.rev)}</span>` : ''}${m.rev && m.upk ? ' · ' : ''}${m.upk ? `<span style="color:#fca5a5">−${fmtMoney(m.upk)} upkeep</span>` : ''}`]);
+                if (T.mw) rows.push(['Power', T.mw > 0 ? `+${T.mw.toLocaleString()} MW supplied` : `${(-T.mw).toLocaleString()} MW used`]);
+                if (T.produces) rows.push(['Output', esc(producesText(T.produces))]);
+            }
             Object.entries(site.specs || {}).forEach(([k, v]) => rows.push([k, esc(String(v))]));
             const prog = site.status === 'construction' ? `<div class="cc-bar" style="margin-top:6px"><div style="width:${Math.round(site.progress * 100)}%;background:${col}"></div></div><div style="font-size:10px;color:#94a3b8;margin-top:2px">${Math.round(site.progress * 100)}% complete</div>` : '';
             const notes = (site.notes || []).slice(-3).map(n => `<div style="font-size:10.5px;color:#94a3b8;margin-top:3px">• ${esc(n)}</div>`).join('');
@@ -8491,7 +8569,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (!m) {
                 m = L.marker([site.lat, site.lng], { icon: siteIcon(site), riseOnHover: true }).addTo(getLayerGroup(site.layer));
                 m.bindPopup(sitePopupHTML(site), { className: 'site-popup', maxWidth: 310 });
-                m.on('click', () => playClick());
+                m.on('click', e => { if (state.buildPick && e && e.latlng) { try { m.closePopup(); } catch (er) { } placeBuildAt(e.latlng); return; } playClick(); });   // placing a building: a click on a marker places it there
                 state.markers[site.id] = m;
             } else { m.setIcon(siteIcon(site)); m.setPopupContent(sitePopupHTML(site)); }
             if (site.path && typeof drawSiteLine === 'function') drawSiteLine(site);
@@ -8541,7 +8619,8 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             updateEconomyUI && state.phase === 'playing' && updateSitesStat();
             if (document.getElementById('cc-sites').classList.contains('hidden')) return;
             const me = state.playerIso;
-            const items = state.sites.filter(s => !s._fog && (siteFilter === 'all' ? true : (s.owner === me || (s.host === me && !s.layer))));
+            const items = state.sites.filter(s => !s._fog && (siteFilter === 'all' ? true : (s.owner === me || (s.host === me && !s.layer))))
+                .sort((a, b) => (b.owner === me && b.fromGame ? 1 : 0) - (a.owner === me && a.fromGame ? 1 : 0));     // your own projects first
             const forces = (state.moves || []).filter(m => !m._fog && (siteFilter === 'all' || m.owner === me));
             const forcesHTML = forces.map(m => `<div class="cc-card !py-2 cursor-pointer" onclick="focusMove('${m.id}')"><div class="flex items-center gap-2">
                     <div class="unit-dot mv-${['deployed', 'engaged'].includes(m.status) ? m.status : 'transit'}" style="width:24px;height:24px;font-size:12px">${UNIT_TYPES[m.unitType].icon}</div>
@@ -8549,8 +8628,10 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                     <div class="text-[10px] text-slate-400">${flagHTML(nationIso(m.owner), 9)} → ${esc(m.to.label)} · ${['deployed', 'engaged'].includes(m.status) ? 'Arrived' : 'Arrives'} ${m.etaDate}</div></div>
                     <span class="cc-pill" style="border-color:#f59e0b;color:#fcd34d">${m.status}</span></div>
                     ${['mobilizing', 'transit', 'returning'].includes(m.status) ? `<div class="cc-bar mt-1.5"><div style="width:${Math.round(moveProgress(m) * 100)}%;background:#f59e0b"></div></div>` : ''}</div>`).join('');
+            let sum = '';
+            if (siteFilter === 'mine') try { const Lg = sitesLedger(); if (Lg.sites || Lg.powerCost || Lg.powerSale) sum = `<div class="cc-card !py-1.5 text-[10.5px] text-slate-300">🏭 Your buildings per month: <span style="color:#86efac">+${fmtMoney(Lg.rev)}</span> revenue · <span style="color:#fca5a5">−${fmtMoney(Lg.upk)}</span> upkeep${Lg.powerCost ? ` · <span style="color:#fca5a5">−${fmtMoney(Lg.powerCost)}</span> power imports` : ''}${Lg.powerSale ? ` · <span style="color:#86efac">+${fmtMoney(Lg.powerSale)}</span> power exports` : ''} → <b>${Lg.net >= 0 ? '+' : '−'}${fmtMoney(Math.abs(Lg.net))}</b> · grid ${Math.round(Lg.power.supply).toLocaleString()} MW built / ${Math.round(Lg.power.demand).toLocaleString()} MW used</div>`; } catch (e) { }
             if (!items.length && !forces.length) { list.innerHTML = `<div class="text-center text-xs text-slate-500 py-6 px-6">No sites yet. Try an order like <i>"Build a nuclear power plant near ${esc((CITIES.find(c => c[1] === me) || ['the capital'])[0])}"</i>, or use 📍 to pin an exact location first.</div>`; return; }
-            list.innerHTML = (forces.length ? `<div class="text-[10px] uppercase tracking-wider font-bold text-slate-400 px-1">Forces</div>${forcesHTML}<div class="text-[10px] uppercase tracking-wider font-bold text-slate-400 px-1 mt-1">Sites</div>` : '') + items.slice(0, 150).map(s => {
+            list.innerHTML = sum + (forces.length ? `<div class="text-[10px] uppercase tracking-wider font-bold text-slate-400 px-1">Forces</div>${forcesHTML}<div class="text-[10px] uppercase tracking-wider font-bold text-slate-400 px-1 mt-1">Sites</div>` : '') + items.slice(0, 150).map(s => {
                 const T = siteT(s.type), col = STATUS_COLOR[s.status];
                 return `<div class="cc-card !py-2 cursor-pointer hover:border-indigo-400/50" onclick="focusSite('${s.id}')">
                     <div class="flex items-center gap-2">
@@ -8564,6 +8645,91 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 </div>`;
             }).join('');
         }
+        // ---------- Build tab: the whole catalogue without AI — pick a building, then click where it goes (only your own land) ----------
+        const BUILD_FEATURED = ['aerospace', 'university', 'state_media', 'desal', 'airport', 'icbm_silo', 'airbase', 'base', 'drone_factory', 'missile_factory', 'refinery', 'coal_plant', 'gas_plant', 'dam',
+            'nuclear', 'enrichment', 'port', 'chip_fab', 'ree_mine', 'auto_plant', 'farm', 'steel_mill', 'cyber_hub', 'tank_factory', 'plane_factory', 'shipyard'];
+        const BUILD_UI = { cat: 'featured', q: '' };
+        function buildableKeys() { return Object.keys(SITE_TYPES).filter(k => { const T = SITE_TYPES[k]; return T && T.cost && !T.hidden && k !== 'embassy'; }); }
+        function setBuildCat(c) { playClick(); BUILD_UI.cat = c; BUILD_UI.q = ''; const i = document.getElementById('cc-build-q'); if (i) i.value = ''; renderBuildTab(); }
+        function renderBuildTab() {
+            const list = document.getElementById('cc-build-list'), cats = document.getElementById('cc-build-cats');
+            if (!list || document.getElementById('cc-build').classList.contains('hidden') || state.phase !== 'playing') return;
+            const me = state.playerIso, p = nationIso(me), qi = document.getElementById('cc-build-q');
+            BUILD_UI.q = qi ? qi.value.trim().toLowerCase() : '';
+            const all = buildableKeys(), count = c => all.filter(k => (SITE_TYPES[k].custom ? 'custom' : SITE_TYPES[k].cat) === c).length;
+            cats.innerHTML = [['featured', `Spec catalogue (${BUILD_FEATURED.length})`]].concat(BUILD_CATS.filter(([c]) => count(c)).map(([c, l]) => [c, `${l} (${count(c)})`]))
+                .map(([c, l]) => `<button type="button" class="cc-tab${BUILD_UI.cat === c && !BUILD_UI.q ? ' cc-tab-active' : ''}" onclick="setBuildCat('${c}')">${esc(l)}</button>`).join('');
+            let keys;
+            if (BUILD_UI.q) { const words = BUILD_UI.q.split(/\s+/).filter(Boolean);
+                keys = all.filter(k => { const T = SITE_TYPES[k], h = (T.name + ' ' + (T.desc || '') + ' ' + (T.cat || '') + ' ' + k).toLowerCase(); return words.every(w => h.includes(w)); });
+                const m = siteTypeMatch(BUILD_UI.q); if (m && !keys.includes(m.key)) keys.unshift(m.key); }
+            else keys = BUILD_UI.cat === 'featured' ? BUILD_FEATURED.filter(k => SITE_TYPES[k]) : all.filter(k => (SITE_TYPES[k].custom ? 'custom' : SITE_TYPES[k].cat) === BUILD_UI.cat);
+            document.getElementById('cc-build-n').textContent = `${all.length} buildings · treasury ${formatVal(p.treasury)}`;
+            const pick = state.buildPick;
+            list.innerHTML = (pick ? `<div class="cc-card !py-2 text-[11.5px]" style="border-color:#d1ad5b !important">📍 Placing <b>${esc(siteT(pick).name)}</b> — click a spot on your own territory${siteT(pick).coastal ? ' (on the coast)' : ''}. <button type="button" class="cc-pill cursor-pointer" style="border-color:#94a3b8;color:#cbd5e1" onclick="cancelBuildPick()">Cancel</button></div>` : '') +
+                (keys.length ? keys.slice(0, 90).map(k => {
+                    const T = SITE_TYPES[k], cost = catalogCost(k, me), poor = cost > p.treasury;
+                    return `<div class="cc-card !py-2 bld-card${pick === k ? ' bld-on' : ''}">
+                        <div class="flex items-center gap-2">
+                            <div class="site-dot st-active" style="width:26px;height:26px;font-size:12px;flex-shrink:0">${T.icon}</div>
+                            <div class="flex-1 min-w-0"><div class="text-[12px] font-bold text-slate-200 truncate">${esc(T.name)}</div>
+                                <div class="text-[10px] text-slate-400">${esc((BUILD_CATS.find(c => c[0] === (T.custom ? 'custom' : T.cat)) || ['', T.cat || ''])[1])} · ${typeTimeText(T)}${T.homeOnly ? '' : ''}${T.coastal ? ' · coast only' : ''}</div></div>
+                            <div class="text-right flex flex-col items-end gap-1"><span class="text-[12px] font-bold font-mono" style="color:${poor ? '#f87171' : '#e6c66e'}" title="${poor ? 'More than the treasury holds' : 'Price'}">${formatVal(cost)}</span>
+                                <button type="button" class="gs-btn bld-place" onclick="startBuildPick('${k}')" title="Click the map where it should be built">📍 Place</button></div>
+                        </div>
+                        <div class="text-[10.5px] text-slate-300 mt-1 leading-snug">${esc(T.desc || '')}</div>
+                        <div class="ox-num mt-0.5">${esc(typeEconLine(k, me))}</div>
+                    </div>`; }).join('') + (keys.length > 90 ? `<div class="text-center text-[10.5px] text-slate-500 py-1">${keys.length - 90} more — type to search</div>` : '')
+                : `<div class="text-center text-xs text-slate-500 py-6 px-4">Nothing matches “${esc(BUILD_UI.q)}”. Type the order in the command bar instead (e.g. <i>"Build a ${esc(BUILD_UI.q)} near ${esc(((capitalOf(me) || {}).label) || 'the capital')}"</i>) — the game ${typeof aiReady === 'function' && aiReady() ? 'and your AI ' : ''}will price it.</div>`);
+        }
+        function startBuildPick(key) {
+            playClick();
+            if (!SITE_TYPES[key]) return;
+            state.buildPick = key; state.repinOrderId = null; state.pinMode = true;
+            document.getElementById('map').classList.add('pin-mode');
+            document.getElementById('command-center').classList.remove('cc-open');       // fold the panel away so the whole map can be clicked
+            buildHint(`📍 Click a spot on <b>your own territory</b> to build the <b>${esc(siteT(key).name)}</b>${siteT(key).coastal ? ' — it needs a coastline' : ''}. <span style="opacity:.7">Esc cancels.</span>`);
+            renderBuildTab();
+        }
+        // a banner over the map while you place a building (the command panel is folded away)
+        function buildHint(html, bad) {
+            let el = document.getElementById('bld-hint');
+            if (!html) { if (el) el.style.display = 'none'; return; }
+            if (!el) { el = document.createElement('div'); el.id = 'bld-hint'; document.body.appendChild(el); }
+            el.innerHTML = html + ` <button type="button" class="gs-btn" style="font-size:10px;padding:2px 7px;margin-left:6px" onclick="cancelBuildPick()">Cancel</button>`;
+            el.classList.toggle('bad', !!bad); el.style.display = 'block';
+        }
+        function cancelBuildPick() {
+            buildHint(null);
+            state.buildPick = null; state.pinMode = false;
+            const m = document.getElementById('map'); if (m) m.classList.remove('pin-mode');
+            renderBuildTab();
+        }
+        // a build order from the menu: no text parsing, the type, place and price are exact
+        function planBuildOrder(key, loc) {
+            const T = siteT(key), me = state.playerIso;
+            const o = { id: 'o' + (++state.orderSeq), text: `Build ${/^[aeiou]/i.test(T.name) ? 'an' : 'a'} ${T.name} near ${loc.place}`, cat: 'construction', kind: 'build', siteType: key,
+                targets: [], scale: 1, covert: false, blocs: [], intel: null, status: 'queued', fromMenu: true };
+            o.loc = { host: loc.host || me, lat: loc.lat, lng: loc.lng, place: loc.place };
+            o.baseCost = catalogBase(key, me); o.cost = Math.max(1e6, Math.round(o.baseCost * D().cost));
+            o.specs = genSpecs(key, o, o.loc.host);
+            refreshBuildOrder(o, true);
+            return o;
+        }
+        function placeBuildAt(latlng) {
+            const key = state.buildPick; if (!key) return false;
+            const r = canBuildAt(key, latlng.lat, latlng.lng, { menu: true });
+            if (!r.ok) { buildHint(`⛔ ${esc(r.reason)} Click another spot.`, true); try { playClick(); } catch (e) { } return true; }   // stay in placing mode
+            if (state.weekOrders + state.orders.queue.length >= ORDERS_PER_WEEK) { cancelBuildPick(); flashReply(`⚠ Command capacity reached (${ORDERS_PER_WEEK} orders per week). Execute or remove queued orders, or wait for next week.`); return true; }
+            const o = planBuildOrder(key, { host: state.playerIso, lat: latlng.lat, lng: latlng.lng, place: r.place });
+            state.orders.queue.push(o);
+            cancelBuildPick();
+            showProposedSite(o);
+            ccTab('orders'); renderQueue(); updateCapacity();
+            flashReply(`🏗 <b>${esc(o.siteName)}</b> placed — ${formatVal(o.cost)}, ${fmtBuildTime(o.buildDays)}, ready ~${esc(o.eta)}. Drag the pin to adjust, then press <b>Execute</b>: work starts at once.`);
+            return true;
+        }
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && state.buildPick) { cancelBuildPick(); flashReply('Placing cancelled.'); } });
         function updateSitesStat() {
             const el = document.getElementById('stat-sites'); if (!el) return;
             const me = state.playerIso;
@@ -8583,6 +8749,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (state.pinMode) flashReply('📍 Click anywhere on the map to pin a location for your next order.');
         }
         function setPin(latlng, iso, label) {
+            if (state.buildPick && placeBuildAt(latlng)) return;          // placing a building from the Build tab
             if (state.repinOrderId) {
                 const id = state.repinOrderId; state.repinOrderId = null; state.pinMode = false;
                 document.getElementById('map').classList.remove('pin-mode');
@@ -8793,6 +8960,9 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
 
         function damageSite(site, outcome, attackerIso) {
             const prev = site.status;
+            if (site.owner === state.playerIso && attackerIso && attackerIso !== state.playerIso && Math.random() < airShield()) {   // your air force bases intercept part of every raid
+                site.notes.push(`${state.date.toLocaleDateString()}: Attack by ${shortName(attackerIso)} intercepted by the air force.`); updateSiteMarker(site); return false;
+            }
             let st = prev;
             if (outcome === 'Major success') st = 'destroyed';
             else if (outcome === 'Success') st = prev === 'damaged' ? 'destroyed' : 'damaged';
@@ -8862,6 +9032,92 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const site = addSite({ name: `${place} ${T.name}`, type, owner: iso, host: iso, lat, lng, place, status: 'construction', progress: 0, buildDays: rint(T.days[0], T.days[1]),
                 cost: T.cost, specs: genSpecs(type, { text: '', targets: [] }, iso), started: state.date.toLocaleDateString(), notes: [`${state.date.toLocaleDateString()}: Announced by the government of ${shortName(iso)}.`], fromGame: true });
             logEvent(`🏗 ${esc(shortName(iso))} breaks ground on the ${esc(site.name)}.`, 'neutral');
+        }
+
+        // =====================================================================
+        //  BUILDING ECONOMY — every operating building of yours earns and costs money each month, uses or supplies power,
+        //  and has the effects its catalogue entry promises (fx). Runs on the 1st of the month (monthlyEconomy).
+        //  fx keys: tech/arms/tourism/tariffs/oil (what drives its revenue) · industry (coal: + revenue of industry)
+        //  edu/health/safety/infra (raise those national indices) · appr/unrest/strikes (state media) · steel (cheaper construction)
+        //  cyber (less damage from hackers) · airShield (air raids intercepted) · rebel (rebellions suppressed) · leverage (better trade prices) · food/rare
+        // =====================================================================
+        const BUILD_POWER = { importPerMW: 25000, exportPerMW: 6000 };          // $ per MW for a month of imported / exported electricity
+        function siteWeight(s) { return s.status === 'active' ? 1 : s.status === 'damaged' ? 0.4 : 0; }
+        function myBuildings(all) { const me = state.playerIso; return (state.sites || []).filter(s => s.owner === me && (all || s.fromGame) && siteWeight(s) > 0); }
+        // Σ of an effect over your operating buildings (real, pre-existing facilities count for military and protective effects)
+        function siteFxSum(k, all) { let v = 0; myBuildings(all).forEach(s => { const T = SITE_TYPES[s.type]; if (T && T.fx && T.fx[k]) v += T.fx[k] * siteWeight(s); }); return v; }
+        function siteSocBonus(k) { try { return Math.min(8, siteFxSum(k)); } catch (e) { return 0; } }       // education / health / safety / infrastructure index points
+        function cyberShield() { try { return Math.min(0.75, siteFxSum('cyber')); } catch (e) { return 0; } }
+        function airShield() { try { return Math.min(0.5, siteFxSum('airShield', true)); } catch (e) { return 0; } }
+        function rebelSuppress() { try { return Math.min(0.75, siteFxSum('rebel', true) * 0.25 / 0.3); } catch (e) { return 0; } }
+        function siteLeverage() { try { return Math.min(0.08, siteFxSum('leverage')); } catch (e) { return 0; } }
+        function mediaCalm() { try { return Math.min(4, siteFxSum('appr')); } catch (e) { return 0; } }
+        function siteBase(s) { return s.base || (s.cost ? s.cost / (D().cost || 1) : catalogBase(s.type, s.owner)); }
+        // share of your own land held by rebels or enemies (cells of the control grid)
+        function rebelShare() {
+            try { const me = state.playerIso, G = gridOf(me); if (!G || !G.cells.length) return 0;
+                  let n = 0; G.cells.forEach(c => { const k = cellOwnerG(me, c); if (k && k !== 'GOV' && k !== me) n++; }); return n / G.cells.length; } catch (e) { return 0; }
+        }
+        // this month's money from one building, with the conditions of the moment (sanctions, war, prices, market access, power)
+        function siteMonthlyOf(s, C) {
+            const T = siteT(s.type), w = siteWeight(s), base = siteBase(s), fx = T.fx || {};
+            let rev = base * (T.y || 0) / 12 * w;
+            const upk = base * (T.u || 0) / 12 * (s.status === 'inactive' ? 0.3 : w > 0 ? 1 : 0);
+            if (rev) {
+                rev *= C.mult;
+                if (fx.tech) rev *= C.chips;
+                if (fx.arms) rev *= C.arms;
+                if (fx.tourism) rev *= C.tourism;
+                if (fx.oil) rev *= C.oil;
+                if (fx.tariffs) rev *= C.trade;
+                if (['industry', 'military'].includes(T.cat)) rev *= C.industry * C.power;
+            }
+            return { rev: Math.round(rev), upk: Math.round(upk) };
+        }
+        function sitesConditions() {
+            const me = state.playerIso, p = nationIso(me), sanc = state.sanctionsOnMe || 0;
+            const war = playerAtWar().some(c => c.intensity > 60);
+            let mw = { supply: 0, demand: 0 };
+            myBuildings().forEach(s => { const T = siteT(s.type), w = siteWeight(s); if (!T.mw) return; if (T.mw > 0) { if (!s.unfuelled) mw.supply += T.mw * w; } else mw.demand += -T.mw * w; });
+            const slack = 300 + p.gdp / 1e9 * 0.5;                                // the existing national grid absorbs the first new loads
+            const need = Math.max(0, mw.demand - slack);
+            mw.deficit = Math.max(0, need - mw.supply); mw.surplus = Math.max(0, mw.supply - need); mw.slack = Math.round(slack);
+            const acc = ['oil', 'gas', 'food', 'metals', 'chips'].reduce((a, r) => a + marketAccess(r), 0) / 5;
+            return {
+                mult: (D().income || 1) * (1 - Math.min(0.5, sanc * 0.025)) * (war ? 0.85 : 1),
+                chips: marketAccess('chips'), arms: sanc > 8 ? 0.4 : 1, tourism: clamp(p.stability / 60, 0.4, 1.2) * (war ? 0.5 : 1),
+                oil: marketPrice('oil') / RES.oil.price, trade: acc,
+                industry: 1 + Math.min(0.36, siteFxSum('industry')), power: mw.deficit > 0 && need > 0 ? clamp(1 - 0.3 * mw.deficit / need, 0.7, 1) : 1, mw
+            };
+        }
+        // what the buildings will bring this month (also used for the budget estimate)
+        function sitesLedger() {
+            const C = sitesConditions(), L = { rev: 0, upk: 0, byType: {}, sites: 0 };
+            myBuildings().concat((state.sites || []).filter(s => s.owner === state.playerIso && s.fromGame && s.status === 'inactive')).forEach(s => {
+                const m = siteMonthlyOf(s, C); if (!m.rev && !m.upk) return;
+                L.rev += m.rev; L.upk += m.upk; L.sites++;
+                const b = L.byType[s.type] = L.byType[s.type] || { n: 0, rev: 0, upk: 0 }; b.n++; b.rev += m.rev; b.upk += m.upk;
+                s.econ = m;
+            });
+            L.power = C.mw;
+            L.powerCost = Math.round(C.mw.deficit * BUILD_POWER.importPerMW);
+            L.powerSale = Math.round(C.mw.surplus * BUILD_POWER.exportPerMW);
+            // taxes lost where rebels hold your land (beyond what they held at the start); army bases win much of it back
+            const share = rebelShare(); if (state.rebel0 === undefined) state.rebel0 = share;
+            const extra = Math.max(0, share - (state.rebel0 || 0));
+            L.rebelLoss = Math.round(extra * nationIso(state.playerIso).gdp * 0.01 * (1 - rebelSuppress()));
+            L.net = L.rev - L.upk - L.powerCost + L.powerSale - L.rebelLoss;
+            return L;
+        }
+        function sitesNetEst() { try { return sitesLedger().net; } catch (e) { return 0; } }
+        function sitesMonthly() {
+            if (state.phase !== 'playing' || !state.playerIso) return;
+            const p = nationIso(state.playerIso), L = sitesLedger();
+            p.treasury += L.net;
+            state.econ = { month: fmtDate(state.date), rev: L.rev, upk: L.upk, powerCost: L.powerCost, powerSale: L.powerSale, rebelLoss: L.rebelLoss, net: L.net, mw: L.power, byType: L.byType };
+            // state media: calmer streets
+            const calm = siteFxSum('unrest'); if (calm > 0 && state.mods) state.mods.unrest *= Math.max(0.3, 1 - calm);
+            if (L.sites || L.powerCost || L.rebelLoss) logEvent(`🏭 Your buildings this month: +${formatVal(L.rev)} revenue, −${formatVal(L.upk)} upkeep${L.powerCost ? `, −${formatVal(L.powerCost)} electricity imports` : ''}${L.powerSale ? `, +${formatVal(L.powerSale)} power exports` : ''}${L.rebelLoss ? `, −${formatVal(L.rebelLoss)} taxes lost in rebel-held areas` : ''} → net ${L.net >= 0 ? '+' : '−'}${formatVal(Math.abs(L.net))}.`, L.net >= 0 ? 'neutral' : 'bad', 'log');
         }
 
 
@@ -10113,6 +10369,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             mine.filter(s => s.type === 'mine').forEach(s => { if (/rare|lithium/i.test(s.specs['Resource'] || '')) out.rare.P += 0.6; else out.metals.P += 1.2; });
             out.chips.P += 2.5 * count('chip_fab');
             out.chips.C += 0.4 * count('data_center');
+            out.food.P += Math.max(0.05, out.food.C * 0.015) * count('farm'); out.metals.P += Math.max(0.1, out.metals.C * 0.03) * count('steel_mill'); out.rare.P += 0.6 * count('ree_mine');   // farms, steel mills, REE mines
             // forces deployed abroad burn fuel
             out.oil.C += (state.moves || []).filter(m => m.owner === me && m.status !== 'blocked').reduce((s, m) => s + 0.8 * m.strength.mult, 0);
             if (typeof applyAgreementBoosts === 'function') applyAgreementBoosts(out);
@@ -10332,7 +10589,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 const cap = t.months > 1 ? capacity : capacity * 3;
                 let note = '';
                 if (qty > cap) { qty = Math.max(0.1, Math.round(cap * 10) / 10); note = ` We can only commit ${fmtQty(qty)} ${RES[t.res].unit}.`; }
-                const unit = mkt * (1 + 0.15 - rel / 400 + (getRel(partnerIso, me) < 0 ? 0.05 : 0));
+                const unit = mkt * (1 + 0.15 - rel / 400 + (getRel(partnerIso, me) < 0 ? 0.05 : 0) - siteLeverage());   // ICBM silos: nobody haggles hard with you
                 const quote = Math.round(unit * qty * 1000) / 1000;
                 const offer = { dir: 'buy', res: t.res, qty, price: quote, months: t.months || 1 };
                 if (t.price && !note) {
@@ -10350,7 +10607,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const cap = (t.months > 1 ? need : need * 3);
             let note = '';
             if (qty > cap) { qty = Math.max(0.1, Math.round(cap * 10) / 10); note = ` We only need ${fmtQty(qty)} ${RES[t.res].unit}.`; }
-            const bid = Math.round(mkt * (0.92 + rel / 500) * qty * 1000) / 1000;
+            const bid = Math.round(mkt * (0.92 + rel / 500 + siteLeverage()) * qty * 1000) / 1000;
             const offer = { dir: 'sell', res: t.res, qty, price: bid, months: t.months || 1 };
             if (t.price && !note) {
                 if (t.price <= bid * 1.05) return { ok: true, offer: { ...offer, price: t.price } };
@@ -11083,6 +11340,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             let b = socBalanceEst();
             b += (typeof agreementsCashFlow === 'function') ? agreementsCashFlow() * 1e9 : 0;
             (state.tradeDeals || []).forEach(d => { if (d.monthsLeft > 0) b += (d.dir === 'buy' ? -1 : 1) * d.price * 1e9; });
+            b += sitesNetEst();                                             // buildings: revenue − upkeep − power imports
             return b;
         }
         function rememberSituation() {
@@ -12922,7 +13180,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             const r = pick(rivals), nm = shortName(r), sev = D().crisisSev;
             const acts = [
                 () => { state.sanctionsOnMe += 1; aiNews(r, `${esc(nm)} imposes new sanctions on ${esc(state.player)}'s banks and state companies.`, 'bad'); queueMessage(r, `Our new sanctions are a response to your hostile policies. They will stay until your conduct changes.`); },
-                () => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7)) { aiNews(r, `${esc(state.player)}'s counter-intelligence thwarts a cyberattack traced to ${esc(nm)}.`, 'good'); return; } const hit = p.gdp * 0.0006 * sev; p.treasury -= hit; aiNews(r, `A cyberattack attributed to ${esc(nm)} disrupts ${esc(state.player)}'s banking and power systems (≈ ${formatVal(hit)} in damage).`, 'bad'); },
+                () => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7)) { aiNews(r, `${esc(state.player)}'s counter-intelligence thwarts a cyberattack traced to ${esc(nm)}.`, 'good'); return; } const hit = p.gdp * 0.0006 * sev * (1 - cyberShield()); p.treasury -= hit; aiNews(r, `A cyberattack attributed to ${esc(nm)} disrupts ${esc(state.player)}'s banking and power systems (≈ ${formatVal(hit)} in damage).`, 'bad'); },
                 () => { p.stability = clamp(p.stability - Math.round(2 * sev), 0, 100); state.mods.defense -= 0.3; aiNews(r, `${esc(nm)} stages provocative military drills near ${esc(state.player)}'s border. Public alarm grows.`, 'bad'); queueMessage(r, `Our exercises are routine. If you feel threatened, perhaps you should reconsider your alignment.`); },
                 () => { state.mods.growth -= 0.001 * sev; aiNews(r, `${esc(nm)} bans imports from ${esc(state.player)} and pressures partners to follow.`, 'bad'); },
                 () => { p.stability = clamp(p.stability - Math.round(2 * sev), 0, 100); aiNews(r, `State media in ${esc(nm)} launch a disinformation campaign targeting ${esc(state.player)}'s government.`, 'bad'); },
@@ -12947,7 +13205,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
             if (Math.random() >= D().crisisChance) return;
             const p = nationIso(state.playerIso), c = pick(CRISES), sev = D().crisisSev;
             p.stability = clamp(p.stability + Math.round(c.appr * sev), 0, 100);
-            if (c.money) p.treasury -= p.gdp * c.money * sev;
+            if (c.money) p.treasury -= p.gdp * c.money * sev * (1 - Math.min(0.6, siteFxSum('strikes')));   // state media head off strikes
             if (c.growth) state.mods.growth += c.growth * sev;
             logEvent(`🚨 <b>Domestic crisis:</b> ${esc(c.t)} Approval ${Math.round(c.appr * sev)}%. Suggested response: <a href="#" onclick='document.getElementById("command-center").classList.remove("hidden");document.getElementById("cc-input").value=${JSON.stringify(c.fix)};document.getElementById("cc-input").focus();return false' class="underline">${esc(c.fix)}</a>`, 'bad');
             try { (state.crises = state.crises || []).push({ t: c.t, fix: c.fix, day: state.dayIndex }); if (state.crises.length > 12) state.crises.shift(); } catch (e) { }   // kept for the 🪖 internal-security panel
@@ -13565,6 +13823,8 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
         function syncProposed() { Object.keys(proposedMarkers).forEach(id => { if (!state.orders.queue.some(o => o.id === id)) removeProposed(id); }); }
         function moveOrderSite(id, ll) {
             const o = state.orders.queue.find(x => x.id === id); if (!o) return;
+            if (o.kind === 'build') { const r = canBuildAt(o.siteType, ll.lat, ll.lng, { menu: o.fromMenu });       // only on land you may build on; the pin snaps back otherwise
+                if (!r.ok) { const mk0 = proposedMarkers[id]; if (mk0 && mk0.setLatLng && o.loc) mk0.setLatLng([o.loc.lat, o.loc.lng]); flashReply(`⛔ ${esc(r.reason)}`); return; } }
             const pc = preciseCountryAt(ll), host = pc ? (nameToIso[pc.name] || resolveIso(pc.name)) : countryAt(ll.lat, ll.lng);
             const nc = nearestCity(ll.lat, ll.lng);
             const iso = host || state.playerIso;
@@ -13948,7 +14208,7 @@ function socMonthly() {
         };
         SOC_SERVICES.forEach(k => {
             const idx = Math.max(0.2, s.b[k] / s.b0[k]);
-            const T = s.i0[k] + (k === 'gov' ? 0 : dev * 0.6) + SOC_SECTORS[k].E * Math.log(idx) + 18 * (eff / eff0 - 1) + (cross[k] || 0) - (WC[k] || 0) * wl;
+            const T = s.i0[k] + (k === 'gov' ? 0 : dev * 0.6) + SOC_SECTORS[k].E * Math.log(idx) + 18 * (eff / eff0 - 1) + (cross[k] || 0) - (WC[k] || 0) * wl + (isP ? siteSocBonus(k) : 0);
             const K = k === 'corrupt' ? 0.008 : SOC_SECTORS[k].k;
             s[k] += K * (clamp(T, 2, 99) - s[k]);
         });
@@ -14381,6 +14641,7 @@ function socApprovalAdj() {
     a -= 0.8 * s.taxAdj;
     a += 0.05 * (s.corrupt - s.i0.corrupt);
     if (s.crisis > 0) a -= 8;
+    a += mediaCalm();                                                   // state media centres steady the public mood
     a -= clamp((s.killedMil / Math.max(nationIso(state.playerIso).pop, 1)) * 1e5 * 0.04, 0, 15);   // war dead weigh on public mood
     return clamp(a, -30, 25);
 }
@@ -14540,6 +14801,7 @@ function socValidateOrder(o) {
     const mentionsSelf = normName(o.text).includes(normName(state.player));
     if (mentionsSelf && !o.targets.length && ['invasion', 'strike', 'blockade'].includes(o.kind)) return `⛔ That order would have you attack your own country, ${esc(state.player)}. Name a foreign target.`;
     if (mentionsSelf && /declare war/.test(s) && !o.targets.length) return `⛔ You can't declare war on your own country. Name the nation you want to confront.`;
+    { const b = typeof buildValidateOrder === 'function' ? buildValidateOrder(o) : null; if (b) return b; }    // buildings: own land, coast, a demolition target
     if (o.kind === 'blockade' && o.targets.length && SOC_LANDLOCKED.has(o.targets[0].iso)) return `⛔ ${esc(shortName(o.targets[0].iso))} has no coastline, so a naval blockade is impossible. Consider sanctions, a border closure or a trade embargo.`;
     return null;
 }
@@ -16689,7 +16951,7 @@ const REACT_ACT = {
     freeze: (i, c) => { const loss = Math.min(c.p.treasury * 0.02, nationIso(i).gdp * 0.002); c.p.treasury -= loss; reactAdd(i, 'g', 12); return [`<b>${c.en}</b> freezes ${formatVal(loss)} of ${c.nm}'s state assets held in its banks.`, 'bad']; },
     embargo: (i, c) => { state.mods.growth -= 0.0003; reactAdd(i, 'g', 10); return [`<b>${c.en}</b> halts key exports to ${c.nm}; prices for your importers rise.`, 'bad']; },
     disinfo: (i, c) => { c.p.stability = clamp(c.p.stability - 1, 0, 100); reactAdd(i, c.intel ? 'i' : 'g', 6); return [`A disinformation campaign traced to <b>${c.en}</b> targets ${c.nm}'s government (approval −1).`, 'bad']; },
-    cyberattack: (i, c) => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7) * 0.8) { reactAdd(i, c.intel ? 'i' : 'g', 4); return [`${c.nm}'s counter-intelligence blocks a cyberattack traced to <b>${c.en}</b>.`, 'good']; } const v = c.p.gdp * (c.intel ? 0.0002 : 0.0004); c.p.treasury -= v; reactAdd(i, c.intel ? 'i' : 'g', 10); return [`A cyberattack blamed on <b>${c.en}</b> hits ${c.nm}'s banks and grid (≈ ${formatVal(v)} in damage).`, 'bad']; },
+    cyberattack: (i, c) => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7) * 0.8) { reactAdd(i, c.intel ? 'i' : 'g', 4); return [`${c.nm}'s counter-intelligence blocks a cyberattack traced to <b>${c.en}</b>.`, 'good']; } const v = c.p.gdp * (c.intel ? 0.0002 : 0.0004) * (typeof cyberShield === 'function' ? 1 - cyberShield() : 1); c.p.treasury -= v; reactAdd(i, c.intel ? 'i' : 'g', 10); return [`A cyberattack blamed on <b>${c.en}</b> hits ${c.nm}'s banks and grid (≈ ${formatVal(v)} in damage).`, 'bad']; },
     sabotage_back: (i, c) => { if (state.counterIntel && state.counterIntel.until > state.dayIndex && Math.random() < (state.counterIntel.lvl || 0.7) * 0.8) return [`${c.nm}'s counter-intelligence foils a sabotage plot linked to <b>${c.en}</b>.`, 'good']; const v = c.p.gdp * 0.0003; c.p.treasury -= v; reactAdd(i, 'i', 10); return [`Sabotage blamed on <b>${c.en}</b> damages ${c.nm}'s infrastructure (≈ ${formatVal(v)}).`, 'bad']; },
     military_alert: (i, c) => { reactAdd(i, 'f', 18); return [`<b>${c.en}</b> puts its forces on alert in response to ${c.nm}.`, 'bad']; },
     mobilize: (i, c) => { reactAdd(i, 'f', 22); addRel(c.me, i, -3); return [`<b>${c.en}</b> mobilises its forces and air defences, citing ${c.nm}'s actions.`, 'bad']; },
