@@ -4758,8 +4758,11 @@
                         layer.bindTooltip(() => countryTip(cName), { className: 'country-tooltip', sticky: GFX().sticky, direction: 'top', offset: [0, -6] });
                         layer._cName = cName; layer.on('tooltipopen', () => { PROV_TIP = layer; PROV_TIP_TXT = ''; });     // the province line follows the pointer
                         if (GFX().hover) {
-                            layer.on('mouseover', () => { if (layer !== playerFeature && layer !== targetFeature && !mapMoving) layer.setStyle(countryHoverStyle(layer)); });
-                            layer.on('mouseout', () => { if (layer !== playerFeature && layer !== targetFeature) { try { geojsonLayer.resetStyle(layer); } catch (e) { } } });
+                            // classic canvas: every restyle repaints everything inside the country's box (half the world for Russia), so the hover
+                            // tint waits until the pointer rests for a moment instead of repainting for each country it crosses on the way to a click
+                            const hvOk = () => layer !== playerFeature && layer !== targetFeature && !mapMoving, gpuHv = window.MAP_ENGINE === 'gpu';
+                            layer.on('mouseover', () => { if (!hvOk()) return; if (gpuHv) { layer.setStyle(countryHoverStyle(layer)); return; } clearTimeout(layer._hvT); layer._hvT = setTimeout(() => { if (hvOk()) { layer.setStyle(countryHoverStyle(layer)); layer._hvOn = 1; } }, 110); });
+                            layer.on('mouseout', () => { clearTimeout(layer._hvT); if (layer !== playerFeature && layer !== targetFeature && (gpuHv || layer._hvOn)) { layer._hvOn = 0; try { geojsonLayer.resetStyle(layer); } catch (e) { } } });
                         }
                         layer.on('dblclick', cancelPendingClick);
                         layer.on('click', (e) => {
