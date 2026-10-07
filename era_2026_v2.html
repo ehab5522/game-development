@@ -4992,7 +4992,7 @@
             const share = Math.round(100 * ours / (ours + theirs));
             const enemyTxt = en.length ? flagList(en) : `<span class="wm-c">${c.type === 'insurgency' ? 'Armed groups' : 'Rebel / non-state forces'}</span>`;
             const weary = Math.round(c.intensity / 15);
-            const terms = en.length && c.type !== 'tension' ? termsFor(c, en[0]).slice(0, 3) : [];
+            const terms = en.length && c.type !== 'tension' && !c.capit ? termsFor(c, en[0]).slice(0, 3) : [];
             let btns = '';
             if (en.length) {
                 if (c.type === 'war') btns += `<button type="button" class="wm-btn wm-go" onclick="warAction('ceasefire','${c.id}')">🕊 Propose ceasefire</button>`;
@@ -5128,7 +5128,7 @@
             if (X.capit) return { verdict: 'accepted', forced: true, ...S, score: 999 };
             const score = S.W - S.sum;
             if (!S.hard.length && score >= 0) return { verdict: 'accepted', ...S, score };
-            if (S.W < -12) return { verdict: 'rejected', ...S, score, why: 'They believe they are winning.' };
+            if (S.W < -12) return { verdict: 'rejected', ...S, score, why: pick(['We are not losing this war.', 'Our forces can still win this.']) };
             const cd = JSON.parse(JSON.stringify(d)), dropped = [];
             const shrink = k => {
                 if (k === 'kind') { cd.kind = c.type === 'war' ? 'ceasefire' : c.type === 'tension' ? 'deesc' : 'peace'; return; }
@@ -5149,7 +5149,7 @@
                 if (worst.k === 'kind' && cd.kind === (c.type === 'war' ? 'ceasefire' : c.type === 'tension' ? 'deesc' : 'peace')) break;
                 shrink(worst.k);
             }
-            return { verdict: 'rejected', ...S, score, why: S.W < 0 ? 'They believe time is on their side.' : 'The gap between the two positions is too wide.' };
+            return { verdict: 'rejected', ...S, score, why: S.W < 0 ? 'Time is on our side.' : 'The gap between our positions is still too wide.' };
         }
         function termsDefault(c, X) {
             return { kind: X.capit ? 'peace' : c.type === 'war' ? 'ceasefire' : c.type === 'ceasefire' ? 'peace' : 'deesc', cedeHeld: !!X.capit && X.held.cells > 0, provs: [], extra: 0,
