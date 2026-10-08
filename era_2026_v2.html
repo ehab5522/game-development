@@ -21967,6 +21967,131 @@ function milYardGo(id) {
     renderMilPanel();
 }
 
+// ---------- air defence: batteries intercept strikes in range and spend interceptors; reloads come from the reserve ----------
+const AD_PK = { adLR: 0.7, adMR: 0.65, adSR: 0.5 }, AD_COL = { adLR: '#ff8a5c', adMR: '#ffd27f', adSR: '#9fe6a0' }, AD_TIER = { adLR: 'long-range', adMR: 'medium-range', adSR: 'short-range' };
+let MIL_IN_DS = 0, AD_SHOW_ALL = false, AD_PICK = null;
+function adUnits() { return myUnits().filter(u => AD_KEYS.some(k => (u[k] || 0) > 0)); }
+// fire at an incoming strike on point pt: long-range batteries first, then medium, then short; two interceptors per engagement
+function adIntercept(pt) {
+    let shots = 0, tried = [];
+    for (const k of ['adLR', 'adMR', 'adSR']) {
+        const m = ASSET[k].msl;
+        const U = adUnits().filter(u => (u[k] || 0) > 0 && (u[m] || 0) > 0 && !['training', 'moving'].includes(u.status) && km(u, pt) <= ASSET[k].range).sort((a, b) => km(a, pt) - km(b, pt));
+        for (const u of U.slice(0, 2)) {
+            const n = Math.min(2, u[m]); u[m] -= n; shots += n; tried.push(u);
+            for (let i = 0; i < n; i++) if (Math.random() < AD_PK[k]) return { ok: true, by: u, k, shots };
+        }
+    }
+    return { ok: false, shots, tried };
+}
+// which batteries cover a point (with missiles loaded)
+function adCover(pt) { return adUnits().filter(u => !['training', 'moving'].includes(u.status) && AD_KEYS.some(k => (u[k] || 0) > 0 && (u[ASSET[k].msl] || 0) > 0 && km(u, pt) <= ASSET[k].range)); }
+// a missile raid on the country (retaliation strikes): batteries covering the capital and the military sites take a share of the salvo
+function adRaid(attacker) {
+    const me = state.playerIso, cap = capitalOf(me), pts = [cap].concat((state.sites || []).filter(s => s.owner === me && isMilBase(s)).slice(0, 6));
+    const salvo = 6; let kills = 0, shots = 0; const by = new Set();
+    for (let i = 0; i < salvo; i++) { const r = adIntercept(pts[i % pts.length]); shots += r.shots; if (r.ok) { kills++; by.add(r.by.name); } if (!r.shots) break; }
+    if (shots) milNote(`🛡 Air defences fired ${shots} interceptors at the incoming salvo${attacker ? ' from ' + esc(shortName(attacker)) : ''}: ${kills} of ${salvo} missiles shot down${by.size ? ' (' + esc([...by].slice(0, 3).join(', ')) + ')' : ''}.`, kills ? 'good' : 'bad');
+    return kills / salvo * 0.85;
+}
+{
+    const _ds = damageSite;
+    damageSite = function (site, outcome, attackerIso) {
+        MIL_IN_DS++;
+        try {
+            if (site && attackerIso && attackerIso !== state.playerIso && (site.owner === state.playerIso || site.host === state.playerIso) && state.army && state.phase === 'playing') {
+                const r = adIntercept(site);
+                if (r.ok) {
+                    (site.notes = site.notes || []).push(`${state.date.toLocaleDateString()}: ${shortName(attackerIso)} strike intercepted by ${r.by.name} (${AD_TIER[r.k]} air defence).`);
+                    try { updateSiteMarker(site); } catch (e) { }
+                    milNote(`🛡 ${esc(r.by.name)} shot down the ${esc(shortName(attackerIso))} strike on ${esc(site.name)} (${r.shots} interceptor${r.shots > 1 ? 's' : ''} fired).`, 'good');
+                    if (ARMY_MK[r.by.id]) ARMY_MK[r.by.id]._sig = '';
+                    return false;
+                }
+                if (r.shots) milNote(`🛡 Air defences fired ${r.shots} interceptors at the ${esc(shortName(attackerIso))} strike on ${esc(site.name)} but missed.`, 'bad');
+            }
+            return _ds.apply(this, arguments);
+        } finally { MIL_IN_DS--; }
+    };
+    // the retaliation missile raid (GDP damage) is thinned out by batteries covering the capital and bases
+    const _as = airShield;
+    airShield = function () { let v = _as.apply(this, arguments); if (MIL_IN_DS || !state.army || state.phase !== 'playing') return v; try { v = Math.min(0.9, v + adRaid()); } catch (e) { } return v; };
+}
+// range rings: closed polylines (the GPU map has no circles, and polygons sit under the water layer)
+const AD_RINGS = {};
+function adRingPts(c, r) {
+    const R = 6371, d = r / R, la = c.lat * Math.PI / 180, lo = c.lng * Math.PI / 180, out = [];
+    for (let i = 0; i <= 72; i++) { const b = i / 72 * 2 * Math.PI, la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b)), lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2)); out.push([la2 * 180 / Math.PI, milContLng(lo2 * 180 / Math.PI, c.lng)]); }
+    return out;
+}
+function adRingsRefresh() {
+    if (typeof L === 'undefined' || typeof map === 'undefined' || !map || state.phase !== 'playing') return;
+    const sel = new Set(army().sel), want = {};
+    adUnits().filter(u => AD_SHOW_ALL || sel.has(u.id)).forEach(u => AD_KEYS.forEach(k => { if ((u[k] || 0) > 0) want[u.id + k] = { u, k }; }));
+    Object.keys(AD_RINGS).forEach(id => { if (!want[id]) { try { map.removeLayer(AD_RINGS[id]); } catch (e) { } delete AD_RINGS[id]; } });
+    Object.keys(want).forEach(id => {
+        const { u, k } = want[id], ln = AD_RINGS[id], empty = !((u[ASSET[k].msl] || 0) > 0), sig = `${u.lat.toFixed(2)},${u.lng.toFixed(2)},${empty}`;
+        if (ln && ln._sig === sig) return;
+        const pts = adRingPts(u, ASSET[k].range);
+        if (ln) { try { map.removeLayer(ln); } catch (e) { } }
+        AD_RINGS[id] = L.polyline(pts, { color: empty ? '#8a8a8a' : AD_COL[k], weight: k === 'adLR' ? 2 : 1.6, opacity: 0.9, dashArray: empty ? '2 6' : '7 5', interactive: false }).addTo(map);
+        AD_RINGS[id]._sig = sig;
+    });
+}
+// place batteries from the reserve anywhere on your own territory (click the map)
+function adPlaceStart(key, n) {
+    const R = resOf(); n = Math.max(1, Math.round(+n || 1));
+    if ((R[key] || 0) < n) { MIL_MSG = [false, `⚠ The reserve holds ${(R[key] || 0)} ${esc(assetLabel(key))}. Buy or produce more in the Procure tab.`]; renderMilPanel(); return; }
+    AD_PICK = { key, n }; ARMY_MOVE_MODE = true; closeMilPanel();
+    try { map.getContainer().style.cursor = 'crosshair'; } catch (e) { }
+    flashReply(`📍 Click a spot on your own territory to deploy ${n} ${esc(assetLabel(key))} (${ASSET[key].range} km range). Esc cancels.`);
+}
+function adPlaceAt(ll) {
+    const P = AD_PICK; AD_PICK = null; ARMY_MOVE_MODE = false; try { map.getContainer().style.cursor = ''; } catch (e) { }
+    if (!P) return { ok: false };
+    const me = state.playerIso, c = canBuildAt('missile', ll.lat, ll.lng, { menu: true });
+    if (!c.ok || c.host !== me) { const why = String(c.reason || 'Air-defence batteries can only be set up on your own territory.').replace(/^[^:—]+: /, 'Air-defence batteries: '); flashReply('⛔ ' + esc(why)); return { ok: false, why }; }
+    const R = resOf(), m = ASSET[P.key].msl, comp = { [P.key]: P.n, [m]: Math.min(R[m] || 0, P.n * ASSET[P.key].mag) };
+    const need = crewNeed(comp); comp.troops = Math.min(R.troops || 0, need);
+    if (comp.troops < need) { flashReply(`⚠ ${P.n} ${esc(assetLabel(P.key))} need ${need} crew — the reserve has ${(R.troops || 0).toLocaleString()} troops. Recruit soldiers first.`); return { ok: false }; }
+    if (!resTake(comp)) { flashReply('⚠ The reserve no longer holds those batteries.'); return { ok: false }; }
+    const u = newUnit('adgroup', comp.troops, { lat: ll.lat, lng: ll.lng }, null, 0, comp, milDefaultName(comp));
+    u.status = 'deployed';
+    milNote(`🛡 ${esc(u.name)} deployed near ${esc(c.place || 'the chosen spot')}: ${esc(unitKit(u))}${comp[m] < P.n * ASSET[P.key].mag ? ' — magazines not full, buy interceptors and refill' : ''}.`, 'good');
+    army().sel = [u.id]; playClick(); armyRefreshMap(); milPing(ll);
+    return { ok: true, unit: u };
+}
+{
+    const _amt = armyMoveTo;
+    armyMoveTo = function (ll, toBase, opt) { if (AD_PICK && ll && !toBase) return adPlaceAt(ll); return _amt.apply(this, arguments); };
+    const _arm = armyRefreshMap;
+    armyRefreshMap = function () { const r = _arm.apply(this, arguments); try { adRingsRefresh(); } catch (e) { } return r; };
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && AD_PICK) { AD_PICK = null; ARMY_MOVE_MODE = false; try { map.getContainer().style.cursor = ''; } catch (er) { } } });
+}
+let MIL_ADP = { key: 'adMR', n: 1 };
+MIL_TAB_HTML.airdef = function () {
+    const U = adUnits(), R = resOf(), me = state.playerIso;
+    const sites = (state.sites || []).filter(s => s.owner === me && ['active', 'damaged', 'construction'].includes(s.status) && (isMilBase(s) || ['industry', 'military', 'nuclear', 'energy'].includes(siteT(s.type).cat)));
+    const covered = sites.filter(s => adCover(s).length).length;
+    const tierLine = k => { const b = U.reduce((t, u) => t + (u[k] || 0), 0), m = ASSET[k].msl, ld = U.reduce((t, u) => t + (u[m] || 0), 0), cap = b * ASSET[k].mag;
+        return `<div><span style="color:${AD_COL[k]}">●</span> <b>${AD_TIER[k]}</b> (${ASSET[k].range} km) — ${b} batter${b === 1 ? 'y' : 'ies'} deployed, ${ld}/${cap} interceptors loaded · reserve: ${R[k] || 0} batteries, ${R[m] || 0} interceptors</div>`; };
+    const avail = AD_KEYS.filter(k => (R[k] || 0) > 0);
+    if (!avail.includes(MIL_ADP.key) && avail.length) MIL_ADP.key = avail[0];
+    return `<div class="mil-note">Short-range batteries cover 10 km ($10M), medium-range 50 km ($150M), long-range 250 km ($800M). Batteries engage strikes on your sites inside their range — long range first — and spend two interceptors per engagement. Reload them from the reserve; buy interceptors abroad or make them at a Missile Factory.</div>
+        <div class="wm-card mr-sub" style="line-height:1.6">${AD_KEYS.slice().reverse().map(tierLine).join('')}<div>Your military, industrial and energy sites covered: <b style="color:#f3d98a">${covered}/${sites.length}</b></div></div>
+        <div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary" onclick="refillAD([]);renderMilPanel()">⟳ Refill all batteries</button>
+            <button type="button" class="gs-btn" onclick="MIL_TAB='procure';MIL_PROC={key:'mslMR',n:48,src:'import',seller:''};renderMilPanel()">🛒 Buy interceptors</button>
+            <button type="button" class="gs-btn" onclick="MIL_TAB='procure';MIL_PROC={key:'adMR',n:2,src:'import',seller:''};renderMilPanel()">🛒 Buy batteries</button>
+            <label class="mr-sub" style="display:flex;gap:5px;align-items:center"><input type="checkbox" ${AD_SHOW_ALL ? 'checked' : ''} onchange="AD_SHOW_ALL=this.checked;adRingsRefresh()"> show every battery's range on the map</label></div>
+        <div class="wm-card"><div class="wm-ctop"><b>📍 Deploy batteries from the reserve</b><span class="mr-sub">anywhere on your own territory — they are crewed and loaded from the reserve</span></div>
+            ${avail.length ? `<div class="mil-grid2" style="margin-top:6px"><label>Type <select onchange="MIL_ADP.key=this.value">${avail.map(k => `<option value="${k}" ${MIL_ADP.key === k ? 'selected' : ''}>${esc(assetLabel(k))} (${R[k]} in reserve)</option>`).join('')}</select></label>
+            <label>Batteries <input type="number" min="1" value="${MIL_ADP.n}" oninput="MIL_ADP.n=Math.max(1,Math.round(+this.value||1))"></label></div>
+            <div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary" onclick="adPlaceStart(MIL_ADP.key, MIL_ADP.n)">📍 Place on the map</button></div>` : `<div class="mr-sub">No batteries in the reserve.</div>`}</div>
+        <div class="mil-list">${U.length ? U.map(u => `<div class="mil-row"><label>${unitSvg(symFor(u), false)}</label><div class="mr-main"><b>${esc(u.name)}</b><div style="margin:2px 0">${compHTML(u, { h: 14, cls: 'sm', noTroops: true })}</div>
+            <div class="mr-sub">${AD_KEYS.filter(k => u[k] > 0).map(k => `${AD_TIER[k]}: ${u[ASSET[k].msl] || 0}/${u[k] * ASSET[k].mag} interceptors`).join(' · ')} · ${esc(unitWhere(u))}</div></div>
+            <div class="mr-act"><button type="button" class="gs-btn" onclick="AD_SHOW_ALL=false;milFocus('${u.id}')" title="Show on the map with its range">◎</button><button type="button" class="gs-btn" onclick="refillAD(['${u.id}']);renderMilPanel()" title="Reload from the reserve">⟳</button></div></div>`).join('') : '<div class="mil-note">No air-defence batteries deployed.</div>'}</div>`;
+};
+
 // ---- intel panel: the armed forces of the selected country ----
 function milStripHTML(iso) {
     if (!iso || !WORLD[iso] || NON_SOVEREIGN.has(iso)) return '';
