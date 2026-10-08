@@ -6721,8 +6721,9 @@
             // Joint infrastructure with other countries ("Negotiate a rail line with Pakistan and Iran")
             { const jt = jointProjectOf(text, s, type); if (jt) return jt; }
             // Explicit resource trade orders ("Buy 30 oil from Saudi Arabia")
-            if (/\b(buy|purchase|sell|export)\b/.test(s) && /\d/.test(s) && typeof parseTrade === 'function') {
-                const tr = parseTrade(text);
+            if (/\b(buy|purchase|sell|export)\b/.test(s) && typeof parseTrade === 'function') {
+                // no amount given ("Sell oil to China") → a standard 10-unit deal instead of a costly spending order
+                const tr = /\d/.test(s) ? parseTrade(text) : (() => { try { return parseTrade(String(text).replace(/\b(buy|purchase|sell|export)\b/i, m => m + ' 10')); } catch (e) { return null; } })();
                 if (tr) { const base = classifyOrderBase(text); if (base.targets.length) return { ...base, cat: 'economy', kind: 'tradeDeal', trade: tr, targets: base.targets.slice(0, 1).map(t => ({ ...t, stance: 'friendly' })) }; }
             }
             // Force movements / withdrawals
@@ -23894,11 +23895,14 @@ function milExpandOrdinals(s) {
 function milUnitsIn(text) {
     const s = milExpandOrdinals(milNorm(text)), GEN = new Set(['brigade', 'group', 'battalion', 'wing', 'force', 'task', 'the', 'of', 'unit', 'squadron', 'fleet', 'division', 'detachment', 'and', 'a']);
     const hits = [];
+    // words already used as equipment ("build 10 stealth fighters") must not name a unit loosely ("1st Fighter Wing")
+    let itemTxt = ''; try { itemTxt = ' ' + milItemsIn(text).filter(x => !x.guessed).map(x => milNorm(x.word).trim()).join(' ') + ' '; } catch (e) { }
+    const asItem = t => itemTxt.includes(' ' + t + ' ') || itemTxt.includes(' ' + t + 's ');
     myUnits().forEach(u => {
         const n = milNorm(u.name).trim(), toks = n.split(' ').filter(Boolean); let best = 0;
         if (s.includes(' ' + n + ' ') || s.includes(' ' + n + 's ')) best = 100 + n.length;
         else for (let k = toks.length; k >= 2 && !best; k--) { const pre = toks.slice(0, k).join(' '); if (s.includes(' ' + pre + ' ') || s.includes(' ' + pre + 's ')) best = 10 * k + pre.length; }
-        if (!best && toks.length) { const d = toks.filter(t => t.length >= 5 && !GEN.has(t) && !/^\d/.test(t)); if (d.length && d.every(t => s.includes(' ' + t + ' ') || s.includes(' ' + t + 's '))) best = 5 + d.join('').length; }
+        if (!best && toks.length) { const d = toks.filter(t => t.length >= 5 && !GEN.has(t) && !/^\d/.test(t) && !asItem(t)); if (d.length && d.every(t => s.includes(' ' + t + ' ') || s.includes(' ' + t + 's '))) best = 5 + d.join('').length; }
         if (best) hits.push({ u, best, n });
     });
     // "1st armoured" names one unit — drop weaker matches that are only part of a stronger one's name
@@ -23980,6 +23984,7 @@ function milPickUnits(text, kind, dest) {
 function milName(text) { const m = String(text || '').match(/\b(?:called|named|name it|as)\s+["“']?([^"”',.;]+?)["”']?(?=\s+(?:with|at|in|from|using|and|stationed|based|to)\b|[,.;]|$)/i); return m ? m[1].trim().replace(/\b\w/g, c => c.toUpperCase()).slice(0, 60) : ''; }
 function milOrderOf(text) {
     const me = state.playerIso; if (!me || !state.army) return null;
+    if (typeof nsaActive === 'function' && nsaActive()) return null;   // a movement recruits cells and runs its own orders
     const s = ' ' + String(text || '').toLowerCase().replace(/[’']/g, "'") + ' ';
     const base = { cat: 'military', kind: 'army', targets: [], scale: 1, covert: false, blocs: [], intel: null };
     const units = milUnitsIn(text), items = milItemsIn(text);
