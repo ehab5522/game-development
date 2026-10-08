@@ -20444,15 +20444,20 @@ function armyRefreshMap() {
             m.on('contextmenu', e => { try { L.DomEvent.stopPropagation(e); } catch (er) { } });
             m.addTo(map); m._sig = '';
         }
-        const sig = [A.sel.includes(u.id), u.status, u.troops, u.tanks, u.jets, u.helis, shipsOf(u)].join('|');
-        if (m._sig !== sig) { m.setIcon(unitIconFor(u)); m._sig = sig; }
+        const sig = [A.sel.includes(u.id), u.status, symFor(u), unitLabel(u), u.name].join('|');
+        if (m._sig !== sig) { m.setIcon(unitIconFor(u)); m._sig = sig; m._hd = undefined; m._emb = undefined; }
         m.setLatLng([u.lat, u.lng]);
-        // path line for moving units
+        // the route of a moving unit: redrawn only when a waypoint is passed (never per frame — the GPU map batches lines)
         const ln = ARMY_LN[u.id];
         if (u.status === 'moving' && u.path) {
-            const pts = [[u.lat, u.lng], [u.path.to.lat, u.path.to.lng]];
-            if (!ln) ARMY_LN[u.id] = L.polyline(pts, { color: '#7fd4ff', weight: 2, opacity: 0.8, dashArray: '6 6', interactive: false }).addTo(map);
-            else ln.setLatLngs(pts);
+            const P = milPts(u), n = P.length + '|' + (P[0] ? P[0][0] : '');
+            if (!ln || ln._n !== n) {
+                const pts = [[u.lat, u.lng]].concat(P.map(p => [p[0], p[1]]));
+                if (!ln) ARMY_LN[u.id] = L.polyline(pts, { color: '#7fd4ff', weight: 2, opacity: 0.8, dashArray: '6 6', interactive: false }).addTo(map);
+                else ln.setLatLngs(pts);
+                ARMY_LN[u.id]._n = n;
+            }
+            const nx = P[0]; if (nx) milSetHeading(m, u, milHeading(u, { lat: nx[0], lng: nx[1] }), !!(nx[2] && unitMoveMode(u) === 'land'));
         } else if (ln) { map.removeLayer(ln); delete ARMY_LN[u.id]; }
     });
     Object.keys(ARMY_MK).forEach(id => { if (!live.has(id)) { try { map.removeLayer(ARMY_MK[id]); } catch (e) { } delete ARMY_MK[id]; if (ARMY_LN[id]) { try { map.removeLayer(ARMY_LN[id]); } catch (e) { } delete ARMY_LN[id]; } } });
@@ -20535,25 +20540,41 @@ function moveCheck(ll) {          // may our troops go there?
     if (r >= 40 || (typeof treatyPartners === 'function' && treatyPartners(me, ['defense', 'alliance']).includes(iso))) return { ok: true, iso, ally: true };
     return { ok: false, iso, why: `${shortName(iso)} has not agreed to host our troops (relations ${r}). Sending troops in would be an invasion — order it through the command bar (e.g. "Invade ${shortName(iso)}") if you mean it.` };
 }
-function armyMoveTo(ll, toBase) {
-    const U = selUnits().filter(u => u.status !== 'training'); if (!U.length) return;
+function armyMoveTo(ll, toBase, opt) {
+    // opt: { units, quiet, label } — the command bar moves named formations through here too (no phantom copies, no fee)
+    opt = opt || {};
+    const U = (opt.units || selUnits()).filter(u => u && u.status !== 'training'); if (!U.length) return { ok: false, why: 'No formation to move.' };
+    const fail = w => { if (!opt.quiet) flashReply('⛔ ' + esc(w)); return { ok: false, why: w }; };
     const chk = toBase ? { ok: true } : moveCheck(ll);
-    if (!chk.ok) { flashReply('⛔ ' + esc(chk.why)); return; }
-    // warships sail: they go to sea areas or into naval bases, never inland
-    if (U.some(u => unitDomain(u) === 'sea') && (toBase ? toBase.type !== 'naval' : !!countryAtLL(ll))) {
-        flashReply(toBase ? `⛔ ${esc(toBase.name)} is not a naval base — warships can only dock at naval bases.` : '⛔ Warships can only move at sea or into a naval base. Click on the water (or use "Into base…" with a naval base).'); return;
-    }
-    const nc = nearestCity(ll.lat, ll.lng, 200), label = toBase ? toBase.name : nc ? `near ${nc.name}` : 'the selected position';
+    if (!chk.ok) return fail(chk.why);
+    // warships sail: they go to sea areas or into naval bases, never inland; ground forces stay on land (they embark to cross water)
+    const onLand = toBase ? true : milLandAt(ll);
+    if (U.some(u => unitMoveMode(u) === 'sea') && (toBase ? toBase.type !== 'naval' : onLand))
+        return fail(toBase ? `${toBase.name} is not a naval base — warships can only dock at naval bases.` : 'Warships can only move at sea or into a naval base. Click on the water (or use "Into base…" with a naval base).');
+    if (U.some(u => unitMoveMode(u) === 'land') && !onLand) return fail('Ground forces cannot stop on open sea — pick a place on land (they embark on transports to cross water on the way).');
+    const nc = nearestCity(ll.lat, ll.lng, 200), label = opt.label || (toBase ? toBase.name : nc ? `near ${nc.name}` : 'the selected position');
+    // one route per group of the same kind standing together; each unit keeps a small offset at the destination
+    const shared = {}; let days = 0, emb = false;
     U.forEach((u, i) => {
-        const off = U.length > 1 && !toBase ? { lat: ll.lat + (i % 3 - 1) * 0.12, lng: ll.lng + (Math.floor(i / 3) - 1) * 0.16 } : { lat: ll.lat, lng: ll.lng };
-        u.baseId = null; u.status = 'moving'; u.path = { to: { lat: off.lat, lng: off.lng, label, baseId: toBase ? toBase.id : null }, iso: chk.iso || null };
+        const off = U.length > 1 && !toBase ? { lat: ll.lat + (i % 3 - 1) * 0.12, lng: ll.lng + (Math.floor(i / 3) % 3 - 1) * 0.16 } : { lat: ll.lat, lng: ll.lng };
+        const mode = unitMoveMode(u), key = mode + '|' + (u.baseId || Math.round(u.lat) + ',' + Math.round(u.lng));
+        let R = shared[key];
+        if (!R || mode === 'air') { R = shared[key] = milRoute(u, off, mode, Math.max(1, unitSpeed(u))); }
+        const pts = R.pts.map(p => p.slice()); const last = pts[pts.length - 1]; last[0] = off.lat; last[1] = milContLng(off.lng, pts.length > 1 ? pts[pts.length - 2][1] : u.lng);
+        u.baseId = null; u.status = 'moving';
+        u.path = { to: { lat: off.lat, lng: off.lng, label, baseId: toBase ? toBase.id : null }, iso: chk.iso || null, pts, mode, from: [u.lat, u.lng] };
+        if (pts[0]) u.hd = Math.round(milHeading(u, { lat: pts[0][0], lng: pts[0][1] }));
+        if (ARMY_MK[u.id]) { ARMY_MK[u.id]._sig = ''; ARMY_MK[u.id]._hd = undefined; }
+        if (ARMY_LN[u.id]) { try { map.removeLayer(ARMY_LN[u.id]); } catch (e) { } delete ARMY_LN[u.id]; }
+        days = Math.max(days, Math.ceil(milRouteDays(u, u, pts))); if (pts.some(p => p[2])) emb = true;
     });
-    playClick();
-    const days = Math.max(...U.map(u => Math.max(1, Math.ceil(km(u, ll) / unitSpeed(u)))));
-    logEvent(`🪖 ${U.length > 1 ? U.length + ' units' : esc(U[0].name)} ordered to ${esc(label)} (≈${days} day${days > 1 ? 's' : ''}).${chk.ally ? ` Stationed with ${esc(shortName(chk.iso))}'s consent.` : chk.war ? ' Moving into the war zone.' : ''}`, 'neutral');
+    playClick(); milPing(ll);
+    days = Math.max(1, days);
+    milNote(`🪖 ${U.length > 1 ? U.length + ' units' : esc(U[0].name)} ordered to ${esc(label)} (≈${days} day${days > 1 ? 's' : ''}${emb ? ', partly by sea transport' : ''}).${chk.ally ? ` Stationed with ${esc(shortName(chk.iso))}'s consent.` : chk.war ? ' Moving into the war zone.' : ''}`, 'neutral');
     if (chk.ally) addRel(state.playerIso, chk.iso, 1);
     ARMY_MOVE_MODE = false; try { map.getContainer().style.cursor = ''; } catch (e) { }
-    armyRefreshMap();
+    SC_SIG = ''; armyRefreshMap(); milAnimStart();
+    return { ok: true, days, label, units: U };
 }
 function sendToBase(baseId) {
     const b = (state.sites || []).find(s => s.id === baseId); if (!b) return;
@@ -20564,29 +20585,37 @@ function sendToBase(baseId) {
     armyMoveTo({ lat: b.lat, lng: b.lng }, b);
 }
 function armyHalt() { selUnits().forEach(u => { if (u.status === 'moving') { u.status = 'deployed'; u.path = null; } }); armyRefreshMap(); }
-function armyTick() {              // runs on every game-clock tick; movement follows the game time that passed
+function armyTick() {              // runs on every game-clock tick; movement follows the game time that passed (the frames in between are animated)
     const A = army(); if (!A.units.length) return;
-    const now = state.date.getTime(), dt = A.lastT ? clamp((now - A.lastT) / 864e5, 0, 30) : 0; A.lastT = now;
+    const now = state.date.getTime(), dt = A.lastT ? clamp((now - A.lastT) / 864e5, 0, 400) : 0; A.lastT = now;
+    MIL_CLOCK = { perf: performance.now(), t: now };
     if (dt <= 0) return;
     let changed = false;
     A.units.forEach(u => {
-        if (u.status === 'training' && state.dayIndex >= u.readyDay) { u.status = u.baseId ? 'garrison' : 'deployed'; changed = true; logEvent(`🎖 ${esc(u.name)} has finished training (${u.troops.toLocaleString()} troops).`, 'good'); }
+        if (u.status === 'training' && state.dayIndex >= u.readyDay) { u.status = u.baseId ? 'garrison' : 'deployed'; changed = true; milNote(`🎖 ${esc(u.name)} has finished training (${u.troops.toLocaleString()} troops).`, 'good'); }
         if (u.status !== 'moving' || !u.path) return;
-        const step = unitSpeed(u) * dt, d = km(u, u.path.to);
-        if (d <= step) {
+        const pts = milPts(u), r = milWalk(u, pts, dt, u);
+        u.lat = r.lat; u.lng = r.lng; pts.splice(0, r.i);
+        if (r.done || !pts.length) {
             u.lat = u.path.to.lat; u.lng = u.path.to.lng;
+            while (u.lng > 180) u.lng -= 360; while (u.lng < -180) u.lng += 360;
             const b = u.path.to.baseId && (state.sites || []).find(s => s.id === u.path.to.baseId);
-            if (b && isMilBase(b) && baseFits(b, [u]).ok) { u.baseId = b.id; u.status = 'garrison'; }
+            if (b && isMilBase(b) && baseFits(b, [u]).ok) { u.baseId = b.id; u.status = 'garrison'; u.lat = b.lat; u.lng = b.lng; }
             else u.status = u.path.iso && atWarWith(u.path.iso) ? 'engaged' : 'deployed';
-            if (u.owner === state.playerIso) logEvent(`🪖 ${esc(u.name)} arrived ${esc(u.path.to.label || '')}.`, 'neutral');
+            if (u.owner === state.playerIso) milNote(`🪖 ${esc(u.name)} arrived ${esc(u.path.to.label || '')}${b && u.baseId !== b.id ? ` — ${esc(b.name)} had no room, so it camps beside it` : ''}.`, 'neutral');
             u.path = null;
-        } else { const f = step / d; u.lat += (u.path.to.lat - u.lat) * f; u.lng += (u.path.to.lng - u.lng) * f; u.ready = Math.max(60, (u.ready || 100) - 0.6 * dt); }
+        } else {
+            // across the date line: keep longitudes in range (the rest of the route moves with it)
+            if (u.lng > 180 || u.lng < -180) { const s = u.lng > 180 ? -360 : 360; u.lng += s; pts.forEach(p => p[1] += s); }
+            u.ready = Math.max(60, (u.ready || 100) - 0.6 * dt);
+            const nx = pts[0]; if (nx) u.hd = Math.round(milHeading(u, { lat: nx[0], lng: nx[1] }));
+        }
         changed = true;
     });
     A.units.forEach(u => { if (u.status !== 'moving' && (u.ready || 100) < 100) u.ready = Math.min(100, u.ready + 1 * dt); });
     if (changed) armyRefreshMap();
+    if (A.units.some(u => u.status === 'moving')) milAnimStart();
 }
-
 // ---------- recruiting, reinforcing, bases ----------
 function recruitCost(type, troops) { return BRIG[type].cost * troops / BRIG[type].troops * (typeof D === 'function' ? (D().cost || 1) : 1); }
 function recruit(type, troops, baseId, count) {
@@ -21477,6 +21506,186 @@ function refillAD(ids, quiet) {
     if (!quiet) { flashReply(msg); if (g.length) milNote(msg, 'neutral'); }
     if (g.length) { SC_SIG = ''; armyRefreshMap(); renderMilPanel(); }
     return { ok: g.length > 0, got, missing, msg };
+}
+
+// ---------- routing: ships sail around continents, ground forces stay on land (or embark to cross water), aircraft fly straight ----------
+// A 0.25° land/sea raster is drawn once from the country shapes (straits and canals carved open); A* on it finds the route,
+// line-of-sight smoothing turns it into a few waypoints. Routes are computed when an order is given, never per frame.
+const MILNAV = { W: 1440, H: 720, land: null, sea: null, kx: null, ready: false, tried: false };
+const MIL_SEALIFT = 600;            // km a day for troops embarked on transports
+// [lat, lng] polylines kept open for shipping: Gibraltar, Bosporus–Dardanelles, Suez, Bab el-Mandeb, Hormuz, Singapore, Panama, Øresund, Dover, Kerch, Messina, Sunda, Kiel, Torres
+const MIL_STRAITS = [[[36.05, -6.4], [35.97, -5.6], [36.0, -4.8]], [[41.35, 29.15], [41.05, 29.02], [40.85, 28.6], [40.6, 27.4], [40.3, 26.6], [40.0, 26.15]], [[31.5, 32.3], [30.6, 32.32], [30.0, 32.56], [29.6, 32.62], [29.0, 32.85], [28.3, 33.25], [27.7, 33.8], [27.2, 34.1], [26.6, 34.5]],
+    [[12.9, 43.15], [12.55, 43.4], [12.3, 43.6]], [[26.7, 56.0], [26.4, 56.5], [26.2, 56.9]], [[1.35, 103.4], [1.22, 103.9], [1.3, 104.4]], [[9.45, -79.95], [9.15, -79.8], [8.95, -79.55], [8.8, -79.5]],
+    [[56.2, 12.6], [55.8, 12.7], [55.4, 12.8]], [[51.15, 1.45], [50.95, 1.6]], [[45.45, 36.6], [45.2, 36.5]], [[38.3, 15.62], [37.95, 15.6]], [[-5.85, 105.75], [-6.1, 105.85]], [[54.38, 10.15], [53.9, 9.2]], [[-10.4, 142.1], [-10.6, 142.6]]];
+function milNavInit() {
+    if (MILNAV.ready) return true; if (MILNAV.tried) return false; MILNAV.tried = true;
+    try {
+        const idx = GEO_INDEX || buildGeoIndex(); if (!idx || !idx.length) return false;
+        const W = MILNAV.W, H = MILNAV.H, c = document.createElement('canvas'); c.width = W; c.height = H;
+        const x = c.getContext('2d', { willReadFrequently: true });
+        x.fillStyle = '#000'; x.fillRect(0, 0, W, H); x.fillStyle = '#fff';
+        const px = ln => (ln + 180) * 4, py = la => (90 - la) * 4;
+        idx.forEach(f => f.polys.forEach(pl => { x.beginPath(); pl.forEach(ring => { ring.forEach(([lo, la], i) => i ? x.lineTo(px(lo), py(la)) : x.moveTo(px(lo), py(la))); x.closePath(); }); x.fill('evenodd'); }));
+        x.strokeStyle = '#000'; x.lineWidth = 2.4; x.lineCap = 'round'; x.lineJoin = 'round';
+        MIL_STRAITS.forEach(L => { x.beginPath(); L.forEach(([la, lo], i) => i ? x.lineTo(px(lo), py(la)) : x.moveTo(px(lo), py(la))); x.stroke(); });
+        const d = x.getImageData(0, 0, W, H).data, land = new Uint8Array(W * H), sea = new Uint8Array(W * H), kx = new Float32Array(H);
+        for (let y = 0; y < H; y++) { const lat = 90 - (y + 0.5) / 4; kx[y] = 27.83 * Math.max(0.02, Math.cos(lat * Math.PI / 180));
+            for (let i = y * W, e = i + W; i < e; i++) { const L = d[i * 4] > 127; land[i] = L ? 1 : 0; sea[i] = !L && lat < 78 && lat > -66 ? 1 : 0; } }
+        Object.assign(MILNAV, { land, sea, kx, ready: true });
+        return true;
+    } catch (e) { console.warn('mil nav', e); return false; }
+}
+function milCell(lat, lng) { const W = MILNAV.W, x = ((Math.floor((lng + 180) * 4) % W) + W) % W, y = Math.floor((90 - lat) * 4); return y < 0 || y >= MILNAV.H ? -1 : y * W + x; }
+function milPass(grid, lat, lng) { const i = milCell(lat, lng); return i >= 0 && grid[i] === 1; }
+function milCellLL(i) { const W = MILNAV.W; return { lat: 90 - (((i / W) | 0) + 0.5) / 4, lng: (i % W + 0.5) / 4 - 180 }; }
+function milLandAt(ll) { return !!countryAtLL(ll); }
+function milLOS(a, b, grid) { const d = km(a, b), n = Math.max(2, Math.ceil(d / 12)); for (let k = 1; k < n; k++) { const f = k / n; if (!milPass(grid, a.lat + (b.lat - a.lat) * f, a.lng + (b.lng - a.lng) * f)) return false; } return true; }
+// nearest passable cell (ring search, up to ~10°)
+function milSnap(grid, ll, maxR) {
+    const W = MILNAV.W, H = MILNAV.H, c = milCell(ll.lat, ll.lng); if (c < 0) return -1; if (grid[c]) return c;
+    const cx = c % W, cy = (c / W) | 0; let best = -1, bd = Infinity;
+    for (let r = 1; r <= (maxR || 40); r++) {
+        for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const y = cy + dy; if (y < 0 || y >= H) continue; const j = y * W + ((cx + dx + W) % W);
+            if (grid[j]) { const p = milCellLL(j), dd = km(ll, p); if (dd < bd) { bd = dd; best = j; } }
+        }
+        if (best >= 0) return best;
+    }
+    return -1;
+}
+const MILNAV_BUF = { stamp: 0 };
+function milAStar(grid, s, t, maxExp) {
+    const W = MILNAV.W, H = MILNAV.H, N = W * H, B = MILNAV_BUF, KX = MILNAV.kx, KY = 27.83;
+    if (!B.g) { B.g = new Float32Array(N); B.par = new Int32Array(N); B.st = new Int32Array(N); B.cl = new Int32Array(N); }
+    const stamp = ++B.stamp, tx = t % W, ty = (t / W) | 0;
+    const kxMinRow = y => KX[Math.abs(y - 360) > Math.abs(ty - 360) ? y : ty];
+    const h = i => { const x = i % W, y = (i / W) | 0; let dx = Math.abs(x - tx); if (dx > W / 2) dx = W - dx; const a = dx * kxMinRow(y), b = (y - ty) * KY; return Math.sqrt(a * a + b * b) * 1.25; };
+    const hi = [], hk = [];
+    const push = (i, k) => { let n = hi.length; hi.push(i); hk.push(k); while (n > 0) { const p = (n - 1) >> 1; if (hk[p] <= k) break; hi[n] = hi[p]; hk[n] = hk[p]; n = p; } hi[n] = i; hk[n] = k; };
+    const pop = () => { const top = hi[0], li = hi.pop(), lk = hk.pop(); const n = hi.length; if (n) { let k = 0; while (true) { let c = 2 * k + 1; if (c >= n) break; if (c + 1 < n && hk[c + 1] < hk[c]) c++; if (hk[c] >= lk) break; hi[k] = hi[c]; hk[k] = hk[c]; k = c; } hi[k] = li; hk[k] = lk; } return top; };
+    B.g[s] = 0; B.st[s] = stamp; B.par[s] = -1; push(s, h(s));
+    const DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1];
+    let exp = 0, found = false;
+    while (hi.length) {
+        const i = pop(); if (B.cl[i] === stamp) continue; B.cl[i] = stamp;
+        if (i === t) { found = true; break; }
+        if (++exp > maxExp) return null;
+        const x = i % W, y = (i / W) | 0, gi = B.g[i];
+        for (let k = 0; k < 8; k++) {
+            const dx = DX[k], dy = DY[k], ny = y + dy; if (ny < 0 || ny >= H) continue;
+            const nx = (x + dx + W) % W, j = ny * W + nx; if (!grid[j] || B.cl[j] === stamp) continue;
+            if (dx && dy && (!grid[y * W + nx] || !grid[ny * W + x])) continue;          // no slipping diagonally between two land cells
+            const c = dx && dy ? Math.sqrt(KX[y] * KX[y] + KY * KY) : dx ? KX[y] : KY, ng = gi + c;
+            if (B.st[j] !== stamp || ng < B.g[j]) { B.st[j] = stamp; B.g[j] = ng; B.par[j] = i; push(j, ng + h(j)); }
+        }
+    }
+    if (!found) return null;
+    const path = []; for (let i = t; i !== -1; i = B.par[i]) path.push(i);
+    return path.reverse();
+}
+// cells → a few waypoints (line-of-sight), longitudes kept continuous across the date line
+function milSmooth(cells, grid, startLng) {
+    let prev = startLng; const P = cells.map(i => { const p = milCellLL(i); while (p.lng - prev > 180) p.lng -= 360; while (p.lng - prev < -180) p.lng += 360; prev = p.lng; return p; });
+    const out = []; let i = 0;
+    while (i < P.length - 1) {
+        let step = 1, good = i + 1;
+        while (i + step < P.length && milLOS(P[i], P[i + step], grid)) { good = i + step; step *= 2; }
+        let lo = good, hiI = Math.min(P.length - 1, i + step);
+        while (hiI - lo > 1) { const mid = (lo + hiI) >> 1; if (milLOS(P[i], P[mid], grid)) lo = mid; else hiI = mid; }
+        out.push(P[lo]); i = lo;
+    }
+    if (!out.length && P.length) out.push(P[P.length - 1]);
+    return out;
+}
+function milContLng(lng, ref) { while (lng - ref > 180) lng -= 360; while (lng - ref < -180) lng += 360; return lng; }
+// a route on one grid from a to b: [[lat,lng],…] ending at b, or null
+function milGridRoute(grid, a, b, maxExp) {
+    const s = milSnap(grid, a, 40), t = milSnap(grid, b, 40); if (s < 0 || t < 0) return null;
+    const cells = s === t ? [s] : milAStar(grid, s, t, maxExp || 600000); if (!cells) return null;
+    const W = milSmooth(cells, grid, a.lng), pts = W.map(p => [p.lat, p.lng]);
+    const last = pts.length ? pts[pts.length - 1] : [a.lat, a.lng];
+    pts.push([b.lat, milContLng(b.lng, last[1])]);
+    return pts;
+}
+function milRouteLen(a, pts) { let d = 0, p = a; pts.forEach(q => { const n = { lat: q[0], lng: q[1] }; d += km(p, n); p = n; }); return d; }
+// the route for one formation: sea (ships), air (straight), land (roads, or embark on transports when that is faster or the only way)
+function milRoute(a, b, mode, speed) {
+    if (mode === 'air' || !milNavInit()) return { pts: [[b.lat, milContLng(b.lng, a.lng)]], len: km(a, b), emb: false };
+    if (mode === 'sea') {
+        if (milLOS(a, b, MILNAV.sea)) return { pts: [[b.lat, b.lng]], len: km(a, b) };
+        const pts = milGridRoute(MILNAV.sea, a, b);
+        return pts ? { pts, len: milRouteLen(a, pts) } : { pts: [[b.lat, milContLng(b.lng, a.lng)]], len: km(a, b), nopath: true };
+    }
+    // ground forces
+    if (milLOS(a, b, MILNAV.land)) return { pts: [[b.lat, b.lng]], len: km(a, b) };
+    const direct = km(a, b), lp = milGridRoute(MILNAV.land, a, b, direct < 1500 ? 250000 : 500000), ll = lp ? milRouteLen(a, lp) : Infinity;
+    let best = lp && ll < direct * 4 ? { pts: lp, len: ll, t: ll / speed } : null;
+    // by sea: drive to the nearest coast, sail, land on the far shore
+    const sp = milGridRoute(MILNAV.sea, a, b);
+    if (sp && sp.length >= 2) {
+        const pts = sp.map((p, i) => [p[0], p[1], i === 0 || i === sp.length - 1 ? 0 : 1]);
+        let t = 3, prev = a; pts.forEach(q => { const n = { lat: q[0], lng: q[1] }; t += km(prev, n) / (q[2] ? MIL_SEALIFT : speed); prev = n; });
+        if (!best || t < best.t) best = { pts, len: milRouteLen(a, pts), t, emb: true };
+    }
+    return best || { pts: [[b.lat, b.lng]], len: direct, nopath: true };
+}
+// days a route takes for a formation (sea legs at transport speed for embarked ground forces)
+function milRouteDays(u, a, pts) { const sp = Math.max(1, unitSpeed(u)); let t = 0, prev = a; pts.forEach(q => { const n = { lat: q[0], lng: q[1] }; t += km(prev, n) / (q[2] && unitMoveMode(u) === 'land' ? MIL_SEALIFT : sp); prev = n; }); return t + (pts.some(q => q[2]) ? 3 : 0); }
+// walk `days` of travel along the route from pos (pure: nothing is changed)
+function milWalk(pos, pts, days, u) {
+    const sp = Math.max(1, unitSpeed(u)), land = unitMoveMode(u) === 'land';
+    let lat = pos.lat, lng = pos.lng, i = 0, t = days;
+    while (i < pts.length && t > 0) {
+        const p = pts[i], v = p[2] && land ? MIL_SEALIFT : sp, d = km({ lat, lng }, { lat: p[0], lng: p[1] }), need = d / v;
+        if (need <= t) { lat = p[0]; lng = p[1]; t -= need; i++; } else { const f = t / need; lat += (p[0] - lat) * f; lng += (p[1] - lng) * f; t = 0; }
+    }
+    return { lat, lng, i, done: i >= pts.length };
+}
+function milPts(u) { if (!u.path) return []; if (!Array.isArray(u.path.pts) || !u.path.pts.length) u.path.pts = [[u.path.to.lat, u.path.to.lng]]; return u.path.pts; }
+
+// ---------- smooth movement: every animation frame, between the 1-second game ticks (Rise of Nations style) ----------
+let MIL_CLOCK = { perf: 0, t: 0 }, MIL_RAF = 0, MIL_FPS = { n: 0, ms: 0 };
+function milAnimStart() { if (!MIL_RAF && typeof requestAnimationFrame === 'function') MIL_RAF = requestAnimationFrame(milAnimFrame); }
+function milSetHeading(m, u, hd, emb) {
+    const el = m && m._icon; if (!el) return;
+    if (m._hd === undefined || Math.abs(((hd - m._hd + 540) % 360) - 180) > 0.8) {
+        const g = el.querySelector('g.rot');
+        if (g) { const top = SPR_TOP.has(SYM_SPR[symFor(u)] || ''); g.setAttribute('transform', top ? `rotate(${hd.toFixed(1)} 32 32)` : (Math.cos(hd * Math.PI / 180) < -0.2 ? 'translate(64 0) scale(-1 1)' : '')); }
+        m._hd = hd; u.hd = Math.round(hd);
+    }
+    if (m._emb !== emb) { const b = el.querySelector('.brig') || el.firstChild; if (b && b.classList) b.classList.toggle('emb', !!emb); m._emb = emb; }
+}
+function movePosAt(mv, t) {
+    if (mv.status === 'deployed' || mv.status === 'engaged') return [mv.to.lat, mv.to.lng];
+    if (!mv.t0 || t <= mv.t0) return [mv.from.lat, mv.from.lng];
+    const f = clamp((t - mv.t0) / (mv.t1 - mv.t0), 0, 1);
+    return [mv.from.lat + (mv.to.lat - mv.from.lat) * f, mv.from.lng + (mv.to.lng - mv.from.lng) * f];
+}
+function milAnimFrame(now) {
+    MIL_RAF = 0; let busy = false; const t0 = performance.now();
+    try {
+        if (state.phase === 'playing' && state.army && !document.hidden && typeof map !== 'undefined' && map) {
+            const A = state.army, sp = state.speed || 0, base = MIL_CLOCK.t || A.lastT || state.date.getTime();
+            const vt = base + Math.min(1, Math.max(0, now - MIL_CLOCK.perf) / 1000) * sp * 1.44e6;
+            const dtv = A.lastT ? Math.max(0, (vt - A.lastT) / 864e5) : 0;
+            A.units.forEach(u => {
+                if (u.status !== 'moving' || !u.path) return; busy = true;
+                const m = ARMY_MK[u.id]; if (!m) return;
+                const pts = milPts(u), r = dtv > 0 ? milWalk(u, pts, dtv, u) : { lat: u.lat, lng: u.lng, i: 0 };
+                m.setLatLng([r.lat, r.lng]);
+                const nx = pts[Math.min(r.i, pts.length - 1)];
+                if (nx) milSetHeading(m, u, milHeading(r, { lat: nx[0], lng: nx[1] }), !!(nx[2] && unitMoveMode(u) === 'land'));
+            });
+            (state.moves || []).forEach(mv => { if (!mv.marker || mv._fog || !['transit', 'returning', 'mobilizing'].includes(mv.status)) return; busy = true; mv.marker.setLatLng(movePosAt(mv, vt)); });
+        }
+    } catch (e) { console.warn('mil anim', e); }
+    MIL_FPS.n++; MIL_FPS.ms += performance.now() - t0;
+    if (busy) MIL_RAF = requestAnimationFrame(milAnimFrame);
+}
+// a short ring where a move order lands
+function milPing(ll) {
+    try { const mk = L.marker([ll.lat, ll.lng], { icon: L.divIcon({ className: 'brig-pin', html: '<div class="mil-ping"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }), interactive: false, keyboard: false, zIndexOffset: 950 }).addTo(map); setTimeout(() => { try { map.removeLayer(mk); } catch (e) { } }, 950); } catch (e) { }
 }
 
 // ---- intel panel: the armed forces of the selected country ----
