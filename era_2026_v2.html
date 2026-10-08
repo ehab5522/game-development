@@ -22191,6 +22191,361 @@ function milAdvice(s) {
     return L.join('<br>');
 }
 
+// ---------- the command bar: buy / produce / recruit / form / merge / split / rename / move / station / refill / deploy air defence ----------
+// "buy 100 tanks from Russia", "build an aircraft carrier", "recruit 10000 soldiers", "form a battalion called Iron Wolves with 1000 troops
+// and 20 tanks at Lyon Garrison", "merge the 1st and 2nd Infantry Brigades", "move the 1st Armoured Brigade to Lyon" — real formations,
+// real prices, no fee for moving your own units, no phantom copies. With an AI connected it only fills gaps the rules could not read.
+const MIL_ITEM_RX = [
+    ['stealth', /\b(stealth (fighter jets?|fighters?|jets?|aircraft|planes?)|stealth|(f-?35[abci]?|f-?22|j-?20|j-?35|su-?57)s?( (stealth )?(fighter jets?|fighters?|jets?|aircraft|planes?))?|(fifth|5th)[- ]gen(eration)? (fighters?|jets?))\b/g],
+    ['bombers', /\b(((strategic|heavy|long[- ]range|nuclear) )?bombers?|(b-?2|b-?21|b-?52|b-?1b?|tu-?160|tu-?95|tu-?22m?|h-?6|h-?20)s?( ((strategic|stealth|heavy) )?bombers?)?)\b/g],
+    ['carriers', /\b(aircraft carriers?|super ?carriers?|carriers?|flat-?tops?)\b/g],
+    ['destroyers', /\bdestroyers?\b/g],
+    ['frigates', /\b(frigates?|corvettes?)\b/g],
+    ['msl', /\b(interceptors?( missiles?)?|(air[- ]?defen[cs]e|sam|patriot|pac-?3|s-?[34]00|nasams|iron dome) (missiles?|interceptors?|rounds|ammunition)|missiles? for (our|the) (air[- ]?defen[cs]es?|batter(y|ies)|sams?))\b/g],
+    ['ad', /\b(air[- ]?defen[cs]e( systems?| batter(y|ies)| units?| launchers?)?|sam (sites?|batter(y|ies)|systems?|launchers?)|surface[- ]to[- ]air( missile)?( systems?| batter(y|ies))?|anti[- ]?air(craft)?( systems?| batter(y|ies)| guns?)?|missile defen[cs]e( systems?)?|(patriots?|s-?[34]00s?|thaad|nasams|iron domes?|iris-?t|pantsirs?|shorads?|manpads|stingers?)( (air[- ]?defen[cs]e |missile |sam )?(batter(y|ies)|systems?|launchers?|units?))?|batter(y|ies))\b/g],
+    ['helis', /\b(((attack|transport|utility) )?helicopters?|helos?|choppers?|gunships?|(apaches?|black ?hawks?)( (attack |transport )?helicopters?)?)\b/g],
+    ['drones', /\b(combat drones?|drones?|uavs?|ucavs?|(bayraktars?|tb-?2s?|reapers?|mq-?9s?|shaheds?)( (combat )?drones?)?)\b/g],
+    ['ifv', /\b(ifvs?|apcs?|infantry fighting vehicles?|armou?red (personnel carriers?|vehicles?)|bradleys?|bmps?|strykers?)\b/g],
+    ['guns', /\b(artillery( pieces| guns| systems)?|howitzers?|self-propelled guns?|caesars?|m777s?|pzh ?2000s?|k9s?|himars|rocket launchers?|mlrs)\b/g],
+    ['tanks', /\b(main battle tanks?|tanks?|mbts?|(abrams|leopards?( 2)?|t-?(90|72|80|14)s?|merkavas?|challengers?( 3)?|leclercs?|k-?2|altays?|armatas?)( (main battle )?tanks?)?)\b/g],
+    ['jets', /\b(multi-?role (fighter )?(jets?|fighters?|aircraft)|fighter (jets?|planes?|aircraft)|fighters?|jets?|warplanes?|combat (aircraft|jets?|planes?)|(f-?16|f-?15|f\/a-?18|f-?18|rafale|typhoon|eurofighter|gripen|su-?3[0-5]|mig-?(29|35)|j-?1[0-6]|jf-?17|kf-?21|tejas)s?( (multi-?role |fighter )?(jets?|fighters?|aircraft|planes?))?|aircraft|planes?)\b/g],
+    ['troops', /\b(soldiers?|troops|infantry(men)?|men|personnel|recruits|conscripts|servicemen|marines|reservists)\b/g]
+];
+const MIL_NUMW = { a: 1, an: 1, one: 1, single: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50, hundred: 100, dozen: 12, couple: 2, few: 3, several: 4 };
+const MIL_DEFAULT_N = { troops: 1000, tanks: 10, ifv: 10, guns: 10, helis: 6, jets: 6, stealth: 4, bombers: 2, drones: 10, carriers: 1, destroyers: 1, frigates: 1, ad: 1, msl: 24 };
+function milNorm(s) {
+    return ' ' + String(s || '').toLowerCase().replace(/[’']/g, "'").replace(/\barmored\b/g, 'armoured').replace(/\bmechanized\b/g, 'mechanised').replace(/\bdefense\b/g, 'defence')
+        .replace(/\b(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\b/g, w => ({ first: '1st', second: '2nd', third: '3rd', fourth: '4th', fifth: '5th', sixth: '6th', seventh: '7th', eighth: '8th', ninth: '9th', tenth: '10th' })[w])
+        .replace(/[^a-z0-9'&]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+}
+// "the 1st and 2nd infantry brigades" → "the 1st infantry brigade and 2nd infantry brigade"
+function milExpandOrdinals(s) {
+    return s.replace(/\b(\d+(?:st|nd|rd|th))((?:(?: ,)? (?:and|&|,) \d+(?:st|nd|rd|th))+) ([a-z-]+(?: [a-z-]+)?)\b/g, (m, a, rest, words) => {
+        const w = words.replace(/s\b/g, '').replace(/ie$/, 'y'), ords = [a].concat(rest.match(/\d+(?:st|nd|rd|th)/g));
+        return ords.map(o => `${o} ${w}`).join(' and ');
+    });
+}
+// which of your formations does the text name? (full name, its first words "1st armoured", or a custom name)
+function milUnitsIn(text) {
+    const s = milExpandOrdinals(milNorm(text)), GEN = new Set(['brigade', 'group', 'battalion', 'wing', 'force', 'task', 'the', 'of', 'unit', 'squadron', 'fleet', 'division', 'detachment', 'and', 'a']);
+    const hits = [];
+    myUnits().forEach(u => {
+        const n = milNorm(u.name).trim(), toks = n.split(' ').filter(Boolean); let best = 0;
+        if (s.includes(' ' + n + ' ') || s.includes(' ' + n + 's ')) best = 100 + n.length;
+        else for (let k = toks.length; k >= 2 && !best; k--) { const pre = toks.slice(0, k).join(' '); if (s.includes(' ' + pre + ' ') || s.includes(' ' + pre + 's ')) best = 10 * k + pre.length; }
+        if (!best && toks.length) { const d = toks.filter(t => t.length >= 5 && !GEN.has(t) && !/^\d/.test(t)); if (d.length && d.every(t => s.includes(' ' + t + ' ') || s.includes(' ' + t + 's '))) best = 5 + d.join('').length; }
+        if (best) hits.push({ u, best, n });
+    });
+    // "1st armoured" names one unit — drop weaker matches that are only part of a stronger one's name
+    hits.sort((a, b) => b.best - a.best);
+    const out = []; hits.forEach(h => { if (!out.some(o => o.best >= 100 && h.best < 100 && o.n.includes(h.n))) out.push(h); });
+    const top = out.length ? out[0].best : 0;
+    // a loose match ("the fighter wing") names one formation unless the order says all / uses the plural
+    if (top && top < 20 && !/\b(all|every|both|each)\b/.test(s) && !out.some(h => s.includes(' ' + h.n.split(' ').pop() + 's '))) return [out[0].u];
+    return out.filter(h => h.best >= Math.min(top, 20)).map(h => h.u);
+}
+// items and quantities in an order
+function milItemsIn(text) {
+    let s = ' ' + String(text || '').toLowerCase().replace(/(\d),(\d{3})/g, '$1$2').replace(/(\d),(\d{3})/g, '$1$2') + ' ';
+    const found = [];
+    MIL_ITEM_RX.forEach(([key, rx]) => {
+        rx.lastIndex = 0; const all = [...s.matchAll(rx)]; if (!all.length) return;
+        const m = all[0];
+        found.push({ key, at: m.index, end: m.index + m[0].length, word: m[0] });
+        all.forEach(x => { s = s.slice(0, x.index) + ' '.repeat(x[0].length) + s.slice(x.index + x[0].length); });
+    });
+    found.sort((a, b) => a.at - b.at);
+    const raw = ' ' + String(text || '').toLowerCase().replace(/(\d),(\d{3})/g, '$1$2').replace(/(\d),(\d{3})/g, '$1$2') + ' ';
+    return found.map((f, i) => {
+        const from = Math.max(i ? found[i - 1].end : 0, f.at - 48), win = raw.slice(from, f.at);
+        let n = null;
+        const m = win.match(/(\d+(?:\.\d+)?)\s*(k|thousand|million|m)?\s+(?:[a-z0-9'-]+\s+){0,4}$/);
+        if (m) { n = parseFloat(m[1]) * (/^(k|thousand)$/.test(m[2] || '') ? 1000 : /^(million|m)$/.test(m[2] || '') ? 1e6 : 1); }
+        else { const w = win.match(/\b(a|an|one|single|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|hundred|dozen|couple|few|several)\b(?:\s+(?:of|new|more|extra|additional|modern|[a-z-]+))*\s*$/); if (w) n = MIL_NUMW[w[1]]; if (/\b(dozens|hundreds) of\s*(?:[a-z-]+\s+)*$/.test(win)) n = /hundreds/.test(win) ? 200 : 36; }
+        if (/\bsquadron of\s*$/.test(win)) n = 12;
+        let key = f.key;
+        const ctx = raw.slice(Math.max(0, f.at - 30), f.end + 12);
+        if (key === 'ad' || key === 'msl') { const tier = /long[- ]range|\blr\b|patriot|s-?[34]00|thaad|hq-?9|arrow/.test(ctx) ? 'LR' : /short[- ]range|\bsr\b|shorad|manpads|stinger|pantsir|iron dome|avenger|c-?ram/.test(ctx) ? 'SR' : 'MR'; key = (key === 'ad' ? 'ad' : 'msl') + tier; }
+        if (n === null) n = MIL_DEFAULT_N[f.key] || 1;
+        return { key, n: Math.max(1, Math.round(n)), word: f.word, guessed: !m };
+    }).filter(x => ASSET[x.key]);
+}
+const MIL_FACILITY_AFTER = /\b(tanks?|planes?|aircraft|jets?|fighters?|drones?|uavs?|missiles?|ships?|warships?|helicopters?|bombers?|interceptors?|armou?r(ed vehicles?)?|vehicles?|naval|air|army|military|navy|missile defen[cs]e|air[- ]?defen[cs]e|sam)\s+(factor(y|ies)|plants?|works|assembly|production (line|facility|plant)|yards?|bases?|sites?|complex(es)?|facilit(y|ies)|centers?|centres?|academ(y|ies)|schools?|airfields?|ports?|stations?|hubs?|industry|programs?|programmes?|research)\b|\b(ship ?yards?|dockyards?|air ?bases?|airfields?|naval bases?|army bases?|military bases?|barracks)\b/;
+// a destination for a move / station order: your base, a sea area, a city, a border or a country
+function milDestOf(text, units) {
+    const me = state.playerIso, s = ' ' + normName(text) + ' ';
+    const need = units.length ? units.map(baseTypesFor).reduce((a, t) => a.filter(x => t.includes(x))) : ['base'];
+    // only the part after "to / at / into / near…" names the destination (the unit names come before it)
+    const tail = (String(text).match(/\b(?:to|into|at|in|near|towards?|toward|around|off|for)\b\s+(.*)$/i) || [])[1] || '';
+    if (/\b(home|back home|back to base|to (its|their|our) bases?)\b/.test(s)) {
+        const u = units[0], b = u && basesFor(units).filter(x => (x.host || x.owner) === me && baseFits(x, units.filter(y => y.baseId !== x.id)).ok)[0];
+        return b ? { base: b, label: b.name } : null;
+    }
+    if (state.pin) return { ll: { lat: state.pin.lat, lng: state.pin.lng }, label: state.pin.label, pin: true };
+    const site = detectSite(tail || text);
+    if (site && site.owner === me && isMilBase(site)) return { base: site, label: site.name };
+    if (site) return { ll: { lat: site.lat, lng: site.lng }, label: site.name };
+    const sea = SEA_TERMS.find(t => (' ' + normName(tail || text) + ' ').includes(' ' + t + ' '));
+    if (sea) { const [la, ln] = SEA_ZONES[sea]; return { ll: { lat: la, lng: ln }, label: sea.replace(/\b\w/g, c => c.toUpperCase()), sea: true }; }
+    const city = detectCity(tail || text);
+    if (city) {
+        const station = /\b(station|garrison|base|stationed|based|house)\b/.test(s);
+        const b = myBases().filter(x => need.includes(x.type) && km(x, city) < (station ? 200 : 60) && (!units.length || baseFits(x, units.filter(y => y.baseId !== x.id)).ok)).sort((a, c) => km(a, city) - km(c, city))[0];
+        if (b) return { base: b, label: b.name };
+        return { ll: { lat: city.lat, lng: city.lng }, label: 'near ' + city.name, iso: city.iso };
+    }
+    const bm = normName(text).match(/border with ([a-z ]+)|([a-z]+) border|frontier with ([a-z ]+)/);
+    const other = (() => { try { return detectCountries(tail || text).filter(f => f.iso !== me).map(f => f.iso); } catch (e) { return []; } })();
+    if (bm && other[0]) { const p = borderPoint(me, other[0]); return p ? { ll: p, label: `${shortName(me)}–${shortName(other[0])} border` } : null; }
+    if (other[0]) { const c = capitalOf(other[0]); return { ll: { lat: c.lat + 0.15, lng: c.lng + 0.15 }, label: shortName(other[0]), iso: other[0] }; }
+    return null;
+}
+// auto-pick formations for "send 5000 troops to …", "send our fleet to …" (nearest available of that kind)
+function milPickUnits(text, kind, dest) {
+    const want = u => kind === 'naval' || kind === 'carrier' ? unitDomain(u) === 'sea' && (kind !== 'carrier' || u.carriers > 0) : kind === 'air' ? unitDomain(u) === 'air' && !(u.drones > unitAircraft(u) / 2)
+        : kind === 'drones' ? (u.drones || 0) > 0 && unitDomain(u) === 'air' : kind === 'armor' ? (u.tanks || 0) > 0 && unitDomain(u) === 'land' : kind === 'airdef' ? AD_KEYS.some(k => u[k] > 0) && !['tanks', 'ifv'].some(k => u[k] > 0) : unitDomain(u) === 'land';
+    const L = myUnits().filter(u => u.status !== 'training' && want(u)).sort((a, b) => (dest ? km(a, dest) - km(b, dest) : 0) || unitPower(b) - unitPower(a));
+    const m = String(text).toLowerCase().replace(/(\d),(\d{3})/g, '$1$2').match(/(\d[\d.]*)\s*(k|thousand)?\s*(troops|soldiers|men|personnel)/);
+    if (m && L.length) { const need = parseFloat(m[1]) * (m[2] ? 1000 : 1); const out = []; let got = 0; for (const u of L) { if (got >= need) break; out.push(u); got += u.troops; } return out; }
+    const c = String(text).toLowerCase().match(/\b(\d+|two|three|four|five|all)\s+(?:of (?:our|my) )?(?:[a-z-]+\s+)?(brigades?|battalions?|formations?|units?|wings?|groups?|task forces?|fleets?|squadrons?|batteries)\b/);
+    if (c) return c[1] === 'all' ? L : L.slice(0, MIL_NUMW[c[1]] || +c[1] || 1);
+    if (/\b(all|every|whole|entire)\b/.test(String(text).toLowerCase()) && /\b(fleet|navy|air force|army)\b/.test(String(text).toLowerCase())) return L;
+    return L.slice(0, 1);
+}
+function milName(text) { const m = String(text || '').match(/\b(?:called|named|name it|as)\s+["“']?([^"”',.;]+?)["”']?(?=\s+(?:with|at|in|from|using|and|stationed|based|to)\b|[,.;]|$)/i); return m ? m[1].trim().replace(/\b\w/g, c => c.toUpperCase()).slice(0, 60) : ''; }
+function milOrderOf(text) {
+    const me = state.playerIso; if (!me || !state.army) return null;
+    const s = ' ' + String(text || '').toLowerCase().replace(/[’']/g, "'") + ' ';
+    const base = { cat: 'military', kind: 'army', targets: [], scale: 1, covert: false, blocs: [], intel: null };
+    const units = milUnitsIn(text), items = milItemsIn(text);
+    let foreign = []; try { foreign = detectCountries(text).filter(f => f.iso !== me); } catch (e) { }
+    const strikeish = /\b(strike|strikes|attack|invade|invasion|bomb (?!factory)|shell|raid|assault|blockade|destroy|shoot down)\b/.test(s) && !/\b(defen[cs]e against|protect|intercept)\b/.test(s);
+    // housekeeping on named formations
+    if (/\b(refill|reload|re-?arm|restock|replenish|resupply|top up)\b/.test(s) && (/\b(air[- ]?defen[cs]es?|batter(y|ies)|interceptors?|sams?|missiles?|patriots?|s-?[34]00s?)\b/.test(s) || units.some(u => AD_KEYS.some(k => u[k] > 0))))
+        return { ...base, act: 'refill', unitIds: units.filter(u => AD_KEYS.some(k => u[k] > 0)).map(u => u.id) };
+    if (/\b(re-?name)\b/.test(s) && units.length) { const nm = (String(text).match(/\b(?:to|as|into)\s+["“']?([^"”]+?)["”']?\s*[.!]?\s*$/i) || [])[1]; return { ...base, act: 'rename', unitIds: [units[0].id], name: (nm || milName(text) || '').trim().slice(0, 60) }; }
+    if (/\b(merge|combine|join|consolidate|amalgamate|unite|fuse)\b/.test(s) && units.length >= 2) { const nm = (String(text).match(/\binto\s+(?:a |an |the |one )?(?:new |single |combined )?(?:formation |unit |brigade |battalion |group )?(?:called |named )?["“']?([A-Z][^"”,.;]+?)["”']?\s*[.!]?\s*$/) || [])[1]; return { ...base, act: 'merge', unitIds: units.map(u => u.id), name: (milName(text) || nm || '').trim() }; }
+    if (/\b(split|divide|detach|break up|separate|carve out|peel off)\b/.test(s) && units.length) {
+        const parts = {}; items.filter(x => ASSET[x.key] && !x.guessed).forEach(x => parts[x.key] = x.n);
+        const even = (s.match(/\b(?:in|into)\s+(two|three|four|five|halves|half|\d+)\b/) || [])[1];
+        return { ...base, act: 'split', unitIds: [units[0].id], parts, even: even ? ({ two: 2, halves: 2, half: 2, three: 3, four: 4, five: 5 })[even] || +even : 0, name: milName(text) };
+    }
+    if (/\b(reinforce|add|attach|assign|give)\b/.test(s) && units.length === 1 && items.length && !/\b(buy|purchase|import|produce|manufacture|recruit)\b/.test(s)) {
+        const parts = {}; items.forEach(x => parts[x.key] = (parts[x.key] || 0) + x.n); return { ...base, act: 'reinforce', unitIds: [units[0].id], parts };
+    }
+    if (/\b(disband|demobili[sz]e|stand down|dissolve|deactivate)\b|\b(to|into) (the |our )?(national )?reserve\b/.test(s) && units.length) return { ...base, act: 'disband', unitIds: units.map(u => u.id) };
+    // procurement (buy abroad / produce at home / recruit)
+    const procVerb = /\b(buy|purchase|order|procure|acquire|import|produce|manufacture|build|make|construct|recruit|train|conscript|draft|enlist|hire|get|lay down|commission|add|field)\b/.test(s);
+    const facility = MIL_FACILITY_AFTER.test(s);
+    const procItems = items.filter(x => x.key !== 'troops' || /\b(recruit|train|conscript|draft|enlist|hire|buy|purchase|raise|mobili[sz]e)\b/.test(s));
+    const formNoun = /\b(battalion|brigade|division|regiment|company|unit|formation|task force|strike group|squadron|air ?group|air wing|wing|battle ?group|flotilla|detachment)\b/.test(s);
+    const formVerb = /\b(form|create|organi[sz]e|assemble|set up|stand up|establish|put together|make up)\b/.test(s);
+    const buyVerb = /\b(buy|purchase|import|order|procure|acquire)\b/.test(s), prodVerb = /\b(produce|manufacture|build|make|construct|lay down|domestic(ally)?|at home|home-?made|locally|our (own )?(factor(y|ies)|shipyards?|plants?))\b/.test(s);
+    if (formVerb && formNoun && !buyVerb && !/\b(recruit|produce|manufacture)\b/.test(s) && !facility && !units.length) {
+        const comp = {}; items.forEach(x => { const k = x.key.startsWith('ad') ? x.key : x.key; comp[k] = (comp[k] || 0) + x.n; });
+        let b = null; const site = detectSite(text); if (site && site.owner === me && isMilBase(site)) b = site;
+        if (!b) { const city = detectCity(text); const probe = Object.assign({}, comp); const bs = basesFor([probe]).filter(x => baseFits(x, [probe]).ok); b = city ? bs.sort((a, c) => km(a, city) - km(c, city))[0] : bs[0]; }
+        return { ...base, act: 'form', comp, name: milName(text), baseId: b ? b.id : null };
+    }
+    if (procVerb && procItems.length && !facility && !strikeish && !units.length) {
+        const seller = (() => { const f = String(text).match(/\bfrom\s+(?:the\s+)?(.+)$/i); if (f) { try { const d = detectCountries(f[1]).filter(x => x.iso !== me); if (d.length) return d[0].iso; } catch (e) { } } return foreign[0] ? foreign[0].iso : null; })();
+        const L = procItems.map(x => {
+            const P = MIL_PRICE[x.key];
+            if (P.recruit) return { key: x.key, n: Math.max(100, Math.round(x.n / 100) * 100), src: 'recruit' };
+            let src = seller || (buyVerb && !prodVerb) ? 'import' : 'domestic', note = '';
+            const facOk = P.fac === 'yard' ? facSites('yard').length > 0 : facSites(P.fac).length > 0;
+            if (src === 'domestic' && !facOk && !/\b(produce|manufacture|domestic(ally)?|at home|home-?made|locally|our (own )?(factor(y|ies)|shipyards?|plants?))\b/.test(s)) { src = 'import'; note = `You have no ${FAC_NAME[P.fac]} — bought abroad instead (build one to produce at home).`; }
+            return { key: x.key, n: x.n, src, seller: src === 'import' ? seller : null, note };
+        });
+        L.forEach(it => { if (it.src === 'import' && !it.seller) { const s1 = sellersFor(it.key).find(z => z.ok); it.seller = s1 ? s1.iso : null; it.auto = true; } });
+        const tg = [...new Set(L.filter(i => i.seller).map(i => i.seller))].map(iso => ({ iso, stance: 'friendly' }));
+        return { ...base, act: 'procure', items: L, targets: tg };
+    }
+    // deploy air defence from the reserve at a place
+    if (/\b(deploy|place|position|install|set up|station|put)\b/.test(s) && items.some(x => x.key.startsWith('ad')) && !units.length) {
+        const it = items.find(x => x.key.startsWith('ad')), city = detectCity(text);
+        return { ...base, act: 'adplace', key: it.key, n: it.n, at: city ? { lat: city.lat + 0.05, lng: city.lng + 0.05 } : (state.pin ? { lat: state.pin.lat, lng: state.pin.lng } : null), label: city ? city.name : state.pin ? state.pin.label : '' };
+    }
+    // moves of real formations (named, or picked by kind) — free
+    const moveVerb = MOVE_RX.test(s) || /\b(go to|head to|garrison|base (it|them)|redeploy|bring)\b/.test(s), withdraw = WITHDRAW_RX.test(s);
+    if ((moveVerb || withdraw) && !strikeish) {
+        let U = units.filter(u => u.status !== 'training');
+        const kind = unitTypeOf(s);
+        if (!U.length && kind && !withdraw) { const d0 = milDestOf(text, []); U = milPickUnits(text, kind, d0 && (d0.base || d0.ll)); }
+        if (!U.length) return null;
+        let dest = withdraw ? milDestOf('home', U) : milDestOf(text, U);
+        // a hostile destination (a country we are not at war with and that is not friendly) stays a deployment order of the old kind
+        // a destination in a country that has not agreed to host us: a named formation is not sent in (that would be an invasion — "Invade …" is
+        // the order for it); a generic deployment order of that kind stays the old hostile deployment
+        let refuse = '';
+        if (dest && dest.ll && !dest.base) { const chk = moveCheck(dest.ll); if (!chk.ok) { if (!units.length) return null; refuse = chk.why; } }
+        return { ...base, act: withdraw ? 'home' : 'move', unitIds: U.map(u => u.id), dest, picked: !units.length, needsAI: !dest, refuse };
+    }
+    return null;
+}
+// what an army order costs and how long it takes; warnings shown on the card
+function milOrderPlan(o) {
+    o.cost = 0; o.days = 1; o.warn = ''; o.eta = '';
+    if (o.act === 'procure') {
+        let last = 0; const W = [];
+        o.items.forEach(it => {
+            it.cost = it.src === 'import' ? milPrice(it.key, it.n, 'import') : milPrice(it.key, it.n, 'domestic');
+            if (it.src === 'import') { const c = canSellArms(it.seller, it.key); if (!c.ok) W.push(c.why); it.days = milLead(it.key, it.n); }
+            else if (it.src === 'recruit') it.days = MIL_PRICE.troops.lead;
+            else if (MIL_PRICE[it.key].fac === 'yard') { if (!facSites('yard').length) W.push('No working Naval Shipyard.'); const S = facSites('yard'); it.days = S.length ? (yardSim(S[0].id, Array.from({ length: it.n }, () => ({ key: it.key }))).slice(-1)[0] || 365) : 365; }
+            else { const P = MIL_PRICE[it.key], r = facCapDay(P.fac); if (!(r > 0)) W.push(`No working ${FAC_NAME[P.fac]}.`); const E = milProdEta(P.fac); it.days = r > 0 ? (E.length ? E[E.length - 1] || 0 : 0) + Math.ceil(it.n * (P.slot || 1) / r) : 365; }
+            if (it.note) W.push(it.note);
+            o.cost += it.cost; last = Math.max(last, it.days || 0);
+        });
+        o.eta = fmtDate(dateIn(last)); o.warn = W.join(' ');
+        if (o.cost > nationIso(state.playerIso).treasury) o.warn = (o.warn ? o.warn + ' ' : '') + 'Not enough money in the treasury.';
+    } else if (o.act === 'move' || o.act === 'home') {
+        const U = (o.unitIds || []).map(unitById).filter(Boolean);
+        if (!o.dest) o.warn = 'Name a destination: a city, one of your bases, a sea area or a border (or pin one with 📍).';
+        else if (U.length) { const to = o.dest.base || o.dest.ll; let d = 0; U.forEach(u => { const R = milRoute(u, to, unitMoveMode(u), Math.max(1, unitSpeed(u))); d = Math.max(d, Math.ceil(milRouteDays(u, u, R.pts))); }); o.eta = fmtDate(dateIn(Math.max(1, d))); o.loc = { place: o.dest.label, host: o.dest.iso || state.playerIso }; }
+        if (o.dest && o.dest.base) { const f = baseFits(o.dest.base, U.filter(u => u.baseId !== o.dest.base.id)); if (!f.ok) o.warn = f.why; }
+        if (o.refuse) o.warn = o.refuse;
+    } else if (o.act === 'form') {
+        const R = resOf(), short = Object.keys(o.comp || {}).filter(k => (R[k] || 0) < o.comp[k]);
+        if (!Object.keys(o.comp || {}).length) o.warn = 'Say what it takes from the reserve, e.g. "with 1000 troops and 20 tanks".';
+        else if (short.length) o.warn = `The reserve is short of ${short.map(assetLabel).join(', ')}.`;
+        else if (!o.baseId) o.warn = 'No base of the right type with room for it.';
+    } else if (o.act === 'adplace') {
+        if (!o.at) o.warn = 'Name a city (or pin a spot) on your own territory.';
+        else if ((resOf()[o.key] || 0) < o.n) o.warn = `The reserve holds ${resOf()[o.key] || 0} ${assetLabel(o.key)} — buy more first.`;
+    } else if (o.act === 'refill') { const R = resOf(); if (!['mslSR', 'mslMR', 'mslLR'].some(k => R[k] > 0)) o.warn = 'No interceptors in the reserve — buy or produce some.'; }
+    else if (o.act === 'reinforce') { const R = resOf(), short = Object.keys(o.parts || {}).filter(k => (R[k] || 0) < o.parts[k]); if (short.length) o.warn = `The reserve is short of ${short.map(assetLabel).join(', ')} — buy or recruit them first.`; }
+    else if (o.act === 'rename' && !o.name) o.warn = 'Say the new name: "rename the 1st Armoured Brigade to Desert Lions".';
+    o.cost = Math.round(o.cost);
+    return o;
+}
+function milOrderSummary(o) {
+    const U = (o.unitIds || []).map(unitById).filter(Boolean), names = U.map(u => u.name).join(', ');
+    switch (o.act) {
+        case 'procure': return o.items.map(it => `${it.src === 'recruit' ? 'Recruit' : it.src === 'import' ? 'Buy' : 'Produce'} <b>${esc(milPl(it.n, it.key))}</b>${it.src === 'import' ? ` from <b>${esc(it.seller ? shortName(it.seller) : 'no willing seller')}</b>${it.auto ? ' (best offer)' : ''}` : it.src === 'domestic' ? ` at your ${FAC_NAME[MIL_PRICE[it.key].fac]}` : ''} · ${formatVal(it.cost || 0)} · ${it.days ? 'into the reserve ~' + fmtDate(dateIn(it.days)) : ''}`).join('<br>');
+        case 'form': return `Form <b>${esc(o.name || milDefaultNamePreview(o.comp || {}))}</b> from the reserve: ${esc(Object.keys(o.comp || {}).map(k => milPl(o.comp[k], k)).join(', ') || '—')} at <b>${esc(((state.sites || []).find(s => s.id === o.baseId) || {}).name || '—')}</b>`;
+        case 'merge': return `Merge <b>${esc(names)}</b>${o.name ? ` into <b>${esc(o.name)}</b>` : ''}`;
+        case 'split': return `Split ${o.even ? `<b>${esc(names)}</b> into ${o.even} parts` : `${esc(Object.keys(o.parts || {}).map(k => milPl(o.parts[k], k)).join(', ') || 'half')} off <b>${esc(names)}</b>`}${o.name ? ` as <b>${esc(o.name)}</b>` : ''}`;
+        case 'rename': return `Rename <b>${esc(names)}</b> to <b>${esc(o.name || '?')}</b>`;
+        case 'reinforce': return `Reinforce <b>${esc(names)}</b> from the reserve with ${esc(Object.keys(o.parts || {}).map(k => milPl(o.parts[k], k)).join(', '))}`;
+        case 'disband': return `Stand down <b>${esc(names)}</b> — everything back into the national reserve`;
+        case 'refill': return `Reload ${U.length ? '<b>' + esc(names) + '</b>' : 'all air-defence batteries'} from the reserve's interceptors`;
+        case 'adplace': return `Deploy <b>${esc(milPl(o.n, o.key))}</b> from the reserve near <b>${esc(o.label || '?')}</b>`;
+        case 'move': case 'home': return `${o.act === 'home' ? 'Bring home' : 'Move'} <b>${esc(names || '—')}</b>${o.picked ? ' (nearest available)' : ''} → <b>${esc(o.dest ? o.dest.label : '?')}</b>${o.eta ? ' · arrives ~' + o.eta : ''} · free (your own forces)`;
+    }
+    return '';
+}
+// carried out the moment the order is executed: money is already paid by Execute
+function milApplyOrder(o) {
+    if (o.milApplied) return o.milResult; o.milApplied = true;
+    const p = nationIso(state.playerIso), U = (o.unitIds || []).map(unitById).filter(Boolean), res = [];
+    let ok = true;
+    const done = (good, msg) => { res.push({ txt: msg, good }); if (!good) ok = false; };
+    try {
+        if (o.act === 'procure') {
+            let spent = 0;
+            o.items.forEach(it => {
+                const r = it.src === 'recruit' ? recruitTroops(it.n, { paid: true, quiet: true }) : it.src === 'import' ? procureImport(it.key, it.n, it.seller, { paid: true, quiet: true }) : procureDomestic(it.key, it.n, { paid: true, quiet: true });
+                if (r.ok) { spent += it.cost || 0; done(true, r.msg); milNote(esc(r.msg), 'neutral'); } else done(false, r.why);
+            });
+            const back = Math.max(0, (o.cost || 0) - spent); if (back > 0) { p.treasury += back; res.push({ txt: `${formatVal(back)} for what could not be ordered was returned to the treasury.`, good: null }); }
+            ok = res.some(x => x.good);
+        } else if (o.act === 'form') { const r = formUnit({ comp: o.comp, name: o.name, baseId: o.baseId, autoCrew: true, quiet: true }); if (r.ok) { done(true, `${r.unit.name} formed at ${(state.sites.find(s => s.id === r.unit.baseId) || {}).name}: ${unitKit(r.unit)}.`); milNote(`🎖 ${esc(r.unit.name)} formed from the reserve: ${esc(unitKit(r.unit))}.`, 'good'); } else done(false, r.why); }
+        else if (o.act === 'merge') { const k = mergeUnits(U, o.name, true); if (k) { done(true, `Merged into ${k.name}: ${unitKit(k)}.`); milNote(`⧉ Formations merged into ${esc(k.name)}: ${esc(unitKit(k))}.`, 'neutral'); } else { const r = U.length < 2 ? 'Fewer than two of the named formations still exist.' : (U.some(u => u.status === 'moving') ? 'Some of them are on the move — halt them first.' : 'They must stand in the same base or place.'); done(false, r); } }
+        else if (o.act === 'split') {
+            const u = U[0]; if (!u) done(false, 'That formation no longer exists.');
+            else if (o.even >= 2) { const before = myUnits().length; splitEven(u.id, o.even); done(myUnits().length > before, myUnits().length > before ? `${u.name} divided into ${o.even} formations.` : 'It is too small to divide.'); }
+            else { const parts = Object.keys(o.parts || {}).length ? Object.assign({}, o.parts) : ASSET_KEYS.reduce((a, [k]) => (a[k] = Math.floor((u[k] || 0) / 2), a), {}); const d = splitUnit(u.id, parts, o.name, true); if (d) { done(true, `${d.name} split off ${u.name}: ${unitKit(d)}.`); milNote(`✂ ${esc(d.name)} split off ${esc(u.name)}: ${esc(unitKit(d))}.`, 'neutral'); armyRefreshMap(); } else done(false, 'That split is not possible (not enough of those assets in it, or nothing would be left).'); }
+        }
+        else if (o.act === 'rename') { const u = U[0]; if (u && o.name && renameUnit(u.id, o.name)) done(true, `Renamed ${o.name}.`); else done(false, 'Name the formation and its new name.'); }
+        else if (o.act === 'reinforce') { const u = U[0]; if (u && reinforceFromReserve(u.id, o.parts, true)) { done(true, `${u.name} reinforced: ${unitKit(u)}.`); milNote(`🎖 ${esc(u.name)} reinforced from the reserve: ${esc(unitKit(u))}.`, 'neutral'); } else done(false, u ? 'The reserve does not hold that much, or the base has no room.' : 'That formation no longer exists.'); }
+        else if (o.act === 'disband') { let n = 0; U.forEach(u => { if (disbandUnit(u.id)) n++; }); done(n > 0, n ? `${n} formation${n > 1 ? 's' : ''} stood down to the reserve.` : 'Nothing to stand down.'); }
+        else if (o.act === 'refill') { const r = refillAD(U.map(u => u.id), true); done(r.ok, r.msg); if (r.ok) milNote(esc(r.msg), 'neutral'); }
+        else if (o.act === 'adplace') { if (!o.at) done(false, 'No place given.'); else { AD_PICK = { key: o.key, n: o.n }; const r = adPlaceAt(o.at); done(!!r.ok, r.ok ? `${r.unit.name} deployed near ${o.label}.` : (r.why || 'Could not deploy there.')); } }
+        else if (o.act === 'move' || o.act === 'home') {
+            if (!o.dest) done(false, 'No destination was given.');
+            else if (o.refuse) done(false, o.refuse);
+            else if (!U.length) done(false, 'The named formations no longer exist.');
+            else { const r = o.dest.base ? (baseFits(o.dest.base, U.filter(u => u.baseId !== o.dest.base.id)).ok ? armyMoveTo({ lat: o.dest.base.lat, lng: o.dest.base.lng }, o.dest.base, { units: U, quiet: true }) : { ok: false, why: baseFits(o.dest.base, U.filter(u => u.baseId !== o.dest.base.id)).why }) : armyMoveTo(o.dest.ll, null, { units: U, quiet: true, label: o.dest.label });
+                done(!!r.ok, r.ok ? `${U.map(u => u.name).join(', ')} on the way ${/^near /.test(o.dest.label) ? o.dest.label : 'to ' + o.dest.label} (≈${r.days} day${r.days > 1 ? 's' : ''}).` : r.why); }
+        }
+    } catch (e) { console.warn('army order', e); done(false, 'The order could not be carried out.'); }
+    if (!ok && o.cost > 0 && o.act !== 'procure') { p.treasury += o.cost; res.push({ txt: `${formatVal(o.cost)} returned to the treasury.`, good: null }); }
+    if (!ok && o.act === 'procure' && !res.some(x => x.good) && o.cost > 0 && !res.some(x => /returned/.test(x.txt))) { p.treasury += o.cost; res.push({ txt: `${formatVal(o.cost)} returned to the treasury.`, good: null }); }
+    o.milResult = { ok, effects: res };
+    try { updateEconomyUI(); renderMilPanel(); } catch (e) { }
+    return o.milResult;
+}
+// an AI (when connected) fills what the rules could not read: the destination, the seller, which formations
+async function aiInterpretArmy(o) {
+    if (!o || !o.needsAI || typeof aiReady !== 'function' || !aiReady()) return;
+    o.aiPending = true; try { renderQueue(); } catch (e) { }
+    const sys = `You are the defence ministry in a realistic geopolitical strategy game. Map the player's military order onto the game's structured actions. Answer with JSON only.`;
+    const user = `ORDER: "${o.text}"\nFormations: ${myUnits().slice(0, 40).map(u => `"${u.name}" (${unitKit(u, ', ')}, ${unitWhere(u)})`).join('; ')}\nBases: ${myBases().map(b => `"${b.name}" (${b.type})`).join('; ')}\n${MIL_AI_RULES}\n\n`
+        + `Return JSON: {"action":"move|station|home|procure|form|merge|split|rename|refill|none","units":["exact formation names"],"destination":"a city, one of the bases above, or a sea area","items":[{"key":"troops|tanks|ifv|guns|helis|jets|stealth|bombers|drones|frigates|destroyers|carriers|adSR|adMR|adLR|mslSR|mslMR|mslLR","n":number,"source":"import|domestic","seller":"ISO3"}],"name":"formation name if given","note":"one sentence telling the player how it was understood"}`;
+    let r = null; try { r = await callAI(sys, user, true, { maxTokens: 500, quiet: true }); } catch (e) { console.warn('ai army', e); }
+    o.aiPending = false; if (!state.orders.queue.includes(o)) return;
+    try {
+        if (r && typeof r === 'object') {
+            const find = n => myUnits().find(u => milNorm(u.name).trim() === milNorm(n).trim()) || milUnitsIn(String(n))[0];
+            const U = (Array.isArray(r.units) ? r.units : []).map(find).filter(Boolean);
+            if (['move', 'station', 'home'].includes(r.action) && (U.length || (o.unitIds || []).length)) {
+                if (U.length) o.unitIds = U.map(u => u.id);
+                const UU = o.unitIds.map(unitById).filter(Boolean), d = r.action === 'home' ? milDestOf('home', UU) : milDestOf('to ' + String(r.destination || ''), UU);
+                if (d && (!d.ll || moveCheck(d.ll).ok)) { o.dest = d; o.refuse = ''; o.act = r.action === 'home' ? 'home' : 'move'; }
+            } else if (r.action === 'procure' && Array.isArray(r.items) && r.items.length) {
+                const L = r.items.filter(x => MIL_PRICE[x.key] && +x.n > 0).slice(0, 4).map(x => ({ key: x.key, n: Math.round(+x.n), src: MIL_PRICE[x.key].recruit ? 'recruit' : x.source === 'domestic' ? 'domestic' : 'import', seller: x.source === 'domestic' ? null : (WORLD[String(x.seller || '').toUpperCase()] ? String(x.seller).toUpperCase() : null) }));
+                L.forEach(it => { if (it.src === 'import' && !it.seller) { const s1 = sellersFor(it.key).find(z => z.ok); it.seller = s1 ? s1.iso : null; it.auto = true; } });
+                if (L.length) { o.act = 'procure'; o.items = L; o.targets = [...new Set(L.filter(i => i.seller).map(i => i.seller))].map(iso => ({ iso, stance: 'friendly' })); }
+            }
+            if (r.note) o.aiArmyNote = String(r.note).slice(0, 200);
+            o.needsAI = false; milOrderPlan(o);
+        }
+    } catch (e) { console.warn('ai army apply', e); }
+    try { renderQueue(); updateCapacity(); } catch (e) { }
+}
+{
+    const _co = classifyOrder;
+    classifyOrder = function (text) { try { const o = milOrderOf(text); if (o) return o; } catch (e) { console.warn('army parse', e); } return _co.apply(this, arguments); };
+    const _pl = planOrder;
+    planOrder = function (text) {
+        const o = _pl.apply(this, arguments);
+        if (o && o.kind === 'army') {
+            try { milOrderPlan(o); } catch (e) { console.warn('army plan', e); o.cost = 0; o.days = 1; }
+            // bookkeeping on your own forces is not world news and needs no AI verdict
+            if (o.act !== 'procure') { o.aiAsked = 'skip'; o.newsId = 'quiet'; }
+            o.worldNoticed = true;
+            if (o.needsAI) setTimeout(() => { try { aiInterpretArmy(o); } catch (e) { } }, 0);
+        }
+        return o;
+    };
+    const _ro = resolveOrder;
+    resolveOrder = function (o) {
+        if (!o || o.kind !== 'army') return _ro.apply(this, arguments);
+        const r = milApplyOrder(o);
+        o.outcome = r.ok ? 'Success' : 'Failure'; o.effects = (o.effects || []).concat(r.effects.filter(e => !(o.effects || []).some(x => x.txt === e.txt))); o.worldNoticed = true;
+        try { if (o.ai && !o.aiApplied) aiOrderApply(o); } catch (e) { }
+        try { newsOrderResolved(o); } catch (e) { }
+        return o;
+    };
+    const _ex = executeOrders;
+    executeOrders = function () {
+        const before = new Set(state.orders.history.map(o => o.id));
+        const r = _ex.apply(this, arguments);
+        // army orders act at once (units start moving, purchases are placed); the order log reports them the next day
+        try { state.orders.history.filter(o => !before.has(o.id) && o.kind === 'army' && o.status === 'active').forEach(o => { milApplyOrder(o); }); renderOrderLog(); } catch (e) { console.warn('army exec', e); }
+        return r;
+    };
+    const _nd = needsDirective;
+    needsDirective = function (o) { if (o && o.kind === 'army') return false; return _nd.apply(this, arguments); };
+    const _ox = orderExplain;
+    orderExplain = function (o) {
+        if (!o || o.kind !== 'army') return _ox.apply(this, arguments);
+        const row = (k, v) => `<div class="ox-row"><span>${k}</span><span>${v}</span></div>`;
+        return `<div class="ox-box">${row('Understood as', milOrderSummary(o))}${row('Cost', o.cost > 0 ? `${formatVal(o.cost)} · ${o.act === 'procure' ? 'spec price (bulk discounts applied), paid on Execute' : ''}` : '<i>free — your own forces</i>')}${o.aiPending ? row('AI', '🤖 reading the order…') : o.aiArmyNote ? row('AI', '🤖 ' + esc(o.aiArmyNote)) : ''}${o.warn ? row('Note', `<span style="color:#fca5a5">${esc(o.warn)}</span>`) : ''}</div>`;
+    };
+}
+
 // ---- intel panel: the armed forces of the selected country ----
 function milStripHTML(iso) {
     if (!iso || !WORLD[iso] || NON_SOVEREIGN.has(iso)) return '';
