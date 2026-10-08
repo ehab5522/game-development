@@ -20064,8 +20064,8 @@ function nsaStateMonthly() {
         if (x === me || NON_SOVEREIGN.has(x) || !(WORLD[x][3] > 0.05) || N.recog.includes(x) || N.fronts.includes(x)) return;
         const r = getRel(me, x); if (r > 35 && !NSA_SEP_FEAR.has(x) && Math.random() < 0.02 + r / 3000) nsaGrantRecog(x);
     });
-    const sig = nsaCellSig();
-    if (sig !== st.cellSig) { st.cellSig = sig; try { const g = nsaBuildGeo(); if (g) { st.geo = g; st.geoV = (st.geoV || 1) + 1; nsaGeoApply(); } } catch (e) { console.warn('statehood border', e); } }
+    const sig = nsaCellSig(), cnt = s => s.split(';').reduce((a, x) => a + (+(x.split(':')[1]) || 0), 0);
+    if (sig !== st.cellSig && Math.abs(cnt(sig) - cnt(st.cellSig || '')) >= 4 && state.dayIndex - (st.regenDay || st.day) >= 85) { st.cellSig = sig; st.regenDay = state.dayIndex; try { const g = nsaBuildGeo(); if (g) { st.geo = g; st.geoV = (st.geoV || 1) + 1; nsaGeoApply(); } } catch (e) { console.warn('statehood border', e); } }
 }
 
 // ---- the new state's borders: drawn from the control map (provinces, control points and the ~28 km squares), traced into polygons ----
@@ -20095,6 +20095,16 @@ function nsaOwnerRaster(iso, MX) {
             else g[o] = kk;
         }
     });
+    for (let pass = 0; pass < 2; pass++) {          // slivers where province borders and the country border disagree by a pixel or two
+        const g2 = g.slice();
+        for (let j = 1; j < H - 1; j++) for (let i = 1; i < W - 1; i++) {
+            const o = j * W + i; if (mask[o * 4 + 3] < 20) continue;
+            const v = g[o]; let same = 0; const tally = {};
+            for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { if (!di && !dj) continue; const u = o + dj * W + di; if (mask[u * 4 + 3] < 20) continue; const k = g[u]; if (k === v) same++; else tally[k] = (tally[k] || 0) + 1; }
+            if (same <= 2) { let bk = v, bn = 0; for (const k in tally) if (tally[k] > bn) { bn = tally[k]; bk = +k; } if (bn >= 4) g2[o] = bk; }
+        }
+        g.set(g2);
+    }
     const ov = (state.control || {})[iso], G = ov && Object.keys(ov).length ? gridOf(iso) : null;
     if (G) for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
         const o = j * W + i; if (mask[o * 4 + 3] < 20) continue;
@@ -20313,7 +20323,7 @@ function nsaGroupTiles() {
             else _rs.apply(this, arguments);
             const body = document.getElementById('soc-body'), bar = body && body.firstElementChild;
             if (bar) { const b = document.createElement('button'); b.type = 'button'; b.className = 'gs-btn' + (socTab === 'nsostate' ? ' gs-btn-primary' : ''); b.textContent = '🏳 Independence'; b.onclick = () => socSetTab('nsostate'); bar.appendChild(b); }
-            if (socTab === 'nsostate' && body) { [...body.children].slice(1).forEach(c => c.remove()); body.insertAdjacentHTML('beforeend', nsaIndependenceHTML()); }
+            if (socTab === 'nsostate' && body) { [...body.children].slice(1).forEach(c => c.remove()); if (bar) [...bar.children].forEach(c => c.classList.toggle('gs-btn-primary', c.textContent === '🏳 Independence')); body.insertAdjacentHTML('beforeend', nsaIndependenceHTML()); }
             return;
         }
         const tabs = [['nso', '🏴 Movement'], ['nsoeco', '💰 Illicit economy'], ['nsofor', '🔫 Cells & network'], ['nsoter', '🗺 Territory & fronts'], ['nsostate', '🏳 Recognition & statehood'], ['war', 'War & casualties'], ['actors', 'Non-state actors'], ['world', 'World rankings']];
@@ -20667,7 +20677,11 @@ function nsaRulesText() {
     const _pe = polElection;
     polElection = function () { if (nsaActive()) return; return _pe.apply(this, arguments); };
     const _co = capitulationOffer;          // a movement does not accept a government's capitulation — it declares statehood instead
-    capitulationOffer = function () { if (nsaActive()) return; return _co.apply(this, arguments); };
+    capitulationOffer = function (foe) {
+        const N = state.nsa; if (nsaActive()) return;
+        if (N && N.statehood && (NON_SOVEREIGN.has(foe) || ((N.statehood.geo || {}).hosts || {})[foe] && N.statehood.geo.hosts[foe].whole)) return;     // a territory the new state took over whole
+        return _co.apply(this, arguments);
+    };
     const _oc = orgCanApply;
     orgCanApply = function (o) { if (nsaActive()) return [false, 'Armed movements cannot join — declare statehood first']; return _oc.apply(this, arguments); };
     const _sm = socMonthly;                 // no taxes, bonds or state debt: the movement's money is the illicit economy
