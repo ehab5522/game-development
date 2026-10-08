@@ -19433,7 +19433,8 @@ function nsaRatio(h) {
 // the war between you and a government (the shared civil war, or your own insurgency)
 function nsaConflictWith(h) {
     const me = state.playerIso;
-    return state.conflicts.find(c => c.type !== 'resolved' && ((c.sideB.includes(me) && (c.sideA.includes(h) || (c.location || []).includes(h))) || (c.sideA.includes(me) && c.sideB.includes(h)))) || null;
+    const L = state.conflicts.filter(c => c.type !== 'resolved' && ((c.sideB.includes(me) && (c.sideA.includes(h) || (c.location || []).includes(h))) || (c.sideA.includes(me) && c.sideB.includes(h))));
+    return L.find(c => ['war', 'insurgency'].includes(c.type)) || L[0] || null;
 }
 function nsaEnsureWar(h, why) {
     const N = state.nsa, me = N.key, d = nsaDef(N.id);
@@ -19578,31 +19579,33 @@ function nsaFrontTick(catchUp) {
         const c = nsaConflictWith(h), op = (N.ops || []).filter(o => o.host === h && o.until > day).sort((a, b) => b.str - a.str)[0];
         if (!op && !(c && ['war', 'insurgency'].includes(c.type))) return;        // frozen lines move only when you attack
         if (N.mode === 'nso' && N.low > day && !op) return;
-        const R = nsaRatio(h), sup = nationIso(me).stability || 50;
-        const pg = clamp(0.5 + 0.28 * Math.tanh(Math.log(R)) + (op ? 0.1 * op.str : 0) + (sup - 50) / 300 - (N.mode === 'nso' ? N.heat / 600 + (N.coin || 0) / 500 : 0), 0.1, 0.9);
-        const inten = c ? c.intensity / 100 : 0.5;
-        const lam = (op ? 1.2 + op.str : 0.25 + inten * 0.5) * clamp(Math.sqrt(G.cells.length / 400), 0.6, 2);
-        let flips = Math.floor(lam) + (Math.random() < lam - Math.floor(lam) ? 1 : 0);
+        const R = nsaRatio(h), sup = nationIso(me).stability || 50, size = clamp(Math.sqrt(G.cells.length / 400), 0.6, 2);
+        const pg = clamp(0.5 + 0.28 * Math.tanh(Math.log(R)) + (sup - 50) / 300, 0.1, 0.9);                 // the war's own ebb and flow
+        const pAtt = op ? clamp(0.35 + 0.25 * Math.tanh(Math.log(R)) + 0.15 * op.str, 0.1, 0.9) : 0;       // your offensive's assaults
+        const inten = c ? c.intensity / 100 : 0.5, war = c && ['war', 'insurgency'].includes(c.type);
+        const poisson = lam => Math.floor(lam) + (Math.random() < lam - Math.floor(lam) ? 1 : 0);
         const own = x => cellOwnerG(h, x) === me, gov = x => cellOwnerG(h, x) === 'GOV';
         const inBox = N.id === 'polisario' && h === 'MAR' ? x => x.lat < 27.7 && x.lng < -8.6 : () => true;     // Morocco's part of Western Sahara only
         const done = [];
-        while (flips-- > 0) {
-            const gain = Math.random() < pg, cand = [], wts = [];
+        const flip = gain => {
+            const cand = [], wts = [];
             G.cells.forEach(x => {
                 if (!inBox(x) || (gain ? !gov(x) : !own(x))) return;
                 const nb = cellNeighbors(G, x).filter(y => gain ? own(y) : gov(y)).length; if (!nb) return;
-                let w = nb * nb; if (gain && op && op.target) w *= 1 + 4 * Math.exp(-km(x, op.target) / 120);
+                let w = nb * nb; if (gain && op && op.target) w *= 1 + 6 * Math.exp(-km(x, op.target) / 120);
                 cand.push(x); wts.push(w);
             });
             if (!cand.length && gain && !G.cells.some(x => own(x) && inBox(x))) {      // no foothold yet: the nearest government cell to your base or target
                 const ref = op && op.target ? op.target : { lat: d.base[0], lng: d.base[1] };
                 const x = G.cells.filter(y => inBox(y) && gov(y)).sort((a, b) => km(ref, a) - km(ref, b))[0]; if (x) { cand.push(x); wts.push(1); }
             }
-            if (!cand.length) continue;
+            if (!cand.length) return;
             let r = Math.random() * wts.reduce((a, b) => a + b, 0), x = cand[0];
             for (let q = 0; q < cand.length; q++) { r -= wts[q]; if (r <= 0) { x = cand[q]; break; } }
             setCell(h, x, gain ? me : 'GOV'); moved = true; done.push([gain, x]);
-        }
+        };
+        if (war) { let k = poisson((0.25 + inten * 0.5) * size); while (k-- > 0) flip(Math.random() < pg); }
+        if (op) { let k = poisson((0.8 + op.str) * size); while (k-- > 0) if (Math.random() < pAtt) flip(true); }
         if (N.mode === 'nso') { const lost = Math.round(N.fighters * 0.0015 * (inten + (op ? 0.6 : 0))); N.fighters = Math.max(0, N.fighters - lost); }
         if (c && op) c.intensity = clamp(c.intensity + 2, 0, 100);
         if (done.length && !catchUp) done.forEach(([gain, x]) => { const near = nearestCityName(h, x.lat, x.lng), where = near ? `near <b>${esc(near)}</b>` : `in ${esc(shortName(h))}`;
