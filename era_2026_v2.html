@@ -20398,59 +20398,38 @@ function armyInit() {
 // ---------- map: unit symbols, paths, selection ----------
 const ARMY_MK = {}, ARMY_LN = {};
 function unitSvg(sym, sel) {
-    // blue unit frame with a picture of what the formation is: soldier, tank, both, gun, launcher, helicopter, jet, ships
-    const st = sel ? '#ffe680' : '#e3f3ff', fA = sel ? '#2d68a8' : '#1f5a96', fB = sel ? '#173e6b' : '#123962', lw = sel ? 2.2 : 1.5;
-    const ln = (d, w) => `<path d="${d}" fill="none" stroke="${st}" stroke-width="${w || 1.5}" stroke-linecap="round" stroke-linejoin="round"/>`;
-    const fl = d => `<path d="${d}" fill="${st}"/>`;
-    const soldier = (x, k) => { k = k || 1; const X = v => (x + v * k).toFixed(2), Y = v => (14 + v * k).toFixed(2);
-        return `<circle cx="${X(0)}" cy="${Y(-4.6)}" r="${1.7 * k}" fill="${st}"/>` + ln(`M${X(0)} ${Y(-2.6)} L${X(0)} ${Y(2.2)} M${X(0)} ${Y(-1.2)} L${X(-2.6)} ${Y(1)} M${X(0)} ${Y(-1.2)} L${X(2.4)} ${Y(-1.8)} M${X(0)} ${Y(2.2)} L${X(-2)} ${Y(6)} M${X(0)} ${Y(2.2)} L${X(2)} ${Y(6)}`, 1.4 * k) + ln(`M${X(1.4)} ${Y(-0.6)} L${X(5)} ${Y(-4.4)}`, 1.1 * k); };
-    const tank = (x, k) => { k = k || 1; const X = v => (x + v * k).toFixed(2), Y = v => (14 + v * k).toFixed(2);
-        return fl(`M${X(-8)} ${Y(1)} L${X(8)} ${Y(1)} L${X(6.4)} ${Y(4.6)} L${X(-6.4)} ${Y(4.6)} Z`) + fl(`M${X(-4)} ${Y(-2.6)} L${X(3)} ${Y(-2.6)} L${X(4)} ${Y(0.6)} L${X(-5)} ${Y(0.6)} Z`) + ln(`M${X(3)} ${Y(-1.3)} L${X(10)} ${Y(-2.8)}`, 1.5 * k)
-            + `<g fill="${fB}">${[-5, -1.7, 1.7, 5].map(v => `<circle cx="${X(v)}" cy="${Y(3)}" r="${0.9 * k}"/>`).join('')}</g>`; };
-    const ship = (k) => { // k: 'carrier' | 'destroyer' | 'frigate'
-        if (k === 'carrier') return fl('M3.5 14 L28.5 14 L26.5 18.5 L6 18.5 Z') + fl('M20 10.5 L23 10.5 L23 14 L20 14 Z') + ln('M7 15.6 L18 15.6', 0.9).replace(st, fB) + ln('M21.5 10.5 L21.5 8.4', 1);
-        if (k === 'destroyer') return fl('M4 15.5 L28 15.5 L25.5 19 L7 19 Z') + fl('M10 12.5 L20 12.5 L20 15.5 L10 15.5 Z') + fl('M13 10 L17 10 L17 12.5 L13 12.5 Z') + ln('M15 10 L15 7.2', 1.1) + ln('M21 14.6 L25.5 13.6', 1.2) + ln('M8.5 14.6 L5.5 13.8', 1.1);
-        return fl('M6 15.5 L26 15.5 L24 19 L8 19 Z') + fl('M11 12.8 L19 12.8 L19 15.5 L11 15.5 Z') + ln('M15 12.8 L15 9', 1.1) + ln('M20.5 14.7 L24 14', 1.1);
-    };
-    const jet = (x, y, k) => { const P = (a, b) => `${(x + a * k).toFixed(2)} ${(y + b * k).toFixed(2)}`;
-        return fl(`M${P(0, -7.5)} L${P(1.3, -3)} L${P(10, 1.8)} L${P(10, 3.3)} L${P(1.4, 1.4)} L${P(1, 5)} L${P(3.4, 6.6)} L${P(3.4, 7.5)} L${P(0, 6.8)} L${P(-3.4, 7.5)} L${P(-3.4, 6.6)} L${P(-1, 5)} L${P(-1.4, 1.4)} L${P(-10, 3.3)} L${P(-10, 1.8)} L${P(-1.3, -3)} Z`); };
-    const inner = {
-        inf: soldier(16) ,
-        arm: tank(15),
-        mech: soldier(8.5, 0.85) + tank(19.5, 0.72),
-        art: `<circle cx="13" cy="18" r="2.4" fill="none" stroke="${st}" stroke-width="1.5"/>` + ln('M12 17 L25 9.5', 2.4) + ln('M13 18.5 L6.5 20.5', 1.6),
-        ad: fl('M6 17 L20 17 L20 20 L6 20 Z') + fl('M22 17 L26 17 L26 20 L22 20 Z') + ln('M9 16 L17 9.5 M12 16.4 L20 10', 1.8) + ln('M16.8 9.6 L18 8.6 M19.8 10.1 L21 9.1', 1.2),
-        abn: ln('M8 12 Q16 3.5 24 12', 1.6) + ln('M8 12 L16 17 L24 12 M16 17 L16 12', 0.9) + `<circle cx="16" cy="17.6" r="1.4" fill="${st}"/>` + ln('M16 19 L16 21.5', 1.3),
-        sf: `<text x="16" y="17.8" font-size="9" text-anchor="middle" fill="${st}" font-family="Arial" font-weight="700">SF</text>`,
-        heli: fl('M9 14.5 Q9 11 14 11 L18 11 Q21.5 11 21.5 14.5 Q21.5 17 18 17 L13 17 Q9 17 9 14.5 Z') + ln('M21 13.5 L28 12.3', 1.6) + ln('M27.5 10.5 L28.3 14.2', 1.3) + ln('M5 8.6 L25 8.6', 1.4) + ln('M15.5 8.6 L15.5 11', 1.2) + ln('M12 17 L11 19.5 M19 17 L20 19.5 M9.5 19.5 L21.5 19.5', 1.1),
-        jet: jet(16, 14, 1),
-        carrier: ship('carrier'), destroyer: ship('destroyer'), frigate: ship('frigate'),
-        csg: ship('carrier') + jet(11, 9.4, 0.42)
-    }[sym] || '';
-    const sea = ['carrier', 'destroyer', 'frigate', 'csg'].includes(sym);
-    const frame = `<rect x="1.5" y="5" width="29" height="18" rx="${sea ? 9 : 1.5}" fill="url(#ug${sel ? 's' : ''})" stroke="${st}" stroke-width="${lw}"/>`;
-    const ech = ['inf', 'mech', 'arm', 'art', 'ad', 'abn', 'sf', 'heli'].includes(sym) ? ln('M13.5 0.8 L18.5 4.2 M18.5 0.8 L13.5 4.2', 1.3) : sym === 'jet' ? ln('M12 1 L12 4.2 M16 1 L16 4.2 M20 1 L20 4.2', 1.2) : '';
-    return `<svg viewBox="0 0 32 24" width="32" height="24"><defs><linearGradient id="ug${sel ? 's' : ''}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${fA}"/><stop offset="1" stop-color="${fB}"/></linearGradient></defs>${frame}${inner}${ech}</svg>`;
+    // a realistic sprite (soldier, tank, jet, warship…) on a blue plate — the sprites live in one shared <symbol> sheet (milSpriteSheet)
+    return milSpriteSvg(sym, sel ? 'sel' : 'mine');
 }
-// the picture follows what the formation actually holds: troops + tanks together get the combined icon, ships + jets the carrier group
+// the picture follows what the formation actually holds: troops + tanks together get the combined icon, bombers the bomber, ships the warship
 function symFor(u) {
-    const T = BRIG[u.type] || {};
-    if (T.sea || shipsOf(u)) return (u.carriers && u.jets) ? 'csg' : u.carriers ? 'carrier' : (u.destroyers || 0) >= (u.frigates || 0) && u.destroyers ? 'destroyer' : 'frigate';
-    if (u.jets && !u.tanks) return 'jet';
-    if (u.helis && !u.tanks && !u.jets) return 'heli';
-    if (u.tanks) { const crewOnly = u.troops <= u.tanks * 30; return u.type === 'armored' || crewOnly ? 'arm' : 'mech'; }
-    return T.sym === 'mech' ? 'inf' : (T.sym || 'inf');
+    const g = k => u[k] || 0, d = unitDomain(u);
+    if (d === 'sea') return (g('carriers') && (g('jets') + g('stealth'))) ? 'csg' : g('carriers') ? 'carrier' : g('destroyers') >= g('frigates') && g('destroyers') ? 'destroyer' : 'frigate';
+    if (d === 'air') { const m = Math.max(g('jets'), g('stealth'), g('bombers'), g('drones')); return g('bombers') === m ? 'bomber' : g('stealth') === m ? 'stealth' : g('jets') === m ? 'jet' : 'drone'; }
+    if (d === 'heli') return 'heli';
+    if (AD_KEYS.some(k => g(k)) && !g('tanks') && !g('ifv') && !g('guns')) return g('adLR') ? 'adlr' : g('adMR') ? 'admr' : 'adsr';
+    if (g('tanks')) { const crewOnly = g('troops') <= g('tanks') * 30; return u.type === 'armored' || crewOnly ? 'arm' : 'mech'; }
+    if (g('guns') && g('guns') * 45 >= g('troops')) return 'art';
+    if (g('ifv') && g('ifv') * 25 >= g('troops')) return 'ifv';
+    const T = BRIG[u.type] || {}; return ['abn', 'sf'].includes(T.sym) ? T.sym : 'inf';
 }
 // headline number shown under the symbol on the map
-function unitLabel(u) { return BRIG[u.type] && BRIG[u.type].sea ? `${shipsOf(u)} ships${u.jets ? ' · ' + u.jets + ' jets' : ''}` : u.type === 'airwing' ? `${u.jets || 0} jets` : u.type === 'aviation' ? `${u.helis || 0} helos` : fmtK(u.troops); }
+function unitLabel(u) {
+    const d = unitDomain(u), g = k => u[k] || 0;
+    if (d === 'sea') return `${shipsOf(u)} ship${shipsOf(u) === 1 ? '' : 's'}${g('jets') + g('stealth') ? ' · ' + (g('jets') + g('stealth')) + ' jets' : ''}`;
+    if (d === 'air') { const s = symFor(u), n = unitAircraft(u); return `${n} ${s === 'bomber' ? 'bombers' : s === 'drone' ? 'drones' : 'jets'}`; }
+    if (d === 'heli') return `${g('helis')} helos`;
+    if (['adsr', 'admr', 'adlr'].includes(symFor(u))) { const n = AD_KEYS.reduce((t, k) => t + g(k), 0); return `${n} batter${n === 1 ? 'y' : 'ies'}`; }
+    return fmtK(g('troops')) + (g('tanks') ? ` · ${g('tanks')} tanks` : '');
+}
 function unitKit(u, sep) {
     sep = sep || ' · ';
     return ASSET_KEYS.filter(([k]) => u[k]).map(([k, l]) => `${(u[k] || 0).toLocaleString()} ${l}`).join(sep);
 }
 function unitIconFor(u) {
-    const sel = army().sel.includes(u.id), T = BRIG[u.type];
-    const cls = 'brig' + (sel ? ' sel' : '') + (u.status === 'moving' ? ' moving' : '') + (u.status === 'training' ? ' training' : '');
-    return L.divIcon({ className: 'brig-pin', html: `<div class="${cls}" title="${esc(u.name)} — ${esc(unitKit(u, ', '))}">${unitSvg(symFor(u), sel)}<span>${esc(unitLabel(u))}</span></div>`, iconSize: [34, 38], iconAnchor: [17, 14] });
+    const sel = army().sel.includes(u.id);
+    const cls = 'brig' + (sel ? ' sel' : '') + (u.status === 'moving' ? ' moving' : '') + (u.status === 'training' ? ' training' : '') + (u.status === 'engaged' ? ' engaged' : '');
+    return L.divIcon({ className: 'brig-pin', html: `<div class="${cls}" title="${esc(u.name)} — ${esc(unitKit(u, ', '))}">${milMarkerSvg(symFor(u), sel ? 'sel' : 'mine', u.hd || 0)}<span>${esc(unitLabel(u))}</span></div>`, iconSize: [40, 54], iconAnchor: [20, 20] });
 }
 function armyRefreshMap() {
     if (typeof L === 'undefined' || typeof map === 'undefined' || !map) return;
@@ -21141,6 +21120,209 @@ function renameUnit(id, name) {
     milNote(`✎ ${esc(old)} renamed ${esc(name)}.`, 'neutral');
     armyRefreshMap(); renderMilPanel(); return true;
 }
+
+// ---------- sprites: one shared sheet of realistic top-down warships and aircraft, side-view troops, tanks and launchers ----------
+// Every sprite is a <symbol> (64×64 box) used through <use href="#spr-…">, so map markers in both engines, the selection card,
+// the Military panel and the intel strip all draw the same art. Gradient ids are unique (msg-…) and defined once.
+// Warships and aircraft face east (heading 0) and are rotated to their course; side views face right and are mirrored when heading west.
+const SPR_TOP = new Set(['carrier', 'destroyer', 'frigate', 'jet', 'stealth', 'bomber', 'heli', 'drone', 'csg']);
+// crop boxes for horizontal composition chips (x y w h inside the 64 box)
+const SPR_BOX = { carrier: [1, 18, 62.5, 23.5], destroyer: [2, 26.5, 61, 11], frigate: [6, 27.5, 52, 9], jet: [5, 14, 55, 36], stealth: [5, 15, 56, 34], bomber: [13, 7, 46, 50],
+    heli: [13, 9, 46, 46], drone: [12, 5, 46, 54], tank: [4, 19, 59, 35], soldier: [18, 10, 39, 45], artillery: [4, 9, 59, 40], ifv: [4, 22, 56, 28], adsr: [6, 17, 52, 29],
+    admr: [5, 12, 57, 31], adlr: [2, 8, 61, 36], missile: [8, 26.5, 52, 11] };
+const SYM_SPR = { inf: 'soldier', abn: 'soldier', sf: 'soldier', arm: 'tank', mech: 'tank', art: 'artillery', ad: 'admr', adsr: 'adsr', admr: 'admr', adlr: 'adlr', ifv: 'ifv',
+    heli: 'heli', jet: 'jet', stealth: 'stealth', bomber: 'bomber', drone: 'drone', carrier: 'carrier', destroyer: 'destroyer', frigate: 'frigate', csg: 'carrier', missile: 'missile' };
+function milSprSheet() {
+    const f = v => (+v).toFixed(2).replace(/\.?0+$/, '');
+    const half = (pts, cy) => { const top = pts.map(p => `${f(p[0])} ${f(p[1])}`), bot = pts.slice().reverse().filter(p => p[1] !== cy).map(p => `${f(p[0])} ${f(2 * cy - p[1])}`); return 'M' + top.concat(bot).join(' L') + 'Z'; };
+    const lg = (id, a, b, x2, y2) => `<linearGradient id="${id}" x1="0" y1="0" x2="${x2 || 0}" y2="${y2 === undefined ? 1 : y2}"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient>`;
+    const rg = (id, a, b) => `<radialGradient id="${id}" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></radialGradient>`;
+    const grid = (x, y, w, h, nx, ny) => { let d = ''; for (let i = 1; i < nx; i++) d += `M${f(x + w * i / nx)} ${f(y)}v${f(h)}`; for (let j = 1; j < ny; j++) d += `M${f(x)} ${f(y + h * j / ny)}h${f(w)}`; return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#353c43"/><path d="${d}" stroke="#5c656e" stroke-width=".28"/>`; };
+    const miniJet = (x, y, s, a) => `<path transform="translate(${x} ${y}) rotate(${a}) scale(${s})" d="M6 0 L1 -.6 L-1 -5 L-2.2 -5 L-1.6 -.6 L-4.5 -.5 L-5.6 -2.4 L-6.4 -2.4 L-6 0 L-6.4 2.4 L-5.6 2.4 L-4.5 .5 L-1.6 .6 L-2.2 5 L-1 5 L1 .6Z" fill="#a8b2bc" stroke="#2a3138" stroke-width=".5"/>`;
+    const blades = (cx, cy, r, a0) => [0, 90, 180, 270].map(a => { const t = (a + a0) * Math.PI / 180; return `M${cx} ${cy}L${f(cx + r * Math.cos(t))} ${f(cy + r * Math.sin(t))}`; }).join('');
+    const wheels = (xs, y, r) => xs.map(x => `<circle cx="${x}" cy="${y}" r="${r}" fill="#4f5544" stroke="#191b15" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="${f(r * 0.32)}" fill="#26291f"/>`).join('');
+    const defs = lg('msg-hull', '#808a94', '#4a535c') + lg('msg-carrier', '#545b63', '#33393f') + lg('msg-sup', '#b2bac2', '#7b858f') + lg('msg-jet', '#c0c9d2', '#6f7a86')
+        + lg('msg-stealth', '#646c75', '#2c3238') + lg('msg-bomber', '#4d535b', '#22262b') + lg('msg-olive', '#86924f', '#4b5530') + lg('msg-olive2', '#919e5a', '#59643a')
+        + lg('msg-track', '#3a3d33', '#1b1d17') + lg('msg-heli', '#7a8a5c', '#3f4a2e') + lg('msg-uniform', '#717e4b', '#424b2a') + lg('msg-msl', '#eef1f3', '#a9b0b7')
+        + rg('msg-canopy', '#5d8fbf', '#0e1d2b') + rg('msg-plate', '#3577c4', '#0d2a49') + rg('msg-plate-sel', '#4a8ad4', '#1a426e') + rg('msg-plate-foe', '#a2473d', '#3c1612') + rg('msg-plate-neu', '#6a717c', '#262a31');
+    const S = {};
+    S.destroyer = `<path d="M2.5 28.6 L44 27.8 Q56.5 29 62 32 Q56.5 35 44 36.2 L2.5 35.4 Q1.6 32 2.5 28.6Z" fill="url(#msg-hull)" stroke="#1b2026" stroke-width=".7"/>
+        <path d="M4.5 29.7 L44 29 Q54 30.2 58.6 32 Q54 33.8 44 35 L4.5 34.3Z" fill="#6e7882"/>
+        <rect x="4.8" y="29.9" width="10.5" height="4.2" fill="#58616a"/><circle cx="10" cy="32" r="1.6" fill="none" stroke="#ece6cc" stroke-width=".45"/><path d="M9.35 31.1v1.8M10.65 31.1v1.8M9.35 32h1.3" stroke="#ece6cc" stroke-width=".35"/>
+        <rect x="15.5" y="29.6" width="5" height="4.8" rx=".4" fill="url(#msg-sup)" stroke="#2a3138" stroke-width=".3"/>${grid(21.2, 30.2, 3.6, 3.6, 3, 3)}
+        <path d="M25.5 29.4 L37 29.2 L39 30.3 L39 33.7 L37 34.8 L25.5 34.6Z" fill="url(#msg-sup)" stroke="#2a3138" stroke-width=".35"/><rect x="28" y="30.6" width="3.2" height="2.8" rx=".7" fill="#2f353c"/>
+        <circle cx="34.2" cy="32" r="1.3" fill="#dfe4e9" stroke="#3a4148" stroke-width=".3"/><path d="M37.7 30.1l1.2.8v2.2l-1.2.8z" fill="#33465a"/>${grid(41, 30.3, 5, 3.4, 4, 3)}
+        <circle cx="50.5" cy="32" r="1.7" fill="#c6cdd4" stroke="#2a3138" stroke-width=".35"/><path d="M51.9 32H57.2" stroke="#2a3138" stroke-width=".85" stroke-linecap="round"/><path d="M53 32 L60.5 32" stroke="#8a949e" stroke-width=".3"/>`;
+    S.frigate = `<path d="M7 29.2 L40 28.6 Q51.5 29.6 57 32 Q51.5 34.4 40 35.4 L7 34.8 Q6.2 32 7 29.2Z" fill="url(#msg-hull)" stroke="#1b2026" stroke-width=".7"/>
+        <path d="M8.8 30.1 L40 29.7 Q49.5 30.6 53.6 32 Q49.5 33.4 40 34.3 L8.8 33.9Z" fill="#6e7882"/>
+        <rect x="9" y="30.2" width="8.6" height="3.6" fill="#58616a"/><circle cx="13.2" cy="32" r="1.35" fill="none" stroke="#ece6cc" stroke-width=".4"/>
+        <rect x="17.8" y="29.9" width="4.4" height="4.2" rx=".4" fill="url(#msg-sup)" stroke="#2a3138" stroke-width=".3"/>
+        <path d="M22.6 29.7 L32 29.6 L33.6 30.6 L33.6 33.4 L32 34.4 L22.6 34.3Z" fill="url(#msg-sup)" stroke="#2a3138" stroke-width=".35"/><rect x="24.6" y="30.8" width="2.8" height="2.4" rx=".6" fill="#2f353c"/>
+        <circle cx="30.3" cy="32" r="1.15" fill="#dfe4e9" stroke="#3a4148" stroke-width=".3"/>${grid(35.4, 30.6, 3.4, 2.8, 2, 2)}
+        <circle cx="43.6" cy="32" r="1.45" fill="#c6cdd4" stroke="#2a3138" stroke-width=".35"/><path d="M44.8 32H49" stroke="#2a3138" stroke-width=".75" stroke-linecap="round"/>`;
+    S.carrier = `<path d="M2 26.5 L11 22.6 L38 19.4 L43.5 21 L52 22.8 Q59.5 25.6 62.6 31.2 Q59.8 36.8 52 38.6 L6 40.4 L2 38.6Z" fill="url(#msg-carrier)" stroke="#1a1e22" stroke-width=".7"/>
+        <path d="M3.6 27.4 L11.4 24 L37.6 21 L43 22.5 L51.6 24.3 Q58 26.8 60.8 31.2 Q58.2 35.6 51.6 37.1 L6.4 38.9 L3.6 37.6Z" fill="none" stroke="#5d656d" stroke-width=".35"/>
+        <path d="M4.5 35 L37.5 20.8 M7 39.6 L42 24.4" stroke="#d6c262" stroke-width=".35"/><path d="M5.5 37.4 L40 22.4" stroke="#ece7d6" stroke-width=".55" stroke-dasharray="2.2 1.6"/>
+        <path d="M40 27.6 L61 29.6 M43.5 31.8 L61.5 32.4" stroke="#d2cdbb" stroke-width=".42"/><path d="M48 29.9 L61 31" stroke="#9aa1a8" stroke-width=".25"/>
+        <rect x="21" y="37.6" width="4.6" height="2.5" fill="#2a2f34"/><rect x="27.2" y="37.7" width="4.6" height="2.4" fill="#2a2f34"/><rect x="13.4" y="21.9" width="4.6" height="2.2" fill="#2a2f34" transform="rotate(-6 15.7 23)"/>
+        <path d="M33.4 35.4 L41.2 35.2 L41.8 38.6 L33.4 38.8Z" fill="url(#msg-sup)" stroke="#23282e" stroke-width=".4"/><circle cx="37.4" cy="37" r=".95" fill="#2a3036"/><path d="M39.6 35.6v2.8" stroke="#2a3036" stroke-width=".5"/>
+        ${miniJet(50, 27, 0.9, 0)}${miniJet(55, 34.5, 0.9, 10)}${miniJet(23, 30, 0.85, 200)}${miniJet(14, 33, 0.85, 190)}
+        <text transform="translate(5.4 29.6) rotate(90)" font-size="4.8" font-family="Arial,Helvetica,sans-serif" font-weight="700" fill="#ece7d6">76</text>`;
+    S.jet = `<path d="${half([[59, 32], [55, 30.9], [49.5, 30], [42, 29.5], [36.5, 29.2], [22.5, 15.5], [19.6, 15.5], [21.6, 28.4], [17, 28.8], [12.6, 22.2], [9.8, 22.2], [10.3, 29.3], [7, 29.8], [6.2, 32]], 32)}" fill="url(#msg-jet)" stroke="#2a3038" stroke-width=".6" stroke-linejoin="round"/>
+        <path d="M17.6 15.9H24.2M17.6 48.1H24.2" stroke="#eef0f2" stroke-width=".9" stroke-linecap="round"/><path d="M26 21.5h5M26 42.5h5" stroke="#d9dde1" stroke-width=".8" stroke-linecap="round"/>
+        <path d="M14 32 L44 32" stroke="rgba(255,255,255,.28)" stroke-width=".5"/><path d="M8.6 32 L18.4 32" stroke="#3a434c" stroke-width="1.3" stroke-linecap="round"/>
+        <ellipse cx="47.6" cy="32" rx="4.3" ry="1.35" fill="url(#msg-canopy)" stroke="#1b2633" stroke-width=".3"/><rect x="5.4" y="30.6" width="1.6" height="2.8" rx=".4" fill="#2a2f35"/>`;
+    S.stealth = `<path d="${half([[60, 32], [55, 30.7], [47, 29.4], [41, 28.2], [35, 26.4], [22.5, 16.2], [18.6, 16.2], [20.2, 25.8], [17.2, 26.6], [11.8, 20.6], [8.6, 21], [9.4, 28.2], [6.6, 29.4], [6.2, 32]], 32)}" fill="url(#msg-stealth)" stroke="#15191d" stroke-width=".6" stroke-linejoin="round"/>
+        <path d="M35 26.4 L22.5 16.2M35 37.6 L22.5 47.8" stroke="rgba(255,255,255,.12)" stroke-width=".5"/><path d="M11.5 28.2 L17.5 29.4M11.5 35.8 L17.5 34.6" stroke="#191d21" stroke-width="1.1" stroke-linecap="round"/>
+        <path d="M16 32 L42 32" stroke="rgba(255,255,255,.12)" stroke-width=".5"/><ellipse cx="48.6" cy="32" rx="4" ry="1.25" fill="#c39d34" stroke="#4d3d10" stroke-width=".3" opacity=".9"/>`;
+    S.bomber = `<path d="M58 32 L52 29.3 L40 22 L16.5 8.2 L14.6 9.6 L22.5 16.8 L17.8 21.6 L25 27.6 L20.8 32 L25 36.4 L17.8 42.4 L22.5 47.2 L14.6 54.4 L16.5 55.8 L40 42 L52 34.7Z" fill="url(#msg-bomber)" stroke="#111417" stroke-width=".6" stroke-linejoin="round"/>
+        <path d="M52 29.3 Q40 30.2 27 32 Q40 33.8 52 34.7" fill="none" stroke="rgba(255,255,255,.12)" stroke-width=".5"/><ellipse cx="39" cy="27.6" rx="3.2" ry="1.25" fill="#3c4249"/><ellipse cx="39" cy="36.4" rx="3.2" ry="1.25" fill="#3c4249"/>
+        <path d="M53 31 L56 31.5 L56 32.5 L53 33Z" fill="#0f1215"/><path d="M40 22 L16.5 8.2M40 42 L16.5 55.8" stroke="rgba(255,255,255,.1)" stroke-width=".5"/>`;
+    S.heli = `<path d="M11 31.2 L27 30.5 L27 33.5 L11 32.8Z" fill="url(#msg-heli)" stroke="#262c1c" stroke-width=".4"/><rect x="14.2" y="28.4" width="2.6" height="7.2" rx=".6" fill="#46512f"/>
+        <circle cx="10.5" cy="32" r="3.4" fill="rgba(220,226,232,.2)" stroke="rgba(25,25,25,.5)" stroke-width=".3"/><path d="M10.5 28.6V35.4" stroke="#1d1f1a" stroke-width=".8"/>
+        <rect x="32.8" y="25.4" width="3.6" height="13.2" rx=".8" fill="#4a5636" stroke="#262c1c" stroke-width=".3"/><ellipse cx="34.6" cy="26.2" rx="2.4" ry="1" fill="#2b2f24"/><ellipse cx="34.6" cy="37.8" rx="2.4" ry="1" fill="#2b2f24"/>
+        <ellipse cx="37" cy="32" rx="12.5" ry="4.6" fill="url(#msg-heli)" stroke="#262c1c" stroke-width=".5"/><ellipse cx="45.6" cy="32" rx="3.4" ry="2.3" fill="url(#msg-canopy)" stroke="#1b2633" stroke-width=".3"/>
+        <circle cx="36" cy="32" r="21.5" fill="rgba(210,220,230,.10)" stroke="rgba(235,240,245,.28)" stroke-width=".45"/><path d="${blades(36, 32, 21, 22)}" stroke="#1c1f1a" stroke-width="1.5" stroke-linecap="round" opacity=".9"/><circle cx="36" cy="32" r="1.4" fill="#1b1e17"/>`;
+    S.drone = `<path d="M33 31 L35.4 5.6 L38.6 5.6 L38.2 31Z M33 33 L35.4 58.4 L38.6 58.4 L38.2 33Z" fill="url(#msg-jet)" stroke="#3a4148" stroke-width=".4"/>
+        <path d="M15 32 Q16 30.2 22 30.1 L48 30.4 Q55 30.8 57 32 Q55 33.2 48 33.6 L22 33.9 Q16 33.8 15 32Z" fill="url(#msg-jet)" stroke="#3a4148" stroke-width=".45"/>
+        <path d="M18.4 31 L13.6 23.4 L15.4 23.3 L20.6 31Z M18.4 33 L13.6 40.6 L15.4 40.7 L20.6 33Z" fill="#9aa3ac" stroke="#3a4148" stroke-width=".35"/><path d="M13.2 27.4V36.6" stroke="#202326" stroke-width=".8"/><circle cx="50.5" cy="32" r="1.3" fill="#1f2328"/>`;
+    S.tank = `<rect x="7" y="38" width="48" height="9.5" rx="4.75" fill="url(#msg-track)"/>${wheels([12.5, 19.5, 26.5, 33.5, 40.5, 47.5], 42.8, 3.3)}<circle cx="52.4" cy="41.6" r="2.4" fill="#3a3e31" stroke="#191b15" stroke-width=".5"/>
+        <path d="M5 38.6 L8.6 31.6 L51.5 31.6 L59 35.6 L56.8 38.6Z" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".6"/>
+        <path d="M9 34.4 L54.5 34.4 L56.5 37.8 L9 37.8Z" fill="#5b6532" stroke="#2c3219" stroke-width=".4"/><path d="M17 34.4v3.4M25 34.4v3.4M33 34.4v3.4M41 34.4v3.4M49 34.4v3.4" stroke="#3d4422" stroke-width=".4"/>
+        <path d="M9.2 31.9 L51 31.9" stroke="rgba(255,255,255,.22)" stroke-width=".6"/>
+        <rect x="14.4" y="26.6" width="3.2" height="4.6" fill="#4a5329" stroke="#262b18" stroke-width=".3"/>
+        <path d="M17 31.6 L20.5 24.2 L39.5 23.2 L46 25.8 L46.5 31.6Z" fill="url(#msg-olive2)" stroke="#262b18" stroke-width=".6"/>
+        <path d="M22 26.2 q3 -1.5 6 0 t5 1 l-1 2.4 q-4 1 -9 -.6z M30 33 q4 -1 7 .5 l-1 1.6 q-3 .8 -6 -.3z" fill="#3b4321" opacity=".55"/>
+        <rect x="25" y="21.4" width="5.5" height="2.4" rx=".8" fill="#5f6a38" stroke="#262b18" stroke-width=".4"/><path d="M28 21.6 L33.4 20.4" stroke="#262b18" stroke-width=".6"/>
+        <rect x="45.5" y="25.6" width="16.2" height="2" rx=".5" fill="#3c4229"/><rect x="51" y="25.1" width="3.4" height="3" rx="1" fill="#474e30"/><rect x="60" y="24.9" width="2.8" height="3.4" rx=".4" fill="#2e3320"/>`;
+    S.ifv = `<rect x="8" y="39" width="44" height="8.5" rx="4.25" fill="url(#msg-track)"/>${wheels([13, 20.5, 28, 35.5, 43], 43.3, 3.1)}<circle cx="48.5" cy="42.4" r="2.2" fill="#3a3e31" stroke="#191b15" stroke-width=".5"/>
+        <path d="M5 39.4 L7.6 29.6 L44 28.6 L58 34.2 L56.4 39.4Z" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".6"/><path d="M8 35 L55.5 35" stroke="#3d4422" stroke-width=".5"/>
+        <rect x="9" y="30.6" width="5" height="4" rx=".4" fill="#4a5329" stroke="#262b18" stroke-width=".3"/><circle cx="20" cy="32.6" r=".8" fill="#2a2e1c"/><circle cx="24" cy="32.6" r=".8" fill="#2a2e1c"/>
+        <path d="M27.5 28.8 L29.6 25.2 L38.6 25 L40.2 28.6Z" fill="url(#msg-olive2)" stroke="#262b18" stroke-width=".5"/><rect x="39.5" y="26.1" width="14.5" height="1.3" rx=".4" fill="#3c4229"/>`;
+    S.artillery = `<rect x="7" y="38" width="48" height="9.5" rx="4.75" fill="url(#msg-track)"/>${wheels([12.5, 19.5, 26.5, 33.5, 40.5, 47.5], 42.8, 3.3)}
+        <path d="M5 38.6 L8 31.6 L52 31.6 L58.5 35.6 L56.8 38.6Z" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".6"/>
+        <path d="M33 26.4 L59.5 11.4" stroke="#363c25" stroke-width="2.5" stroke-linecap="round"/><path d="M57.6 11.4 L61 9.6 L62.2 11.8 L58.8 13.6Z" fill="#2e3320"/><path d="M38 23.6 L44 20.2" stroke="#4a5232" stroke-width="3.4" stroke-linecap="round"/>
+        <path d="M11 31.6 L13 23.8 L37.6 23 L40.4 31.6Z" fill="url(#msg-olive2)" stroke="#262b18" stroke-width=".6"/><rect x="17" y="21.6" width="5" height="2.2" rx=".7" fill="#5f6a38" stroke="#262b18" stroke-width=".4"/>
+        <path d="M14 27 q4 -1.6 8 0 l-1 2 q-3 .8 -7 -.4z" fill="#3b4321" opacity=".55"/>`;
+    S.adsr = `<path d="M8 40.5 L10 33.6 L21 33.6 L25.6 28.4 L34.6 28.4 L37.4 33.6 L55 33.6 L56.6 40.5Z" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".6"/><path d="M26.6 29.4 L33.6 29.4 L35.8 33.2 L24 33.2Z" fill="#26313a"/>
+        ${wheels([18, 46], 41.6, 4.6)}<rect x="41" y="26.6" width="2" height="7" fill="#3b4228"/>
+        <rect x="35" y="19.6" width="14" height="8" rx="1.2" fill="url(#msg-olive2)" stroke="#262b18" stroke-width=".5"/><path d="M35 23.6 h14" stroke="#3b4228" stroke-width=".4"/>
+        <circle cx="49.6" cy="21.6" r="1.2" fill="#e9e4d0"/><circle cx="49.6" cy="25.6" r="1.2" fill="#e9e4d0"/><circle cx="33.8" cy="21.6" r="1.2" fill="#e9e4d0"/><circle cx="33.8" cy="25.6" r="1.2" fill="#e9e4d0"/>`;
+    S.admr = `<rect x="7" y="33.4" width="43.4" height="5.6" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".5"/><path d="M50 39.4 L50 31.6 L52.4 25.6 L59.4 25.6 L61 31.6 L61 39.4Z" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".6"/>
+        <path d="M53 26.6 L58.8 26.6 L59.8 30.8 L52.2 30.8Z" fill="#26313a"/>${wheels([14, 24, 54.5], 41.2, 4.2)}
+        <path d="M24 33.4 L30 26" stroke="#3b4228" stroke-width="1.4"/>
+        <g transform="rotate(-24 14 33)"><rect x="12" y="24.6" width="31" height="8" rx="1" fill="url(#msg-olive2)" stroke="#262b18" stroke-width=".5"/><path d="M12 28.6 h31 M27.5 24.6 v8" stroke="#2c3219" stroke-width=".45"/><circle cx="43" cy="26.6" r="1.3" fill="#e9e4d0"/><circle cx="43" cy="30.6" r="1.3" fill="#e9e4d0"/></g>`;
+    S.adlr = `<rect x="3" y="34.6" width="47.4" height="5" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".5"/><path d="M50 40.6 L50 32.6 L52.2 25 L60 25 L61.8 32.6 L61.8 40.6Z" fill="url(#msg-olive)" stroke="#262b18" stroke-width=".6"/>
+        <path d="M52.8 26 L59.4 26 L60.6 30.6 L52 30.6Z" fill="#26313a"/>${wheels([8, 15, 55.6], 42, 4)}<path d="M30 34.6 L35 24" stroke="#3b4228" stroke-width="1.6"/>
+        <g transform="rotate(-34 8 34)"><rect x="6" y="21" width="40" height="12.4" rx="1.2" fill="url(#msg-olive2)" stroke="#262b18" stroke-width=".55"/><path d="M6 27.2 h40 M16 21 v12.4 M26 21 v12.4 M36 21 v12.4" stroke="#2c3219" stroke-width=".45"/><rect x="44.2" y="21.4" width="1.8" height="11.6" fill="#d9d4c0"/></g>`;
+    S.missile = `<rect x="10" y="29.6" width="40" height="4.8" rx="2.2" fill="url(#msg-msl)" stroke="#5a6168" stroke-width=".4"/><path d="M50 29.6 Q58.5 32 50 34.4Z" fill="#c2402f" stroke="#5a1d14" stroke-width=".3"/>
+        <path d="M10.5 29.6 L7 26.8 L13.6 29.6Z M10.5 34.4 L7 37.2 L13.6 34.4Z M38 29.6 L36 27.8 L40.6 29.6Z M38 34.4 L36 36.2 L40.6 34.4Z" fill="#7d858c"/><rect x="22" y="29.6" width="1.4" height="4.8" fill="#c2402f"/>`;
+    S.soldier = `<path d="M28.5 37 L24.5 46.5 L21.6 52.4 L25.2 53 L27.8 47.5 L31.4 39Z" fill="url(#msg-uniform)" stroke="#20251a" stroke-width=".5"/><path d="M31.5 37.5 L36.8 46 L38.6 52.6 L42.4 52.6 L40.4 45.4 L35 36.6Z" fill="url(#msg-uniform)" stroke="#20251a" stroke-width=".5"/>
+        <path d="M20.6 51.6 h5.4 v2.4 h-6.4z M37.8 51.6 h5.6 l.8 2.4 h-6.4z" fill="#1c1e18"/><rect x="20.4" y="23.4" width="6.4" height="11.2" rx="1.6" fill="#46502c" stroke="#20251a" stroke-width=".5"/>
+        <path d="M24.8 22.5 Q30 20.8 34.6 22.8 L35.2 37.8 L26.5 38.4Z" fill="url(#msg-uniform)" stroke="#20251a" stroke-width=".5"/><rect x="26.2" y="34.2" width="9" height="1.6" fill="#33391f"/>
+        <path d="M27.5 24.5 Q30 28.5 34 28" stroke="#4f5a33" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="31.6" cy="17.6" r="3.3" fill="#c79a74"/>
+        <path d="M26.4 17.2 Q26.8 11.4 31.8 11.2 Q36.4 11.4 36.6 16.2 L37.6 16.8 L26.4 17.6Z" fill="#56603a" stroke="#20251a" stroke-width=".5"/>
+        <path d="M28 27.2 L55.5 25.4" stroke="#1b1d18" stroke-width="2" stroke-linecap="round"/><path d="M27 26.4 L30.4 26.2 L31 29.6 L27.6 30Z M39 26.6 L41.4 26.4 L42.2 30.2 L39.8 30.4Z" fill="#1b1d18"/>
+        <path d="M33.5 24 Q39 26.5 44 26.4" stroke="#5a643c" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="44.2" cy="26.4" r="1.25" fill="#c79a74"/>`;
+    return `<svg id="mil-sprites" xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true"><defs>${defs}</defs>`
+        + Object.keys(S).map(k => `<symbol id="spr-${k}" viewBox="0 0 64 64">${S[k]}</symbol>`).join('') + '</svg>';
+}
+function milSpritesInit() {
+    if (document.getElementById('mil-sprites')) return;
+    document.body.insertAdjacentHTML('afterbegin', milSprSheet());
+    document.head.insertAdjacentHTML('beforeend', `<style id="mil2-css">
+        .brig { position: relative; }
+        .brig .bsv { display: block; overflow: visible; }
+        .brig.sel .bsv { filter: drop-shadow(0 0 5px #ffe680); }
+        .brig.engaged .bsv circle.pl { stroke: #ff8a6b; }
+        .brig .bsv .emb { display: none; } .brig.emb .bsv .emb { display: inline; }
+        .mchips { display: flex; flex-wrap: wrap; gap: 3px 7px; align-items: center; }
+        .mchip { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; color: #f3e3b0; font: 600 11px 'Roboto Condensed','Arial Narrow',Arial,sans-serif; }
+        .mchip svg { display: block; filter: drop-shadow(0 1px 1px rgba(0,0,0,.7)); }
+        .mchip b { font-weight: 700; } .mchip i { font-style: normal; color: #a69a78; font-size: 10px; }
+        .mchips.sm .mchip { font-size: 10px; } .mchips.dim .mchip { opacity: .45; }
+        #sel-card .sc-list .sc-u { display: grid; grid-template-columns: 34px 1fr auto; gap: 1px 7px; align-items: center; padding: 3px 0; border-top: 1px solid rgba(156,128,64,.18); }
+        #sel-card .sc-list .sc-u > svg { grid-row: span 2; width: 32px; height: 24px; }
+        #sel-card .sc-list .sc-u .sc-n { color: #f6e7b4; font-weight: 600; display: flex; gap: 5px; align-items: center; }
+        #sel-card .sc-list .sc-u .sc-w { color: #8f8466; font-size: 10.5px; grid-row: span 2; text-align: right; }
+        #sel-card .sc-tot { margin: 4px 0 4px; padding: 4px 6px; background: rgba(0,0,0,.25); border: 1px solid #3b3726; }
+        #sel-card .sc-form { margin-top: 6px; padding: 6px; border: 1px solid #9c8040; background: rgba(156,128,64,.08); display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+        #sel-card .sc-form input, #sel-card .sc-form select { background: #15160f; border: 1px solid #5c5236; color: #ecdcae; padding: 2px 5px; font-size: 11px; }
+        #sel-card .sc-form label { font-size: 10.5px; color: #cdbf95; display: flex; gap: 3px; align-items: center; }
+        #sel-card .icn { background: none; border: none; color: #c9b47a; cursor: pointer; font-size: 11px; padding: 0 2px; }
+        .mil-res { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 5px; margin: 8px 0; }
+        .mil-res > div { background: rgba(0,0,0,.25); border: 1px solid #3b3726; padding: 5px 6px; display: flex; gap: 6px; align-items: center; }
+        .mil-res > div.z { opacity: .4; } .mil-res svg { flex-shrink: 0; } .mil-res b { display: block; font: 600 14px 'Oswald','Arial Narrow',Arial,sans-serif; color: #f3d98a; line-height: 1.05; }
+        .mil-res span { font-size: 9.5px; color: #ab9f80; text-transform: uppercase; letter-spacing: .04em; line-height: 1.1; }
+        .mil-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+        .mil-grid2 label { font-size: 11px; color: #cdbf95; display: flex; flex-direction: column; gap: 2px; }
+        .mil-grid2 input, .mil-grid2 select, .mil-in { background: #15160f; border: 1px solid #5c5236; color: #ecdcae; padding: 4px 6px; font-size: 12px; width: 100%; }
+        .mil-proc { width: 100%; border-collapse: collapse; font-size: 11.5px; } .mil-proc td, .mil-proc th { padding: 4px 5px; border-top: 1px solid #3b3726; text-align: left; }
+        .mil-proc th { color: #8f8466; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; } .mil-proc tr.on td { background: rgba(209,173,91,.12); } .mil-proc tr { cursor: pointer; }
+        .mil-proc td.n { text-align: right; font-family: 'Roboto Mono', monospace; font-size: 11px; white-space: nowrap; }
+        .mil-msg { margin: 6px 0; padding: 6px 8px; font-size: 11.5px; border: 1px solid #93b25f; color: #bccf7a; } .mil-msg.bad { border-color: #c4553c; color: #e8a08a; }
+        .yard-bar { height: 10px; background: #2a2a20; position: relative; margin: 4px 0; border: 1px solid #3b3726; } .yard-bar > div { position: absolute; top: 0; bottom: 0; }
+        .ad-ring-lbl { font: 700 10px Arial, sans-serif; color: #ffd27f; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+        .mil-ping { width: 26px; height: 26px; border: 2px solid #ffe680; border-radius: 50%; animation: milping .9s ease-out forwards; pointer-events: none; }
+        @keyframes milping { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.8); opacity: 0; } }
+        .tmil svg { width: 30px; height: 22px; }
+    </style>`);
+}
+// a sprite on a plate, for lists and panels (32×24); side: mine | sel | foe | neu
+function milSpriteSvg(sym, side) {
+    const spr = SYM_SPR[sym] || 'soldier', pl = side === 'sel' ? 'msg-plate-sel' : side === 'foe' ? 'msg-plate-foe' : side === 'neu' ? 'msg-plate-neu' : 'msg-plate';
+    const st = side === 'sel' ? '#ffe680' : side === 'foe' ? '#ff9b85' : '#9fd3ff';
+    const extra = sym === 'mech' ? `<use href="#spr-soldier" x="-3" y="1" width="22" height="22"/>` : sym === 'csg' ? `<use href="#spr-jet" x="17" y="-3" width="14" height="14"/>` : '';
+    const big = SPR_TOP.has(spr) && !['heli', 'drone', 'bomber'].includes(spr);
+    return `<svg viewBox="0 0 32 24" width="32" height="24"><rect x=".75" y=".75" width="30.5" height="22.5" rx="4" fill="url(#${pl})" stroke="${st}" stroke-width="1.2"/><use href="#spr-${spr}" x="${big ? -2 : 0}" y="${big ? -6 : -4}" width="${big ? 36 : 32}" height="${big ? 36 : 32}"/>${extra}</svg>`;
+}
+// the map marker: a round plate with the sprite turned to its heading (deg, 0 = east, clockwise)
+function milMarkerInner(sym, hd) {
+    const spr = SYM_SPR[sym] || 'soldier';
+    if (SPR_TOP.has(spr)) return `<g class="rot" transform="rotate(${Math.round(hd || 0)} 32 32)"><use href="#spr-${spr}" x="1" y="1" width="62" height="62"/>${sym === 'csg' ? '' : ''}</g>`;
+    const west = Math.cos((hd || 0) * Math.PI / 180) < -0.2;
+    const body = `<use href="#spr-${spr}" x="3" y="3" width="58" height="58"/>${sym === 'mech' ? '<use href="#spr-soldier" x="-2" y="20" width="32" height="32"/>' : ''}`;
+    return `<g class="rot" transform="${west ? 'translate(64 0) scale(-1 1)' : ''}">${body}</g>`;
+}
+function milMarkerSvg(sym, side, hd, size) {
+    const pl = side === 'sel' ? 'msg-plate-sel' : side === 'foe' ? 'msg-plate-foe' : side === 'neu' ? 'msg-plate-neu' : 'msg-plate';
+    const st = side === 'sel' ? '#ffe680' : side === 'foe' ? '#ff9b85' : side === 'neu' ? '#c9ced6' : '#9fd3ff';
+    return `<svg class="bsv" viewBox="0 0 64 64" width="${size || 40}" height="${size || 40}"><circle class="pl" cx="32" cy="32" r="29" fill="url(#${pl})" stroke="${st}" stroke-width="${side === 'sel' ? 4 : 2.6}"/>`
+        + `<path class="emb" d="M8 44 L56 44 L50 53 L14 53Z" fill="#59636d" stroke="#1d2328" stroke-width="1.4" opacity=".95"/>${milMarkerInner(sym, hd)}</svg>`;
+}
+// what a formation (or the reserve, or any totals) holds, as sprite chips with counts — ships first, listed horizontally
+const CHIP_ORDER = ['carriers', 'destroyers', 'frigates', 'bombers', 'stealth', 'jets', 'drones', 'helis', 'tanks', 'ifv', 'guns', 'troops', 'adLR', 'adMR', 'adSR', 'msl'];
+function compHTML(o, opt) {
+    opt = opt || {}; const h = opt.h || 18, out = [];
+    CHIP_ORDER.forEach(k => {
+        let n = k === 'msl' ? (o.mslSR || 0) + (o.mslMR || 0) + (o.mslLR || 0) : (o[k] || 0);
+        if (k === 'troops' && opt.noTroops) return;
+        if (!n && !opt.zeros) return;
+        const spr = k === 'msl' ? 'missile' : ASSET[k].spr, B = SPR_BOX[spr] || [0, 0, 64, 64], w = Math.round(h * B[2] / B[3]);
+        const lbl = k === 'msl' ? 'interceptor missiles' : assetLabel(k);
+        out.push(`<span class="mchip${n ? '' : ' z'}" title="${n.toLocaleString()} ${esc(lbl)}"><svg viewBox="${B.join(' ')}" width="${Math.min(w, h * 3)}" height="${h}"><use href="#spr-${spr}" width="64" height="64"/></svg><b>×${k === 'troops' || n >= 10000 ? fmtK(n) : n.toLocaleString()}</b>${opt.labels ? `<i>${esc(ASSET[k] ? ASSET[k].s : 'msl')}</i>` : ''}</span>`);
+    });
+    return `<span class="mchips${opt.cls ? ' ' + opt.cls : ''}">${out.join('') || '<span class="mchip"><i>empty</i></span>'}</span>`;
+}
+// a sprite alone (no plate) for tables: key of ASSET or sprite name
+function sprIcon(spr, h) { const B = SPR_BOX[spr] || [0, 0, 64, 64]; h = h || 18; return `<svg viewBox="${B.join(' ')}" width="${Math.round(Math.min(h * 3, h * B[2] / B[3]))}" height="${h}"><use href="#spr-${spr}" width="64" height="64"/></svg>`; }
+try { milSpritesInit(); } catch (e) { console.warn('sprites', e); }
+
+// heading on the (Web Mercator) screen from a to b, degrees clockwise from east
+function milHeading(a, b) {
+    const my = la => Math.log(Math.tan(Math.PI / 4 + clamp(la, -85, 85) * Math.PI / 360));
+    let dx = b.lng - a.lng; if (dx > 180) dx -= 360; if (dx < -180) dx += 360;
+    const dy = (my(b.lat) - my(a.lat)) * 180 / Math.PI;
+    return Math.abs(dx) + Math.abs(dy) < 1e-9 ? 0 : Math.atan2(-dy, dx) * 180 / Math.PI;
+}
+// foreign deployments and other command-bar force movements use the same sprites (red plate = hostile, grey = others)
+const MOVE_SYM = { airdef: 'admr', carrier: 'carrier', naval: 'destroyer', air: 'jet', missile: 'adlr', armor: 'arm', drones: 'drone', peace: 'inf', special: 'sf', ground: 'inf' };
+moveIcon = function (mv) {
+    const cls = mv.status === 'deployed' ? 'mv-deployed' : mv.status === 'engaged' ? 'mv-engaged' : mv.status === 'returning' ? 'mv-returning' : 'mv-transit';
+    const mine = mv.owner === state.playerIso, side = mine ? 'mine' : (mv.hostile || (state.playerIso && getRel(state.playerIso, mv.owner) <= -40)) ? 'foe' : 'neu';
+    const hd = mv.from && mv.to ? milHeading(mv.status === 'returning' ? mv.from : mv.from, mv.to) : 0;
+    return L.divIcon({ className: 'site-pin', html: `<div class="brig mvb ${cls}${mine ? ' mine' : ' foreign'}" title="${esc(mv.name || '')}">${milMarkerSvg(MOVE_SYM[mv.unitType] || 'inf', side, hd, 30)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -13] });
+};
 
 // ---- intel panel: the armed forces of the selected country ----
 function milStripHTML(iso) {
