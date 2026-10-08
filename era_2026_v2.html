@@ -20964,7 +20964,7 @@ function milReinforcePrompt(id) {
     const _tm = tickMoves;
     tickMoves = function () { const r = _tm.apply(this, arguments); try { if (state.phase === 'playing') armyTick(); } catch (e) { console.warn('army', e); } return r; };
     const _dt = dailyTick;
-    dailyTick = function () { const r = _dt.apply(this, arguments); try { if (state.phase === 'playing') { armyDaily(); equipDeliveries(); if (state.dayIndex % 2 === 0) milPanelRefresh(); } } catch (e) { console.warn('army daily', e); } return r; };
+    dailyTick = function () { const r = _dt.apply(this, arguments); try { if (state.phase === 'playing') { armyDaily(); equipDeliveries(); productionDaily(); if (state.dayIndex % 2 === 0) milPanelRefresh(); } } catch (e) { console.warn('army daily', e); } return r; };
     const _me = monthlyEconomy;
     monthlyEconomy = function () { const r = _me.apply(this, arguments); try { armyMonthly(); } catch (e) { console.warn('army monthly', e); } return r; };
     const _sg = showGameUI;
@@ -21686,6 +21686,285 @@ function milAnimFrame(now) {
 // a short ring where a move order lands
 function milPing(ll) {
     try { const mk = L.marker([ll.lat, ll.lng], { icon: L.divIcon({ className: 'brig-pin', html: '<div class="mil-ping"></div>', iconSize: [26, 26], iconAnchor: [13, 13] }), interactive: false, keyboard: false, zIndexOffset: 950 }).addTo(map); setTimeout(() => { try { map.removeLayer(mk); } catch (e) { } }, 950); } catch (e) { }
+}
+
+// ---------- procurement: buy abroad (a willing seller), produce at home (your factories), recruit soldiers ----------
+// who builds what for export (2025-26 arms industries, approx.)
+const ARMS_MAKERS = (() => {
+    const TK = ['USA', 'RUS', 'CHN', 'DEU', 'FRA', 'GBR', 'KOR', 'ISR', 'TUR', 'ITA', 'IND', 'PAK', 'UKR', 'POL', 'JPN', 'IRN'];
+    const ADS = ['USA', 'RUS', 'CHN', 'FRA', 'GBR', 'DEU', 'ISR', 'KOR', 'TUR', 'SWE', 'NOR', 'IRN', 'ITA'], ADM = ['USA', 'RUS', 'CHN', 'FRA', 'DEU', 'ISR', 'KOR', 'NOR', 'ITA', 'TUR', 'IRN', 'GBR'], ADL = ['USA', 'RUS', 'CHN', 'ISR', 'FRA', 'ITA', 'KOR'];
+    return { tanks: TK, ifv: TK.concat(['SWE', 'FIN', 'ESP', 'CZE', 'SRB', 'BRA', 'ZAF']), guns: TK.concat(['SWE', 'ESP', 'SRB', 'CZE', 'ZAF', 'BRA']),
+        helis: ['USA', 'RUS', 'FRA', 'ITA', 'DEU', 'GBR', 'CHN', 'TUR', 'KOR', 'IND', 'JPN', 'ESP'], jets: ['USA', 'RUS', 'CHN', 'FRA', 'GBR', 'DEU', 'ITA', 'ESP', 'SWE', 'KOR', 'PAK', 'IND', 'TUR', 'JPN'],
+        stealth: ['USA', 'CHN', 'RUS'], bombers: ['USA', 'RUS', 'CHN'], drones: ['USA', 'TUR', 'ISR', 'CHN', 'IRN', 'RUS', 'ARE', 'IND', 'FRA', 'GBR', 'UKR'],
+        frigates: ['USA', 'FRA', 'GBR', 'ITA', 'ESP', 'DEU', 'NLD', 'KOR', 'JPN', 'CHN', 'RUS', 'TUR', 'IND'], destroyers: ['USA', 'GBR', 'FRA', 'ITA', 'ESP', 'KOR', 'JPN', 'CHN', 'RUS'], carriers: ['USA', 'FRA', 'GBR', 'ITA', 'ESP', 'CHN', 'RUS'],
+        adSR: ADS, adMR: ADM, adLR: ADL, mslSR: ADS, mslMR: ADM, mslLR: ADL };
+})();
+const PROC_KEYS = ['troops', 'tanks', 'ifv', 'guns', 'helis', 'jets', 'stealth', 'bombers', 'drones', 'frigates', 'destroyers', 'carriers', 'adSR', 'adMR', 'adLR', 'mslSR', 'mslMR', 'mslLR'];
+const FAC_TYPES = { tank: 'tank_factory', plane: 'plane_factory', missile: 'missile_factory', drone: 'drone_factory', yard: 'shipyard' };
+const FAC_NAME = { tank: 'Tank Factory', plane: 'Plane Factory', missile: 'Missile Factory', drone: 'Drone Production Factory', yard: 'Naval Shipyard' };
+// output per factory per day in "slots" (an item takes MIL_PRICE[key].slot): from the catalogue (50 tanks / 30 days, 10 aircraft / 30 days…)
+function facRate(fac) { const T = SITE_TYPES[FAC_TYPES[fac]], P = T && T.produces; if (!P) return 0; const n = P.tanks || P.aircraft || P.missiles || P.drones || 0; return n / (P.perDays || 30); }
+function facSites(fac) { const me = state.playerIso; return (state.sites || []).filter(s => s.owner === me && s.type === FAC_TYPES[fac] && ['active', 'damaged'].includes(s.status)); }
+function facCapDay(fac) { return facSites(fac).reduce((t, s) => t + facRate(fac) * (s.status === 'damaged' ? 0.5 : 1), 0); }
+function canSellArms(seller, key) {
+    const me = state.playerIso, nm = seller && WORLD[seller] ? shortName(seller) : 'That country';
+    if (!seller || seller === me || !WORLD[seller] || (typeof NON_SOVEREIGN !== 'undefined' && NON_SOVEREIGN.has(seller))) return { ok: false, why: 'Pick a foreign government to buy from.' };
+    const makers = ARMS_MAKERS[key];
+    if (makers && !makers.includes(seller)) return { ok: false, why: `${nm} does not build ${assetLabel(key)} for export.` };
+    try { if (atWarWith(seller)) return { ok: false, why: `${nm} is at war with you.` }; } catch (e) { }
+    const EUL = (typeof BLOCS !== 'undefined' && BLOCS.EU) || [];
+    if ((state.sanctionsOnMe || 0) > 0 && ((typeof SANCTIONERS !== 'undefined' && SANCTIONERS.includes(seller)) || EUL.includes(seller))) return { ok: false, why: `${nm} is among the governments sanctioning you — no arms sales.` };
+    if (((state.sanctionsOn || {})[seller] || 0) > 0) return { ok: false, why: `You have sanctions on ${nm}; it will not sell you weapons.` };
+    try { if (opposedBlocs(me, seller)) return { ok: false, why: `${nm} belongs to a rival bloc and will not arm you.` }; } catch (e) { }
+    const rel = getRel(me, seller); let ally = false; try { ally = typeof treatyPartners === 'function' && treatyPartners(me, ['defense', 'alliance']).includes(seller); } catch (e) { }
+    const need = ['stealth', 'bombers', 'carriers', 'adLR', 'mslLR'].includes(key) ? 50 : ['destroyers', 'jets', 'frigates', 'adMR', 'mslMR'].includes(key) ? 30 : 20;
+    if (!ally && rel < need) return { ok: false, why: `${nm} will not sell ${assetLabel(key)} at relations ${rel} (needs ${need}+ or a defence treaty).` };
+    if (key === 'bombers' && !ally && rel < 70) return { ok: false, why: `${nm} sells strategic bombers only to its closest allies (relations 70+ or a defence treaty).` };
+    return { ok: true, rel, ally };
+}
+// possible sellers of an item: willing ones first (best relations first), then the others with the reason
+function sellersFor(key) {
+    const me = state.playerIso, makers = (ARMS_MAKERS[key] || []).filter(i => i !== me && WORLD[i]);
+    return makers.map(i => Object.assign({ iso: i }, canSellArms(i, key))).sort((a, b) => (b.ok - a.ok) || (getRel(me, b.iso) - getRel(me, a.iso)));
+}
+function milLead(key, n) { const P = MIL_PRICE[key]; return Math.round((P ? P.lead : 60) * (1 + Math.min(1, Math.max(0, n - 1) / 400))); }
+function procureImport(key, n, seller, opt) {
+    opt = opt || {}; const me = state.playerIso, p = nationIso(me), P = MIL_PRICE[key];
+    n = Math.round(+n || 0); if (!P || n <= 0 || P.recruit) return { ok: false, why: 'Choose a weapon and a quantity.' };
+    if (!seller) { const s = sellersFor(key).find(x => x.ok); if (!s) return { ok: false, why: `No government is willing to sell you ${assetLabel(key)} right now.` }; seller = s.iso; }
+    const c = canSellArms(seller, key); if (!c.ok) return { ok: false, why: c.why, seller };
+    const cost = milPrice(key, n, 'import');
+    if (!opt.paid && cost > p.treasury) return { ok: false, why: `${milPl(n, key)} from ${shortName(seller)} cost ${formatVal(cost)} — the treasury holds ${formatVal(p.treasury)}.`, cost };
+    if (!opt.paid) p.treasury -= cost;
+    const days = milLead(key, n), A = army();
+    A.orders.push({ dest: 'reserve', key, n, day: state.dayIndex + days, src: 'import', seller, cost });
+    addRel(me, seller, 2);
+    try { rivalsOf(seller).slice(0, 3).forEach(r => { if (r !== me) addRel(me, r, -1); }); } catch (e) { }
+    const msg = `🛒 Ordered ${milPl(n, key)} from ${shortName(seller)} — ${formatVal(cost)}, delivery to the national reserve ~${fmtDate(dateIn(days))}.`;
+    if (!opt.quiet) milNote(esc(msg), 'neutral');
+    try { updateEconomyUI(); } catch (e) { }
+    return { ok: true, msg, cost, days, seller };
+}
+function recruitTroops(n, opt) {
+    opt = opt || {}; const me = state.playerIso, p = nationIso(me); n = Math.round((+n || 0) / 100) * 100;
+    if (n < 100) return { ok: false, why: 'Recruit at least 100 soldiers.' };
+    const pool = Math.round((p.pop || 1e6) * 0.012) - armySum('troops') - (army().orders || []).filter(o => o.src === 'recruit').reduce((s, o) => s + o.n, 0);
+    if (n > Math.max(0, pool)) return { ok: false, why: `${shortName(me)} cannot find ${n.toLocaleString()} more recruits (about ${Math.max(0, pool).toLocaleString()} fit volunteers left — about 1.2% of the population can serve).` };
+    const cost = milPrice('troops', n, 'domestic');
+    if (!opt.paid && cost > p.treasury) return { ok: false, why: `${n.toLocaleString()} soldiers cost ${formatVal(cost)} — the treasury holds ${formatVal(p.treasury)}.`, cost };
+    if (!opt.paid) p.treasury -= cost;
+    const days = MIL_PRICE.troops.lead;
+    army().orders.push({ dest: 'reserve', key: 'troops', n, day: state.dayIndex + days, src: 'recruit', cost });
+    const msg = `🎖 Recruiting ${n.toLocaleString()} soldiers — ${formatVal(cost)}; they finish basic training and join the reserve ~${fmtDate(dateIn(days))}.`;
+    if (!opt.quiet) milNote(esc(msg), 'neutral');
+    try { updateEconomyUI(); } catch (e) { }
+    return { ok: true, msg, cost, days };
+}
+function procureDomestic(key, n, opt) {
+    opt = opt || {}; const me = state.playerIso, p = nationIso(me), P = MIL_PRICE[key];
+    n = Math.round(+n || 0); if (!P || n <= 0) return { ok: false, why: 'Choose a weapon and a quantity.' };
+    if (P.recruit) return recruitTroops(n, opt);
+    if (P.fac === 'yard') return typeof shipyardOrder === 'function' ? shipyardOrder(key, n, opt) : { ok: false, why: 'Warships are built at a Naval Shipyard.' };
+    if (!facSites(P.fac).length) return { ok: false, why: `Producing ${assetLabel(key)} at home needs a ${FAC_NAME[P.fac]} — build one first (Build tab or "Build a ${FAC_NAME[P.fac].toLowerCase()} in …"), or buy them abroad.`, needFactory: P.fac };
+    const cost = milPrice(key, n, 'domestic');
+    if (!opt.paid && cost > p.treasury) return { ok: false, why: `${milPl(n, key)} cost ${formatVal(cost)} at home — the treasury holds ${formatVal(p.treasury)}.`, cost };
+    if (!opt.paid) p.treasury -= cost;
+    const A = army(), Q = A.prod[P.fac] = A.prod[P.fac] || { acc: 0, q: [] };
+    Q.q.push({ key, n, done: 0, cost, day: state.dayIndex });
+    const eta = milProdEta(P.fac).slice(-1)[0];
+    const msg = `🏭 ${FAC_NAME[P.fac]}: ${milPl(n, key)} ordered — ${formatVal(cost)}; ${eta ? 'last one ready ~' + fmtDate(dateIn(eta)) : 'production starts at once'}.`;
+    if (!opt.quiet) milNote(esc(msg), 'neutral');
+    try { updateEconomyUI(); } catch (e) { }
+    return { ok: true, msg, cost, days: eta || 30 };
+}
+// days from today until each queued job of a factory class is finished
+function milProdEta(fac) {
+    const Q = (army().prod || {})[fac]; if (!Q || !Q.q.length) return [];
+    const rate = facCapDay(fac); if (!(rate > 0)) return Q.q.map(() => null);
+    let acc = Q.acc || 0, t = 0; return Q.q.map(j => { const need = (j.n - j.done) * (MIL_PRICE[j.key].slot || 1) - acc; acc = 0; t += Math.max(0, need) / rate; return Math.ceil(t); });
+}
+function milProdIncoming() {
+    const out = [];
+    ['tank', 'plane', 'missile', 'drone'].forEach(fac => { const Q = (army().prod || {})[fac]; if (!Q || !Q.q.length) return; const E = milProdEta(fac);
+        Q.q.forEach((j, i) => out.push(`${sprIcon(ASSET[j.key].spr, 13)} ${esc(milPl(j.n - j.done, j.key))} · ${FAC_NAME[fac]} · ${E[i] === null ? '<span style="color:#e8a08a">paused — no working factory</span>' : 'done ~' + fmtDate(dateIn(E[i]))}`)); });
+    try { shipyardIncoming().forEach(t => out.push(t)); } catch (e) { }
+    return out;
+}
+// daily: factories turn their capacity into finished equipment in the reserve
+function productionDaily() {
+    const A = army();
+    ['tank', 'plane', 'missile', 'drone'].forEach(fac => {
+        const Q = A.prod[fac]; if (!Q || !Q.q || !Q.q.length) { if (Q) Q.acc = 0; return; }
+        Q.acc = (Q.acc || 0) + facCapDay(fac);
+        while (Q.q.length) {
+            const j = Q.q[0], w = MIL_PRICE[j.key].slot || 1, k = Math.min(j.n - j.done, Math.floor(Q.acc / w + 1e-9));
+            if (k <= 0) break;
+            j.done += k; Q.acc -= k * w; resAdd(j.key, k);
+            if (ASSET[j.key].mag) resAdd(ASSET[j.key].msl, k * ASSET[j.key].mag);
+            if (j.done >= j.n) { Q.q.shift(); milNote(`📦 ${FAC_NAME[fac]} output: ${esc(milPl(j.n, j.key))} completed and delivered to the national reserve.`, 'good'); }
+        }
+        if (!Q.q.length) Q.acc = 0;
+    });
+    try { shipyardDaily(); } catch (e) { console.warn('shipyard', e); }
+}
+
+// ---------- the Procure tab ----------
+let MIL_PROC = { key: 'tanks', n: 10, src: 'import', seller: '' };
+MIL_TAB_HTML.procure = function () {
+    const D1 = typeof D === 'function' ? (D().cost || 1) : 1, k = MIL_PROC.key, P = MIL_PRICE[k];
+    const facTxt = f => { const n = f === 'yard' ? facSites('yard').length : facSites(f).length; return n ? `<span style="color:#9fcf6a">${n} ${FAC_NAME[f]}${n > 1 ? 's' : ''}</span>` : `<span style="color:#a68e6a">needs a ${FAC_NAME[f]}</span>`; };
+    const pr = (unit, bulk) => `${formatVal(unit * D1)}${bulk ? `<br><span class="mr-sub">${bulk[0]} for ${formatVal(bulk[1] * D1)}</span>` : ''}`;
+    const rows = PROC_KEYS.map(key => { const Q = MIL_PRICE[key];
+        return `<tr class="${key === k ? 'on' : ''}" onclick="MIL_PROC.key='${key}';MIL_PROC.seller='';MIL_PROC.n=${key === 'troops' ? 1000 : ['carriers'].includes(key) ? 1 : 10};MIL_PROC.src=${Q.recruit ? "'domestic'" : 'MIL_PROC.src'};renderMilPanel()">
+            <td>${sprIcon(ASSET[key].spr, 18)}</td><td><b style="color:#f6e7b4">${esc(Q.recruit ? 'Soldiers (per 1,000)' : assetLabel(key).replace(/^./, c => c.toUpperCase()))}</b>${ASSET[key].range ? `<br><span class="mr-sub">range ${ASSET[key].range} km · ${ASSET[key].mag} interceptors</span>` : ''}</td>
+            <td class="n">${Q.recruit ? '—' : pr(Q.imp, Q.impBulk)}</td><td class="n">${Q.recruit ? formatVal(25e6 * D1) + '<br><span class="mr-sub">per 1,000</span>' : pr(Q.dom, Q.domBulk)}</td>
+            <td>${Q.recruit ? 'army bases · 30 days' : `${facTxt(Q.fac)}<br><span class="mr-sub">import ~${Q.lead} days</span>`}</td></tr>`; }).join('');
+    const sellers = P.recruit ? [] : sellersFor(k);
+    if (!P.recruit && MIL_PROC.src === 'import' && (!MIL_PROC.seller || !sellers.some(s => s.iso === MIL_PROC.seller))) { const s = sellers.find(x => x.ok); MIL_PROC.seller = s ? s.iso : (sellers[0] || {}).iso || ''; }
+    const domOk = P.recruit || (P.fac === 'yard' ? facSites('yard').length > 0 : facSites(P.fac).length > 0);
+    const form = `<div class="wm-card" style="margin-top:8px"><div class="wm-ctop">${sprIcon(ASSET[k].spr, 24)}<b>${P.recruit ? 'Recruit soldiers' : 'Order ' + esc(assetLabel(k))}</b><span class="mr-sub">everything ordered goes into the national reserve first</span></div>
+        <div class="mil-grid2" style="margin-top:6px"><label>Quantity <input type="number" id="mp-n" min="1" step="${P.recruit ? 100 : 1}" value="${MIL_PROC.n}" oninput="MIL_PROC.n=Math.max(1,Math.round(+this.value||1));milProcUpd()"></label>
+        ${P.recruit ? '' : `<label>Source <select id="mp-src" onchange="MIL_PROC.src=this.value;renderMilPanel()"><option value="import" ${MIL_PROC.src === 'import' ? 'selected' : ''}>Import (buy from another country)</option><option value="domestic" ${MIL_PROC.src === 'domestic' ? 'selected' : ''} ${domOk ? '' : 'disabled'}>Produce at home${domOk ? '' : ' — needs a ' + FAC_NAME[P.fac]}</option></select></label>`}
+        ${!P.recruit && MIL_PROC.src === 'import' ? `<label>Seller <select id="mp-seller" onchange="MIL_PROC.seller=this.value;milProcUpd()">${sellers.map(s => `<option value="${s.iso}" ${s.iso === MIL_PROC.seller ? 'selected' : ''} ${s.ok ? '' : 'disabled'}>${esc(shortName(s.iso))} · rel ${getRel(state.playerIso, s.iso)}${s.ok ? '' : ' — refuses'}</option>`).join('')}</select></label>` : ''}</div>
+        <div id="mp-info" class="mil-note" style="margin:6px 0"></div>
+        <div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary mil-go" onclick="milProcGo()">${P.recruit ? '🎖 Recruit' : MIL_PROC.src === 'import' ? '🛒 Buy' : '🏭 Produce'}</button>
+        ${!P.recruit && !domOk && P.fac ? `<button type="button" class="gs-btn" onclick="closeMilPanel();startBuildPick('${FAC_TYPES[P.fac]}')">🏗 Build a ${FAC_NAME[P.fac]} (${formatVal(SITE_TYPES[FAC_TYPES[P.fac]].cost * D1)})</button>` : ''}</div></div>`;
+    return `<div class="mil-note">Buying abroad needs a willing seller (relations, sanctions and rival blocs matter); producing at home is cheaper but needs the factory and takes its time. Bulk orders are discounted.</div>
+        <div class="mil-list" style="max-height:34vh"><table class="mil-proc"><thead><tr><th></th><th>Item</th><th style="text-align:right">Import</th><th style="text-align:right">Domestic</th><th>Made at</th></tr></thead><tbody>${rows}</tbody></table></div>${form}`;
+};
+MIL_TAB_AFTER.procure = () => milProcUpd();
+function milProcUpd() {
+    const el = document.getElementById('mp-info'); if (!el) return;
+    const k = MIL_PROC.key, P = MIL_PRICE[k], n = Math.max(1, Math.round(+MIL_PROC.n || 1)), dom = P.recruit || MIL_PROC.src === 'domestic';
+    const cost = milPrice(k, n, dom ? 'domestic' : 'import'), each = cost / n;
+    let when = '';
+    if (P.recruit) when = `ready ~${fmtDate(dateIn(P.lead))} (basic training)`;
+    else if (!dom) { const c = canSellArms(MIL_PROC.seller, k); when = c.ok ? `from ${esc(shortName(MIL_PROC.seller))}, delivered ~${fmtDate(dateIn(milLead(k, n)))}` : `<span style="color:#e8a08a">${esc(c.why || 'no seller')}</span>`; }
+    else if (P.fac === 'yard') { try { when = shipyardPreview(k, n); } catch (e) { when = ''; } }
+    else { const rate = facCapDay(P.fac), Q = (army().prod || {})[P.fac], E = milProdEta(P.fac), start = E.length ? (E[E.length - 1] || 0) : 0; when = rate > 0 ? `at your ${FAC_NAME[P.fac]}${facSites(P.fac).length > 1 ? 'ies'.replace('ies', 's') : ''} (${(rate * 30 / (P.slot || 1)).toFixed(0)} a month), last one ~${fmtDate(dateIn(start + Math.ceil(n * (P.slot || 1) / rate)))}${Q && Q.q.length ? ` after ${Q.q.length} earlier order${Q.q.length > 1 ? 's' : ''}` : ''}` : `<span style="color:#e8a08a">no working ${FAC_NAME[P.fac]}</span>`; }
+    el.innerHTML = `${n.toLocaleString()} × ${esc(P.recruit ? 'soldiers' : assetLabel(k))} → <b style="color:#f3d98a">${formatVal(cost)}</b> (${formatVal(each)} each${(dom ? P.domBulk : P.impBulk) && n > 1 ? ', bulk discount' : ''}) · ${when} · treasury ${formatVal(nationIso(state.playerIso).treasury)}`;
+}
+function milProcGo() {
+    const k = MIL_PROC.key, P = MIL_PRICE[k], n = Math.max(1, Math.round(+MIL_PROC.n || 1));
+    const r = P.recruit ? recruitTroops(n, { quiet: true }) : MIL_PROC.src === 'domestic' ? procureDomestic(k, n, { quiet: true }) : procureImport(k, n, MIL_PROC.seller, { quiet: true });
+    MIL_MSG = r.ok ? [true, esc(r.msg)] : [false, '⚠ ' + esc(r.why)];
+    if (r.ok) { playClick(); milNote(esc(r.msg), 'neutral'); }
+    renderMilPanel();
+}
+
+// ---------- the Production tab: your factories, their queues, and what to build next ----------
+MIL_TAB_HTML.production = function () {
+    const A = army(), D1 = typeof D === 'function' ? (D().cost || 1) : 1;
+    const card = fac => {
+        const S = facSites(fac), all = (state.sites || []).filter(s => s.owner === state.playerIso && s.type === FAC_TYPES[fac]), Q = A.prod[fac] || { q: [] }, E = milProdEta(fac), rate = facCapDay(fac);
+        const items = PROC_KEYS.filter(k => MIL_PRICE[k].fac === fac);
+        return `<div class="wm-card"><div class="wm-ctop"><b>${FAC_NAME[fac]}</b><span class="mr-sub">${S.length} working${all.length > S.length ? ` · ${all.length - S.length} building / out of action` : ''} · ${rate > 0 ? `output ${(rate * 30).toFixed(0)} slots a month` : 'no output'} · makes ${items.map(k => esc(assetLabel(k))).join(', ')}</span></div>
+            ${all.length ? `<div class="mr-sub">${all.map(s => `${esc(s.name)} (${esc(STATUS_LABEL[s.status] || s.status)}${s.status === 'construction' && s.buildDays ? ', ready ~' + fmtDate(dateIn(Math.max(1, Math.round(s.buildDays * (1 - s.progress))))) : ''})`).join(' · ')}</div>` : ''}
+            ${Q.q.length ? Q.q.map((j, i) => `<div class="mr-sub" style="margin-top:3px">${sprIcon(ASSET[j.key].spr, 14)} ${esc(milPl(j.n, j.key))} — ${j.done}/${j.n} built · ${E[i] === null ? '<span style="color:#e8a08a">paused</span>' : 'done ~' + fmtDate(dateIn(E[i]))}<div class="mil-cap"><div style="width:${Math.round(100 * j.done / j.n)}%;background:#9fcf6a"></div></div></div>`).join('') : `<div class="mr-sub">Queue empty.</div>`}
+            <div class="mil-acts">${items.map(k => `<button type="button" class="gs-btn" ${S.length ? '' : 'disabled'} onclick="MIL_TAB='procure';MIL_PROC={key:'${k}',n:${k === 'mslSR' ? 50 : 10},src:'domestic',seller:''};renderMilPanel()">🏭 ${esc(ASSET[k].s)}</button>`).join('')}
+            <button type="button" class="gs-btn" onclick="closeMilPanel();startBuildPick('${FAC_TYPES[fac]}')">🏗 Build one · ${formatVal(SITE_TYPES[FAC_TYPES[fac]].cost * D1)}</button></div></div>`;
+    };
+    return `<div class="mil-note">Factories turn their monthly capacity into equipment for the national reserve: a Tank Factory 50 tanks every 30 days, a Plane Factory 10 aircraft every 30 days (stealth fighters, multirole jets, bombers; helicopters count half), a Missile Factory interceptors and air-defence batteries, a Drone Factory 20 drones. Orders are paid when placed.</div>
+        ${['tank', 'plane', 'missile', 'drone'].map(card).join('')}${typeof shipyardTabHTML === 'function' ? shipyardTabHTML() : ''}`;
+};
+
+// ---------- naval shipyards: yearly capacity shared by the ships on the slipways ----------
+// A yard's capacity is 1 a year. A carrier is 0.5 of it and may use at most half the yard (→ 1 year); destroyers are 0.125 each and the
+// destroyer line uses at most half the yard (→ one every 3 months, 4 a year = 50%); frigates are 0.125 each at full speed (→ one every ~46 days,
+// 8 a year = 100%). Mixes share the year: 2 carriers, 1 carrier + 4 frigates, 4 destroyers + 4 frigates…
+const YARD_W = { carriers: { work: 0.5, ship: 0.5, cls: 1 }, destroyers: { work: 0.125, ship: 0.5, cls: 0.5 }, frigates: { work: 0.125, ship: 1, cls: 1 } };
+function yardOf(id) { const A = army(); return A.yards[id] = A.yards[id] || { q: [] }; }
+function yardLoad(id) { const Y = army().yards[id]; return Y ? Y.q.reduce((s, j) => s + (YARD_W[j.key].work - j.done), 0) : 0; }
+// one day of a yard's work on its queue (in place); returns the finished items
+function yardStep(q, k) {
+    let free = k / 365; const used = { carriers: 0, destroyers: 0, frigates: 0 }, out = [];
+    q.forEach(j => {
+        if (free <= 1e-12) return; const W = YARD_W[j.key];
+        const r = Math.max(0, Math.min(free, W.ship * k / 365, W.cls * k / 365 - used[j.key], W.work - j.done));
+        j.done += r; free -= r; used[j.key] += r;
+    });
+    for (let i = q.length - 1; i >= 0; i--) if (q[i].done >= YARD_W[q[i].key].work - 1e-9) out.unshift(q.splice(i, 1)[0]);
+    return out;
+}
+// days until each queued (and optionally extra) ship of a yard is launched
+function yardSim(id, extra) {
+    const s = (state.sites || []).find(x => x.id === id), k = !s ? 0 : s.status === 'damaged' ? 0.5 : ['active'].includes(s.status) ? 1 : 0;
+    const q = (yardOf(id).q.concat(extra || [])).map((j, i) => ({ key: j.key, done: j.done || 0, i })), eta = new Array(q.length).fill(null);
+    if (!k) return eta;
+    for (let d = 1; d <= 365 * 25 && q.length; d++) yardStep(q, k).forEach(j => eta[j.i] = d);
+    return eta;
+}
+function yardShare(id) { return yardLoad(id); }          // capacity-years still to build (1 = a full year of the yard)
+function shipyardOrder(key, n, opt) {
+    opt = opt || {}; const me = state.playerIso, p = nationIso(me), S = facSites('yard');
+    n = Math.round(+n || 0); if (!YARD_W[key] || n <= 0) return { ok: false, why: 'Choose carriers, destroyers or frigates.' };
+    if (!S.length) return { ok: false, why: `Warships are built at a Naval Shipyard ($12B, on your coast) — build one first, or buy ${assetLabel(key)} abroad.`, needFactory: 'yard' };
+    const y = (opt.yardId && S.find(s => s.id === opt.yardId)) || S.slice().sort((a, b) => yardLoad(a.id) - yardLoad(b.id))[0];
+    const cost = milPrice(key, n, 'domestic');
+    if (!opt.paid && cost > p.treasury) return { ok: false, why: `${milPl(n, key)} cost ${formatVal(cost)} — the treasury holds ${formatVal(p.treasury)}.`, cost };
+    if (!opt.paid) p.treasury -= cost;
+    const Y = yardOf(y.id); for (let i = 0; i < n; i++) Y.q.push({ key, done: 0, cost: Math.round(cost / n), day: state.dayIndex });
+    const E = yardSim(y.id), last = E[E.length - 1];
+    const msg = `🚢 ${y.name}: ${milPl(n, key)} laid down — ${formatVal(cost)}; ${last ? 'the last one is launched ~' + fmtDate(dateIn(last)) : 'work starts at once'} (yard committed for ${(yardLoad(y.id)).toFixed(2)} years of capacity).`;
+    if (!opt.quiet) milNote(esc(msg), 'neutral');
+    try { updateEconomyUI(); } catch (e) { }
+    return { ok: true, msg, cost, days: last || 365, yard: y.id };
+}
+function shipyardPreview(key, n) {
+    const S = facSites('yard'); if (!S.length) return '<span style="color:#e8a08a">no working Naval Shipyard</span>';
+    const y = S.slice().sort((a, b) => yardLoad(a.id) - yardLoad(b.id))[0], E = yardSim(y.id, Array.from({ length: n }, () => ({ key })));
+    return `at ${esc(y.name)}, last one launched ~${E[E.length - 1] ? fmtDate(dateIn(E[E.length - 1])) : '?'} · uses ${Math.round(n * YARD_W[key].work * 100)}% of a year's capacity`;
+}
+function shipyardDaily() {
+    const A = army(), S = facSites('yard'), ids = new Set(S.map(s => s.id)), me = state.playerIso;
+    // plans of a yard that is gone (demolished, destroyed, captured) move to another yard, or the unbuilt part is refunded
+    Object.keys(A.yards).forEach(id => {
+        if (ids.has(id)) return; const Y = A.yards[id], site = (state.sites || []).find(s => s.id === id);
+        if (site && site.owner === me && ['construction', 'planned', 'inactive'].includes(site.status)) return;   // paused, not gone
+        if (Y.q.length) {
+            const to = S.slice().sort((a, b) => yardLoad(a.id) - yardLoad(b.id))[0];
+            if (to) { yardOf(to.id).q.push(...Y.q); milNote(`🚢 ${Y.q.length} ship${Y.q.length > 1 ? 's' : ''} from ${esc(site ? site.name : 'a lost shipyard')} moved to ${esc(to.name)}.`, 'neutral'); }
+            else { const back = Y.q.reduce((s, j) => s + (j.cost || 0) * (1 - j.done / YARD_W[j.key].work), 0); nationIso(me).treasury += back; milNote(`🚢 Shipyard lost: ${Y.q.length} unfinished ship${Y.q.length > 1 ? 's' : ''} cancelled, ${formatVal(back)} refunded.`, 'bad'); }
+        }
+        delete A.yards[id];
+    });
+    S.forEach(s => {
+        const Y = A.yards[s.id]; if (!Y || !Y.q.length) return;
+        yardStep(Y.q, s.status === 'damaged' ? 0.5 : 1).forEach(j => { resAdd(j.key, 1); milNote(`🚢 ${esc(s.name)} launched a new ${esc(assetLabel(j.key).replace(/s$/, ''))}; it joins the national reserve (form a task force at a naval base).`, 'good'); });
+    });
+}
+function shipyardIncoming() {
+    const out = [];
+    facSites('yard').concat((state.sites || []).filter(s => s.owner === state.playerIso && s.type === 'shipyard' && !['active', 'damaged'].includes(s.status))).forEach(s => {
+        const Y = army().yards[s.id]; if (!Y || !Y.q.length) return; const E = yardSim(s.id);
+        Y.q.forEach((j, i) => out.push(`${sprIcon(ASSET[j.key].spr, 13)} 1 ${esc(assetLabel(j.key).replace(/s$/, ''))} · ${esc(s.name)} · ${Math.round(100 * j.done / YARD_W[j.key].work)}% · ${E[i] ? 'launch ~' + fmtDate(dateIn(E[i])) : '<span style="color:#e8a08a">paused</span>'}`));
+    });
+    return out;
+}
+let MIL_YARD = { carriers: 0, destroyers: 0, frigates: 0 };
+function shipyardTabHTML() {
+    const S = (state.sites || []).filter(s => s.owner === state.playerIso && s.type === 'shipyard'), D1 = typeof D === 'function' ? (D().cost || 1) : 1;
+    const mix = MIL_YARD, add = ['carriers', 'destroyers', 'frigates'].reduce((t, k) => t + (mix[k] || 0) * YARD_W[k].work, 0), addCost = ['carriers', 'destroyers', 'frigates'].reduce((t, k) => t + milPrice(k, mix[k] || 0, 'domestic'), 0);
+    const step = (k) => `<span class="mchip" style="gap:4px">${sprIcon(ASSET[k].spr, 16)}<button type="button" class="gs-btn" style="padding:0 7px" onclick="MIL_YARD.${k}=Math.max(0,(MIL_YARD.${k}||0)-1);renderMilPanel()">−</button><b>${mix[k] || 0}</b><button type="button" class="gs-btn" style="padding:0 7px" onclick="MIL_YARD.${k}=(MIL_YARD.${k}||0)+1;renderMilPanel()">＋</button><i>${esc(assetLabel(k))} · ${Math.round(YARD_W[k].work * 100)}%</i></span>`;
+    const cards = S.map(s => {
+        const ok = ['active', 'damaged'].includes(s.status), Y = yardOf(s.id), E = yardSim(s.id), load = yardLoad(s.id);
+        const pct = Math.min(100, load * 100), extra = Math.min(100 - pct, add * 100);
+        return `<div class="wm-card"><div class="wm-ctop"><b>🚢 ${esc(s.name)}</b><span class="mr-sub">${esc(STATUS_LABEL[s.status] || s.status)}${s.status === 'damaged' ? ' · half capacity' : ''} · committed ${(load).toFixed(2)} year${load === 1 ? '' : 's'} of capacity</span></div>
+            <div class="yard-bar" title="Share of one year's capacity: queued ships, plus your mix below"><div style="left:0;width:${pct}%;background:#7fd4ff"></div><div style="left:${pct}%;width:${extra}%;background:#d1ad5b"></div>${load + add > 1 ? '' : ''}</div>
+            <div class="mr-sub">${Math.round(load * 100)}% of a year queued${add ? ` + ${Math.round(add * 100)}% in your mix` : ''}${load + add > 1 ? ` → ${(load + add).toFixed(2)} years of work` : ''}</div>
+            ${Y.q.length ? Y.q.map((j, i) => `<div class="mr-sub" style="margin-top:2px">${sprIcon(ASSET[j.key].spr, 13)} ${esc(assetLabel(j.key).replace(/s$/, ''))} — ${Math.round(100 * j.done / YARD_W[j.key].work)}% · ${E[i] ? 'launch ~' + fmtDate(dateIn(E[i])) : 'paused'}</div>`).join('') : '<div class="mr-sub">No ships on the slipways.</div>'}
+            ${ok && add ? `<div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary" onclick="milYardGo('${s.id}')">🚢 Lay down this mix here · ${formatVal(addCost)}</button></div>` : ''}</div>`;
+    }).join('');
+    return `<div class="wm-card"><div class="wm-ctop"><b>Naval shipyards</b><span class="mr-sub">a year of yard capacity = 1 carrier (50%) · 4 destroyers, one every 3 months (50%) · 8 frigates, one every ~46 days (100%) — mix as you like</span></div>
+        <div class="mchips" style="margin:6px 0;gap:8px 14px">${step('carriers')}${step('destroyers')}${step('frigates')}</div>
+        <div class="mr-sub">Your mix: ${Math.round(add * 100)}% of a year's capacity · ${formatVal(addCost)} (${formatVal(MIL_PRICE.carriers.dom * D1)} a carrier, ${formatVal(MIL_PRICE.destroyers.dom * D1)} a destroyer, ${formatVal(MIL_PRICE.frigates.dom * D1)} a frigate)</div>
+        ${S.length ? '' : `<div class="mil-acts"><span class="mr-sub" style="align-self:center">You have no Naval Shipyard.</span><button type="button" class="gs-btn" onclick="closeMilPanel();startBuildPick('shipyard')">🏗 Build one · ${formatVal(SITE_TYPES.shipyard.cost * D1)} (coast)</button></div>`}</div>${cards}`;
+}
+function milYardGo(id) {
+    const msgs = []; let ok = true;
+    ['carriers', 'destroyers', 'frigates'].forEach(k => { if (!(MIL_YARD[k] > 0) || !ok) return; const r = shipyardOrder(k, MIL_YARD[k], { yardId: id, quiet: true }); if (r.ok) { msgs.push(r.msg); milNote(esc(r.msg), 'neutral'); } else { ok = false; msgs.push('⚠ ' + r.why); } });
+    MIL_MSG = [ok, esc(msgs.join(' '))]; if (ok) { MIL_YARD = { carriers: 0, destroyers: 0, frigates: 0 }; playClick(); }
+    renderMilPanel();
 }
 
 // ---- intel panel: the armed forces of the selected country ----
