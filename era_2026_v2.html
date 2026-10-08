@@ -20152,17 +20152,46 @@ const BRIG = {
     mechanized: { name: 'Mechanised Brigade',      sym: 'mech', troops: 4000, tanks: 30, ifv: 130, guns: 18, sam: 0,  speed: 110,  cost: 0.9e9,  days: 45, pw: 1.6 },
     armored:    { name: 'Armoured Brigade',        sym: 'arm',  troops: 3500, tanks: 90, ifv: 45,  guns: 18, sam: 0,  speed: 100,  cost: 1.4e9,  days: 60, pw: 2.2 },
     artillery:  { name: 'Artillery Brigade',       sym: 'art',  troops: 2200, tanks: 0,  ifv: 10,  guns: 54, sam: 0,  speed: 100,  cost: 0.6e9,  days: 45, pw: 1.3 },
-    airdef:     { name: 'Air-Defence Brigade',     sym: 'ad',   troops: 1200, tanks: 0,  ifv: 0,   guns: 0,  sam: 24, speed: 120,  cost: 0.8e9,  days: 50, pw: 0.9 },
+    airdef:     { name: 'Air-Defence Brigade',     sym: 'ad',   troops: 1200, tanks: 0,  ifv: 0,   guns: 0,  sam: 0, adSR: 4, adMR: 2, mslSR: 32, mslMR: 24, speed: 120,  cost: 0.8e9,  days: 50, pw: 0.9 },
     airborne:   { name: 'Airborne Brigade',        sym: 'abn',  troops: 3000, tanks: 0,  ifv: 20,  guns: 8,  sam: 0,  speed: 1500, cost: 0.5e9,  days: 60, pw: 1.1 },
     special:    { name: 'Special Forces Group',    sym: 'sf',   troops: 800,  tanks: 0,  ifv: 0,   guns: 0,  sam: 0,  speed: 2000, cost: 0.3e9,  days: 60, pw: 0.7 },
     aviation:   { name: 'Aviation Brigade',        sym: 'heli', troops: 1500, tanks: 0,  ifv: 0,   guns: 0,  sam: 0,  helis: 48, speed: 600,  cost: 1.6e9, days: 75, pw: 1.5 },
     airwing:    { name: 'Fighter Wing',            sym: 'jet',  troops: 1200, tanks: 0,  ifv: 0,   guns: 0,  sam: 0,  jets: 24,  speed: 4000, cost: 2.8e9, days: 90, pw: 2.6 },
     fleet:      { name: 'Naval Task Force',        sym: 'destroyer', troops: 1800, tanks: 0, ifv: 0, guns: 0, sam: 0, destroyers: 2, frigates: 4, speed: 800, cost: 7.2e9, days: 270, pw: 2.4, sea: true },
-    csg:        { name: 'Carrier Strike Group',    sym: 'csg', troops: 7500, tanks: 0, ifv: 0, guns: 0, sam: 0, carriers: 1, destroyers: 3, frigates: 1, jets: 36, speed: 800, cost: 25e9, days: 720, pw: 6, sea: true }
+    csg:        { name: 'Carrier Strike Group',    sym: 'csg', troops: 7500, tanks: 0, ifv: 0, guns: 0, sam: 0, carriers: 1, destroyers: 3, frigates: 1, jets: 36, speed: 800, cost: 25e9, days: 720, pw: 6, sea: true },
+    // custom formations the player puts together from the national reserve (any mix; the name, icon and speed follow what they hold)
+    battalion:  { name: 'Battalion',               sym: 'mech', troops: 1000, speed: 110, cost: 0.3e9, days: 30, pw: 1, custom: true },
+    airgroup:   { name: 'Air Group',               sym: 'jet',  troops: 300,  speed: 4000, cost: 1e9, days: 30, pw: 1, custom: true },
+    taskforce:  { name: 'Task Force',              sym: 'destroyer', troops: 500, speed: 800, cost: 2e9, days: 30, pw: 1, sea: true, custom: true },
+    adgroup:    { name: 'Air-Defence Group',       sym: 'ad',   troops: 200,  speed: 120, cost: 0.5e9, days: 30, pw: 1, custom: true }
 };
-// every equipment count a formation can carry
-const ASSET_KEYS = [['troops', 'troops'], ['tanks', 'tanks'], ['ifv', 'IFV/APC'], ['guns', 'artillery'], ['sam', 'SAM'], ['helis', 'helicopters'], ['jets', 'jets'], ['carriers', 'aircraft carriers'], ['destroyers', 'destroyers'], ['frigates', 'frigates']];
+// every equipment count a formation (and the national reserve) can hold
+const ASSET_KEYS = [['troops', 'troops'], ['tanks', 'tanks'], ['ifv', 'IFV/APC'], ['guns', 'artillery'], ['sam', 'SAM'], ['helis', 'helicopters'], ['jets', 'multirole jets'], ['stealth', 'stealth fighters'], ['bombers', 'strategic bombers'], ['drones', 'combat drones'],
+    ['carriers', 'aircraft carriers'], ['destroyers', 'destroyers'], ['frigates', 'frigates'], ['adSR', 'short-range AD batteries'], ['adMR', 'medium-range AD batteries'], ['adLR', 'long-range AD batteries'], ['mslSR', 'SR interceptors'], ['mslMR', 'MR interceptors'], ['mslLR', 'LR interceptors']];
 const SHIP_KEYS = ['carriers', 'destroyers', 'frigates'];
+// what each asset is: domain (land / heli / air / sea / ad / msl), combat power, speed (km a day), crew, sprite; AD batteries: range (km) and magazine
+const ASSET = {
+    troops:     { s: 'troops',     dom: 'land', pw: 0.00025, speed: 120, crew: 0, spr: 'soldier' },
+    tanks:      { s: 'tanks',      dom: 'land', pw: 0.012, speed: 100, crew: 4, spr: 'tank' },
+    ifv:        { s: 'IFVs',       dom: 'land', pw: 0.004, speed: 110, crew: 3, spr: 'ifv' },
+    guns:       { s: 'artillery',  dom: 'land', pw: 0.006, speed: 100, crew: 6, spr: 'artillery' },
+    sam:        { s: 'SAM',        dom: 'land', pw: 0.02,  speed: 120, crew: 8, spr: 'admr' },
+    helis:      { s: 'helos',      dom: 'heli', pw: 0.02,  speed: 600, crew: 6, spr: 'heli' },
+    jets:       { s: 'jets',       dom: 'air',  pw: 0.09,  speed: 4000, crew: 8, spr: 'jet' },
+    stealth:    { s: 'stealth',    dom: 'air',  pw: 0.14,  speed: 4000, crew: 10, spr: 'stealth' },
+    bombers:    { s: 'bombers',    dom: 'air',  pw: 0.2,   speed: 3500, crew: 30, spr: 'bomber' },
+    drones:     { s: 'drones',     dom: 'air',  pw: 0.015, speed: 1500, crew: 4, spr: 'drone' },
+    carriers:   { s: 'carriers',   dom: 'sea',  pw: 2.0,   speed: 800, crew: 3200, spr: 'carrier' },
+    destroyers: { s: 'destroyers', dom: 'sea',  pw: 0.45,  speed: 800, crew: 320, spr: 'destroyer' },
+    frigates:   { s: 'frigates',   dom: 'sea',  pw: 0.25,  speed: 800, crew: 180, spr: 'frigate' },
+    adSR:       { s: 'SR AD',      dom: 'ad',   pw: 0.01,  speed: 150, crew: 12, spr: 'adsr', range: 10,  mag: 8,  msl: 'mslSR' },
+    adMR:       { s: 'MR AD',      dom: 'ad',   pw: 0.08,  speed: 120, crew: 40, spr: 'admr', range: 50,  mag: 12, msl: 'mslMR' },
+    adLR:       { s: 'LR AD',      dom: 'ad',   pw: 0.3,   speed: 100, crew: 90, spr: 'adlr', range: 250, mag: 16, msl: 'mslLR' },
+    mslSR:      { s: 'SR msl',     dom: 'msl',  pw: 0, speed: 0, crew: 0, spr: 'missile' },
+    mslMR:      { s: 'MR msl',     dom: 'msl',  pw: 0, speed: 0, crew: 0, spr: 'missile' },
+    mslLR:      { s: 'LR msl',     dom: 'msl',  pw: 0, speed: 0, crew: 0, spr: 'missile' }
+};
+const AD_KEYS = ['adSR', 'adMR', 'adLR'], AIR_KEYS = ['jets', 'stealth', 'bombers', 'drones'];
 function shipsOf(u) { return SHIP_KEYS.reduce((t, k) => t + (u[k] || 0), 0); }
 // main surface combatants (aircraft carriers incl. helicopter / amphibious carriers, destroyers, frigates), approx. 2025
 const NAVY_DATA = { USA: [11, 92, 22], CHN: [3, 50, 47], RUS: [1, 11, 12], IND: [2, 13, 14], GBR: [2, 6, 9], FRA: [1, 11, 11], JPN: [4, 36, 12], ITA: [2, 4, 12],
@@ -20210,8 +20239,8 @@ function milInventory(iso) {
     let [troops, tanks, jets, helis, ships] = B.v.map(x => Math.round(x * k));
     let [carriers, destroyers, frigates] = navyBase(iso, B.v[4]).map(x => Math.round(x * Math.min(k, 1.2)));
     if (iso === state.playerIso && state.army) {
-        // your recruited formations add to the national total
-        const U = myUnits(), sum = key => U.reduce((s, u) => s + (key === 'ships' ? shipsOf(u) : (u[key] || 0)), 0);
+        // your formations and the national reserve add to the national total (jets = multirole + stealth + bombers)
+        const U = myUnits(), sum = key => armySum(key);
         if (!state.army.inv0 && U.length) { state.army.inv0 = {}; ['troops', 'tanks', 'jets', 'helis', 'ships'].concat(SHIP_KEYS).forEach(k => state.army.inv0[k] = sum(k)); }
         const p0 = state.army.inv0 || {};
         troops += Math.max(0, sum('troops') - (p0.troops || 0)); tanks += Math.max(0, sum('tanks') - (p0.tanks || 0)); jets += Math.max(0, sum('jets') - (p0.jets || 0));
@@ -20227,17 +20256,54 @@ function army() {
     const A = state.army; A.sel = A.sel || [];
     if (A.navV !== 2) { A.navV = 2; A.units.forEach(u => { if (u.ships) { u.frigates = (u.frigates || 0) + Math.ceil(u.ships * 0.6); u.destroyers = (u.destroyers || 0) + Math.floor(u.ships * 0.4); delete u.ships; } }); if (A.inv0 && A.inv0.ships !== undefined) delete A.inv0; }
     A.orders = A.orders || [];
+    // national stockpile (reserve), factory queues, shipyard plans; every unit carries every asset key (older saves lack the new ones)
+    if (!A.reserve || typeof A.reserve !== 'object') A.reserve = {};
+    if (A.keyV !== ASSET_KEYS.length) { A.keyV = ASSET_KEYS.length; ASSET_KEYS.forEach(([k]) => { if (!(A.reserve[k] >= 0)) A.reserve[k] = 0; }); A.units.forEach(u => ASSET_KEYS.forEach(([k]) => { if (!(u[k] >= 0)) u[k] = 0; })); }
+    // old SAM launchers become medium-range air-defence batteries with a full magazine
+    if (A.adV !== 1) { A.adV = 1; A.units.forEach(u => { if (u.sam > 0) { const n = Math.max(1, Math.round(u.sam / 12)); u.adMR = (u.adMR || 0) + n; u.mslMR = (u.mslMR || 0) + n * 12; u.sam = 0; } }); }
+    A.prod = A.prod || {}; A.yards = A.yards || {};
+    // combat power is counted per asset now: re-base the rank baseline once so nobody's rank jumps
+    if (A.powV !== 2) { A.powV = 2; if (A.init) A.p0 = forcePower(); }
     return A;
 }
 function myUnits() { return army().units.filter(u => u.owner === state.playerIso); }
 function unitById(id) { return army().units.find(u => u.id === id); }
+// what a formation is: 'sea' (any warship), 'air' (aircraft and their ground crews), 'heli' (helicopters and crews), else 'land'
+function unitDomain(u) {
+    if (shipsOf(u)) return 'sea';
+    const land = ['tanks', 'ifv', 'guns', 'sam'].concat(AD_KEYS).some(k => (u[k] || 0) > 0), air = AIR_KEYS.some(k => (u[k] || 0) > 0);
+    if (air && !land && !(u.helis > 0)) return 'air';
+    if ((u.helis || 0) > 0 && !land && !air) return 'heli';
+    return 'land';
+}
+// how a formation travels: ships sail, aircraft and helicopters fly, everything else drives (embarking to cross water)
+function unitMoveMode(u) { const d = unitDomain(u); return d === 'sea' ? 'sea' : d === 'air' || d === 'heli' ? 'air' : 'land'; }
+// the slowest part of the formation sets its speed (km a day)
+function unitSpeed(u) {
+    const T = BRIG[u.type], d = unitDomain(u);
+    if (T && !T.custom && ['airborne', 'special'].includes(u.type) && !(u.tanks > 0) && !(u.guns > 0)) return T.speed;
+    if (d === 'sea') return 800;
+    const keys = d === 'air' ? AIR_KEYS : d === 'heli' ? ['helis'] : ['troops', 'tanks', 'ifv', 'guns', 'sam'].concat(AD_KEYS);
+    let v = Infinity; keys.forEach(k => { if ((u[k] || 0) > 0 && ASSET[k].speed) v = Math.min(v, ASSET[k].speed); });
+    return isFinite(v) ? v : (T ? T.speed : 120);
+}
+function brigOf(u) { return BRIG[u.type] || BRIG.battalion; }
 function unitPower(u) {
-    const T = BRIG[u.type]; if (!T) return 0;
-    // average strength of every component the formation is built around (troops, tanks, jets, ships…)
-    const ks = ASSET_KEYS.map(a => a[0]).filter(k => T[k] > 0), share = ks.reduce((s, k) => s + (u[k] || 0) / T[k], 0) / Math.max(1, ks.length);
-    return T.pw * share * (0.5 + 0.5 * (u.ready || 100) / 100);
+    // every asset counts by what it is worth in combat (troops only fight on land; crews of ships and aircraft are not infantry)
+    const d = unitDomain(u);
+    let v = 0; ASSET_KEYS.forEach(([k]) => { if (k === 'troops' && d !== 'land') return; v += (u[k] || 0) * (ASSET[k] ? ASSET[k].pw : 0); });
+    return v * (0.5 + 0.5 * (u.ready || 100) / 100);
 }
 function armyPower() { return myUnits().filter(u => u.status !== 'training').reduce((s, u) => s + unitPower(u), 0); }
+// the national reserve fights too once it is organised: it counts at half value for ranks and war odds
+function reservePower() { const R = (state.army && state.army.reserve) || {}; let v = 0; ASSET_KEYS.forEach(([k]) => { v += (R[k] || 0) * (ASSET[k] ? ASSET[k].pw : 0); }); return v * 0.5; }
+function forcePower() { return armyPower() + reservePower(); }
+// total of one asset across formations and the reserve ('jets' = every combat aircraft, 'ships' = every warship)
+function armySum(key) {
+    const U = myUnits(), R = (state.army && state.army.reserve) || {};
+    const one = (o, k) => k === 'ships' ? SHIP_KEYS.reduce((t, x) => t + (o[x] || 0), 0) : k === 'jets' ? (o.jets || 0) + (o.stealth || 0) + (o.bombers || 0) : (o[k] || 0);
+    return U.reduce((s, u) => s + one(u, key), 0) + one(R, key);
+}
 function isMilBase(s) { return s && ['base', 'airbase', 'naval'].includes(s.type) && !['destroyed', 'planned', 'construction'].includes(s.status); }
 function myBases() { return (state.sites || []).filter(s => s.owner === state.playerIso && isMilBase(s)); }
 function baseCap(s) { return Math.round((BASE_CAP[s.type] || 6000) * (s.level || 1)); }
@@ -20245,12 +20311,13 @@ function baseLoad(s) { return army().units.filter(u => u.baseId === s.id).reduce
 function unitsAt(s) { return army().units.filter(u => u.baseId === s.id); }
 function fmtK(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n)); }
 function unitName(type) { const A = army(); A.typeSeq[type] = (A.typeSeq[type] || 0) + 1; return `${BRIG_ORD(A.typeSeq[type])} ${BRIG[type].name}`; }
-function newUnit(type, troops, at, base, ready) {
-    const T = BRIG[type], A = army(), k = troops / T.troops;
-    const u = { id: 'u' + (++A.seq), owner: state.playerIso, type, name: unitName(type), troops: Math.round(troops),
-        tanks: Math.round(T.tanks * k), ifv: Math.round(T.ifv * k), guns: Math.round(T.guns * k), sam: Math.round(T.sam * k),
-        helis: Math.round(T.helis * k), jets: Math.round(T.jets * k), carriers: Math.round(T.carriers * k), destroyers: Math.round(T.destroyers * k), frigates: Math.round(T.frigates * k),
+function newUnit(type, troops, at, base, ready, comp, name) {
+    // a template unit scaled to its troops, or (comp) exactly the assets given — every asset key is set
+    if (!BRIG[type]) type = 'battalion';
+    const T = BRIG[type], A = army(), k = troops / (T.troops || 1);
+    const u = { id: 'u' + (++A.seq), owner: state.playerIso, type, name: name ? String(name).slice(0, 60) : unitName(type),
         lat: at.lat, lng: at.lng, baseId: base ? base.id : null, status: 'garrison', ready: 100, xp: 0 };
+    ASSET_KEYS.forEach(([key]) => { u[key] = comp ? Math.max(0, Math.round(+comp[key] || 0)) : key === 'troops' ? Math.round(troops) : Math.round((T[key] || 0) * k); });
     if (ready && ready > (state.dayIndex || 0)) { u.status = 'training'; u.readyDay = ready; }
     A.units.push(u); return u;
 }
@@ -20274,25 +20341,28 @@ function armyInit() {
     let ms = 3; try { ms = milScore(me); } catch (e) { }
     const n = clamp(Math.round(2 + ms * 0.28), 3, 30);          // milScore runs 0-100: the US ≈ 30 brigades, Israel ≈ 17, Kenya ≈ 6
     const mix = ['infantry', 'mechanized', 'infantry', 'armored', 'artillery', 'airdef', 'mechanized', 'infantry', 'airborne', 'armored', 'special', 'artillery'];
-    const bases = myBases().filter(s => (s.host || s.owner) === me).concat(myBases().filter(s => (s.host || s.owner) !== me));
+    // land brigades live in army bases only (never in naval or air bases), home bases first; a full base grows a level, then units camp beside it
+    const bases = myBases().filter(s => s.type === 'base' && (s.host || s.owner) === me).concat(myBases().filter(s => s.type === 'base' && (s.host || s.owner) !== me));
     for (let i = 0; i < n; i++) {
-        const type = mix[i % mix.length], b = bases[i % Math.max(1, bases.length)];
-        const at = b ? { lat: b.lat, lng: b.lng } : capitalOf(me);
-        const u = newUnit(type, BRIG[type].troops, at, null, 0);
-        if (b && baseLoad(b) + u.troops <= baseCap(b)) u.baseId = b.id;
-        else if (b) { b.level = Math.min(5, (b.level || 1) + 1); if (baseLoad(b) + u.troops <= baseCap(b)) u.baseId = b.id; else { u.status = 'deployed'; u.lat += rnd(-0.3, 0.3); u.lng += rnd(-0.3, 0.3); } }
-        else u.status = 'deployed';
+        const type = mix[i % mix.length];
+        const u = newUnit(type, BRIG[type].troops, capitalOf(me), null, 0);
+        let b = bases.find(x => baseLoad(x) + u.troops <= baseCap(x));
+        if (!b) { b = bases.slice().sort((a, c) => (((a.host || a.owner) !== me) - ((c.host || c.owner) !== me)) || (a.level || 1) - (c.level || 1)).find(x => (x.level || 1) < 6); if (b && (b.level || 1) < 6) b.level = (b.level || 1) + 1; if (b && baseLoad(b) + u.troops > baseCap(b)) b = null; }
+        if (b) { u.baseId = b.id; u.lat = b.lat; u.lng = b.lng; }
+        else { const b0 = bases[i % Math.max(1, bases.length)]; const at = b0 || capitalOf(me); u.status = 'deployed'; u.lat = at.lat + rnd(-0.3, 0.3); u.lng = at.lng + rnd(-0.3, 0.3); }
     }
     // air, helicopter and naval formations: about half the national inventory is organised into deployable formations
     const inv = milBase(me).v, cap = capitalOf(me);
+    // fighter wings need an air base: a country with an air force gets one near the capital
+    if (inv[2] >= 6) { try { milEnsureAirbase(me, Math.round(inv[2] * 0.5)); } catch (e) { console.warn('airbase', e); } }
     const placeAt = (types, u) => {
         const bs = myBases().filter(b => types.includes(b.type)).sort((a, b) => ((b.host || b.owner) === me) - ((a.host || a.owner) === me));
-        const b = bs.find(x => baseLoad(x) + u.troops <= baseCap(x)) || bs[0];
-        if (b) { if (baseLoad(b) + u.troops > baseCap(b)) b.level = Math.min(6, (b.level || 1) + 1); u.lat = b.lat; u.lng = b.lng; u.baseId = b.id; u.status = 'garrison'; return true; }
+        const b = bs.find(x => baseFits(x, [u]).ok) || bs.find(x => (x.level || 1) < 6) || bs[0];
+        if (b) { while (!baseFits(b, [u]).ok && (b.level || 1) < 6) b.level = (b.level || 1) + 1; u.lat = b.lat; u.lng = b.lng; u.baseId = b.id; u.status = 'garrison'; return true; }
         return false;
     };
     const split = (total, per, max) => { const n = clamp(Math.round(total / per), 1, max); return { n, each: Math.max(1, Math.round(total / n)) }; };
-    if (inv[2] >= 6) { const S = split(inv[2] * 0.5, 36, 8); for (let i = 0; i < S.n; i++) { const u = newUnit('airwing', BRIG.airwing.troops, cap, null, 0); u.jets = S.each; if (!placeAt(['airbase', 'base'], u)) u.status = 'deployed'; } }
+    if (inv[2] >= 6) { const S = split(inv[2] * 0.5, 36, 8); for (let i = 0; i < S.n; i++) { const u = newUnit('airwing', BRIG.airwing.troops, cap, null, 0); u.jets = S.each; if (!placeAt(['airbase'], u) && !placeAt(['base'], u)) u.status = 'deployed'; } }
     if (inv[3] >= 8) { const S = split(inv[3] * 0.4, 60, 6); for (let i = 0; i < S.n; i++) { const u = newUnit('aviation', BRIG.aviation.troops, cap, null, 0); u.helis = S.each; if (!placeAt(['base', 'airbase'], u)) u.status = 'deployed'; } }
     const NV = navyBase(me, inv[4]);
     if (NV[0] + NV[1] + NV[2] >= 1) {
@@ -20315,8 +20385,13 @@ function armyInit() {
             if (shipsOf(u)) station(u); else A.units.splice(A.units.indexOf(u), 1);
         }
     }
-    A.inv0 = {}; ['troops', 'tanks', 'jets', 'helis', 'ships'].concat(SHIP_KEYS).forEach(k => A.inv0[k] = myUnits().reduce((s, u) => s + (k === 'ships' ? shipsOf(u) : (u[k] || 0)), 0));
-    A.p0 = armyPower();
+    // the national reserve starts with the equipment not organised into formations; arms producers start with their real factories
+    A.reserve = {}; ASSET_KEYS.forEach(([k]) => A.reserve[k] = 0); A.resV = 0;
+    try { milSeedReserve(); } catch (e) { console.warn('reserve seed', e); }
+    try { milStartFactories(me); } catch (e) { console.warn('factories', e); }
+    A.inv0 = {}; ['troops', 'tanks', 'jets', 'helis', 'ships'].concat(SHIP_KEYS).forEach(k => A.inv0[k] = armySum(k));
+    A.p0 = forcePower();
+    try { armyMonthlyUpkeep(true); } catch (e) { }
     armyRefreshMap();
 }
 
@@ -20551,10 +20626,8 @@ function expandBase(baseId) {
 function armyDaily() {
     (state.sites || []).forEach(b => { if (b.expandDay && state.dayIndex >= b.expandDay) { b.level = (b.level || 1) + 1; b.expandDay = 0; b.specs = Object.assign({}, b.specs, { Capacity: baseCap(b).toLocaleString() + ' troops', Level: b.level }); if (b.owner === state.playerIso) { logEvent(`🏗 ${esc(b.name)} expansion complete — now holds ${baseCap(b).toLocaleString()} troops.`, 'good'); try { updateSiteMarker(b); } catch (e) { } } } });
 }
-function armyMonthly() {           // upkeep: about 1% of the units' value a month
-    const U = myUnits(); if (!U.length) return;
-    const up = U.reduce((s, u) => s + recruitCost(u.type, u.troops) * 0.01, 0) + myBases().reduce((s, b) => s + 4e6 * (b.level || 1), 0);
-    const p = nationIso(state.playerIso); p.treasury -= up; state.armyUpkeep = up;
+function armyMonthly() {           // upkeep: about 1% of the formations' value a month, 0.5% for equipment in the reserve, plus the bases
+    armyMonthlyUpkeep(false);
 }
 
 // ---------- the Military panel ----------
@@ -20666,8 +20739,10 @@ function equipDeliveries() {
     const A = army(), due = A.orders.filter(o => o.day <= state.dayIndex); if (!due.length) return;
     A.orders = A.orders.filter(o => o.day > state.dayIndex);
     due.forEach(o => {
+        // purchases, imports and recruits go into the national reserve
+        if (o.dest === 'reserve') { milDeliver(o); return; }
         const u = unitById(o.uid), E = EQUIP[o.key];
-        if (!u || !E) { logEvent(`📦 A delivery of ${E ? E.n.toLowerCase() : 'equipment'} arrived but its formation no longer exists; it went into reserve stores.`, 'neutral'); return; }
+        if (!u || !E) { if (E) { if (o.key === 'troops') resAdd('troops', o.n * (E.per || 1)); else { resAdd(o.key, o.n); resAdd('troops', o.n * (E.crew || 0)); } } logEvent(`📦 A delivery of ${E ? E.n.toLowerCase() : 'equipment'} arrived but its formation no longer exists; it went into the national reserve.`, 'neutral'); return; }
         if (o.key === 'troops') u.troops += o.n * E.per; else { u[o.key] = (u[o.key] || 0) + o.n; u.troops += o.n * E.crew; }
         logEvent(`📦 ${o.n.toLocaleString()} ${E.n.toLowerCase()} delivered to ${esc(u.name)} (${esc(unitKit(u))}).`, 'good');
     });
@@ -20800,7 +20875,7 @@ function milReinforcePrompt(id) {
     showGameUI = function () { const r = _sg.apply(this, arguments); setTimeout(() => { try { armyInit(); armyRefreshMap(); } catch (e) { console.warn('army init', e); } }, 120); return r; };
     // more brigades → a stronger military rank; forces near a target help in a war
     const _ms = milScore;
-    milScore = function (iso) { let v = _ms(iso); try { if (iso === state.playerIso && state.army && state.army.init === iso) v += clamp((armyPower() - (state.army.p0 || 0)) * 0.35, -6, 12); } catch (e) { } return v; };
+    milScore = function (iso) { let v = _ms(iso); try { if (iso === state.playerIso && state.army && state.army.init === iso) v += clamp((forcePower() - (state.army.p0 || 0)) * 0.35, -6, 12); } catch (e) { } return v; };
     const _db = deployBonus;
     deployBonus = function (t) { let v = _db(t); try { const c = countryCenter(t); if (c) v += myUnits().filter(u => ['deployed', 'engaged'].includes(u.status) && km(u, c) < 900).reduce((s, u) => s + 0.05 * unitPower(u), 0); } catch (e) { } return v; };
     // your bases' popups get military actions
@@ -20824,6 +20899,248 @@ function milReinforcePrompt(id) {
     };
 }
 
+
+// =====================================================================
+//  MILITARY v2 — the national reserve (stockpile), custom formations, merge/split/rename, bases by type,
+//  procurement (import / domestic), factories and shipyards, air defence, smooth movement with sea/land routing,
+//  realistic sprites and command-bar orders. Everything works without an AI; with one, the AI only proposes
+//  structured actions that these rules check (prices, sellers, capacities are never taken from the AI).
+// =====================================================================
+function milNote(msg, type) { try { logEvent(msg, type || 'neutral', 'log'); } catch (e) { } }      // military bookkeeping → Activity log
+function resOf() { return army().reserve; }
+function resAdd(key, n) { if (!ASSET[key] || !(n > 0)) return; const R = resOf(); R[key] = Math.round((R[key] || 0) + n); }
+function resHas(comp) { const R = resOf(); return Object.keys(comp || {}).every(k => !(comp[k] > 0) || (R[k] || 0) >= comp[k]); }
+function resTake(comp) { if (!resHas(comp)) return false; const R = resOf(); Object.keys(comp).forEach(k => { if (comp[k] > 0) R[k] = Math.max(0, (R[k] || 0) - Math.round(comp[k])); }); return true; }
+function resTotal() { const R = resOf(); return ASSET_KEYS.reduce((s, [k]) => s + (R[k] || 0), 0); }
+function assetLabel(k) { const a = ASSET_KEYS.find(x => x[0] === k); return a ? a[1] : k; }
+function milPl(n, k) { const l = assetLabel(k); return `${Math.round(n).toLocaleString()} ${n === 1 ? l.replace(/ies$/, 'y').replace(/(?<!s)s$/, '') : l}`; }
+
+// ---------- prices (spec): imports from another country vs your own factories ----------
+// imp / dom: unit price; impBulk / domBulk: [quantity, total] — the price per item slides from the unit price to the bulk price
+// lead: import delivery days; fac: which factory builds it at home; slot: share of that factory's monthly output one item takes
+const MIL_PRICE = {
+    troops:     { imp: 25e3, dom: 25e3, lead: 30, recruit: true },
+    tanks:      { imp: 5e6,   impBulk: [100, 450e6],  dom: 3.5e6, domBulk: [100, 300e6],  lead: 45,  fac: 'tank',  slot: 1 },
+    ifv:        { imp: 3.5e6, impBulk: [100, 315e6],  dom: 2.5e6, domBulk: [100, 225e6],  lead: 40,  fac: 'tank',  slot: 0.5 },
+    guns:       { imp: 6e6,   impBulk: [50, 270e6],   dom: 4.5e6, domBulk: [50, 200e6],   lead: 45,  fac: 'tank',  slot: 1 },
+    helis:      { imp: 30e6,  impBulk: [10, 270e6],   dom: 22e6,  domBulk: [10, 200e6],   lead: 90,  fac: 'plane', slot: 0.5 },
+    jets:       { imp: 80e6,  impBulk: [10, 700e6],   dom: 60e6,  domBulk: [10, 500e6],   lead: 120, fac: 'plane', slot: 1 },
+    stealth:    { imp: 120e6, impBulk: [10, 1.05e9],  dom: 90e6,  domBulk: [10, 750e6],   lead: 150, fac: 'plane', slot: 1 },
+    bombers:    { imp: 200e6, impBulk: [10, 1.7e9],   dom: 150e6, domBulk: [10, 1.25e9],  lead: 180, fac: 'plane', slot: 1 },
+    drones:     { imp: 8e6,   impBulk: [20, 140e6],   dom: 5e6,   domBulk: [20, 85e6],    lead: 30,  fac: 'drone', slot: 1 },
+    frigates:   { imp: 0.85e9, dom: 0.6e9, lead: 300, fac: 'yard' },
+    destroyers: { imp: 2.2e9,  dom: 1.6e9, lead: 450, fac: 'yard' },
+    carriers:   { imp: 13e9,   dom: 11e9,  lead: 900, fac: 'yard' },
+    adSR:       { imp: 10e6,  dom: 10e6,  lead: 30,  fac: 'missile', slot: 2 },
+    adMR:       { imp: 150e6, dom: 150e6, lead: 60,  fac: 'missile', slot: 10 },
+    adLR:       { imp: 800e6, dom: 800e6, lead: 120, fac: 'missile', slot: 30 },
+    mslSR:      { imp: 0.15e6, dom: 0.1e6,  lead: 20, fac: 'missile', slot: 0.25 },
+    mslMR:      { imp: 1.2e6,  dom: 0.85e6, lead: 30, fac: 'missile', slot: 1 },
+    mslLR:      { imp: 4e6,    dom: 2.8e6,  lead: 45, fac: 'missile', slot: 2.5 }
+};
+function milPrice(key, n, src) {
+    const P = MIL_PRICE[key]; n = Math.round(+n || 0); if (!P || n <= 0) return 0;
+    const dom = src === 'domestic', unit = dom ? P.dom : P.imp, bulk = dom ? P.domBulk : P.impBulk;
+    let each = unit;
+    if (bulk) { const [bn, bt] = bulk, be = bt / bn; each = n >= bn ? be : unit - (unit - be) * (n - 1) / (bn - 1); }
+    return Math.round(n * each * (typeof D === 'function' ? (D().cost || 1) : 1));
+}
+function milUnitValue(k) { const P = MIL_PRICE[k]; return P ? P.imp : k === 'sam' ? 20e6 : 0; }
+
+// ---------- bases: what each type holds ----------
+// army bases hold land units; air bases hold aircraft (and their crews); naval bases hold warships; air defence may sit at any base
+const BASE_CAPS = { base: { troops: 8000 }, airbase: { troops: 4000, air: 72 }, naval: { troops: 5000, ships: 12 } };
+function unitAircraft(u) { return AIR_KEYS.reduce((t, k) => t + (u[k] || 0), 0) + (u.helis || 0); }
+function baseCaps(b) { const C = BASE_CAPS[b.type] || { troops: 6000 }, l = b.level || 1; return { troops: Math.round(C.troops * l), air: Math.round((C.air || 0) * l), ships: Math.round((C.ships || 0) * l) }; }
+function baseLoads(b, excl) {
+    const U = army().units.filter(u => u.baseId === b.id && !(excl && excl.includes(u)));
+    return { troops: U.reduce((s, u) => s + (u.troops || 0), 0), air: U.reduce((s, u) => s + unitAircraft(u), 0), ships: U.reduce((s, u) => s + shipsOf(u), 0), n: U.length };
+}
+const BASE_TYPE_WORD = { base: 'army base', airbase: 'air base', naval: 'naval base' };
+function baseTypesFor(u) {
+    const d = unitDomain(u);
+    if (d === 'sea') return ['naval'];
+    if (d === 'air') return ['airbase'];
+    if (d === 'heli') return ['base', 'airbase'];
+    const adOnly = AD_KEYS.some(k => (u[k] || 0) > 0) && !['tanks', 'ifv', 'guns'].some(k => (u[k] || 0) > 0);
+    return adOnly ? ['base', 'airbase', 'naval'] : ['base'];
+}
+function domainWord(u) { return { sea: 'warships', air: 'aircraft', heli: 'helicopters', land: 'ground forces' }[unitDomain(u)]; }
+// can these formations be stationed at base b? (type rule first, then troops, aircraft and ship capacity)
+function baseFits(b, units) {
+    if (!b || !isMilBase(b)) return { ok: false, why: 'That is not a usable military base.' };
+    for (const u of units) if (!baseTypesFor(u).includes(b.type)) {
+        const want = baseTypesFor(u).map(t => BASE_TYPE_WORD[t]).join(' or ');
+        return { ok: false, why: `${u.name || 'This formation'} (${domainWord(u)}) is based at ${want === 'naval base' ? 'a naval base' : want === 'air base' ? 'an air base' : 'an ' + want}, not at ${b.type === 'airbase' ? 'an' : 'a'} ${BASE_TYPE_WORD[b.type] || b.type}.` };
+    }
+    const C = baseCaps(b), L = baseLoads(b, units);
+    const add = { troops: units.reduce((s, u) => s + (u.troops || 0), 0), air: units.reduce((s, u) => s + unitAircraft(u), 0), ships: units.reduce((s, u) => s + shipsOf(u), 0) };
+    if (L.troops + add.troops > C.troops) return { ok: false, why: `${b.name} holds ${C.troops.toLocaleString()} troops (${L.troops.toLocaleString()} there now). Expand it or pick another base.` };
+    if (b.type === 'airbase' && L.air + add.air > C.air) return { ok: false, why: `${b.name} has room for ${C.air} aircraft (${L.air} there now). Expand it or pick another air base.` };
+    if (b.type === 'naval' && L.ships + add.ships > C.ships) return { ok: false, why: `${b.name} berths ${C.ships} warships (${L.ships} there now). Expand it or pick another naval base.` };
+    return { ok: true };
+}
+function baseCapText(b) {
+    const C = baseCaps(b), L = baseLoads(b);
+    return `${fmtK(L.troops)}/${fmtK(C.troops)} troops${b.type === 'airbase' ? ` · ${L.air}/${C.air} aircraft` : ''}${b.type === 'naval' ? ` · ${L.ships}/${C.ships} ships` : ''}`;
+}
+function baseFull(b) { const C = baseCaps(b), L = baseLoads(b); return L.troops >= C.troops * 0.98 || (b.type === 'airbase' && L.air >= C.air) || (b.type === 'naval' && L.ships >= C.ships); }
+// bases a set of formations may go to, nearest first
+function basesFor(units) {
+    if (!units.length) return [];
+    const types = units.map(baseTypesFor).reduce((a, t) => a.filter(x => t.includes(x)));
+    const c = units[0];
+    return myBases().filter(b => types.includes(b.type)).sort((a, b) => km(a, c) - km(b, c));
+}
+// air bases for an air force: one near the capital, more near the largest cities until the aircraft fit
+function milEnsureAirbase(me, needAir) {
+    const cap6 = () => myBases().filter(b => b.type === 'airbase').length * 72 * 6;
+    const homeAir = () => myBases().some(b => b.type === 'airbase' && (b.host || b.owner) === me);
+    const cities = CITIES.filter(c => c[1] === me).slice(0, 8);
+    let made = 0;
+    for (const c of cities) {
+        if ((homeAir() && cap6() >= needAir) || made >= 4) break;
+        const tries = [[-0.16, 0.2], [0.14, -0.18], [0.05, 0.05], [0, 0]];
+        let at = null; for (const [a, b] of tries) { const p = { lat: c[2] + a, lng: c[3] + b }; if (countryAtLL(p) === me) { at = p; break; } }
+        if (!at || myBases().some(b => b.type === 'airbase' && km(b, at) < 80)) continue;
+        addSite({ name: `${c[0]} Air Base`, type: 'airbase', owner: me, host: me, lat: at.lat, lng: at.lng, place: c[0], status: 'active', progress: 1, specs: { Role: 'Fighter and transport wings' }, notes: [], fromGame: true, level: 2 });
+        made++;
+    }
+}
+
+// ---------- the national reserve at the start: equipment not organised into formations ----------
+// stealth fighters and strategic bombers in service (2025, approx.): F-35/F-22/J-20/Su-57 · B-52/B-1/B-2, Tu-95/Tu-160/Tu-22M, H-6
+const STEALTH_FLEET = { USA: 630, CHN: 250, RUS: 25, JPN: 40, KOR: 40, ISR: 45, AUS: 72, GBR: 37, ITA: 40, NLD: 40, NOR: 50, DNK: 12, POL: 4, BEL: 4, CHE: 0 };
+const BOMBER_FLEET = { USA: 140, RUS: 120, CHN: 230, IND: 0 };
+function milSeedReserve() {
+    const A = army(), me = state.playerIso; if (!me || A.resV >= 1) return;
+    A.resV = 1;
+    const inv = milBase(me).v, have = k => myUnits().reduce((s, u) => s + (u[k] || 0), 0);
+    let ms = 20; try { ms = MIL_BASE[me] !== undefined ? MIL_BASE[me] : clamp(Math.sqrt(inv[1] + 1) * 1.5, 3, 40); } catch (e) { }
+    const seed = {
+        troops: Math.round(Math.max(0, inv[0] - have('troops')) * 0.06 / 100) * 100,
+        tanks: Math.round(Math.max(0, inv[1] - have('tanks')) * 0.15),
+        jets: Math.round(Math.max(0, inv[2] - have('jets')) * 0.1),
+        helis: Math.round(Math.max(0, inv[3] - have('helis')) * 0.1),
+        stealth: Math.round((STEALTH_FLEET[me] || 0) * 0.25),
+        bombers: Math.round((BOMBER_FLEET[me] || 0) * 0.25),
+        adSR: Math.round(clamp(ms / 12, 0, 8)), adMR: Math.round(clamp(ms / 30, 0, 4)), adLR: ms >= 50 ? Math.round(clamp(ms / 50, 1, 2)) : 0
+    };
+    // one spare reload of interceptors for every battery in the reserve
+    seed.mslSR = seed.adSR * ASSET.adSR.mag * 2; seed.mslMR = seed.adMR * ASSET.adMR.mag * 2; seed.mslLR = seed.adLR * ASSET.adLR.mag * 2;
+    Object.keys(seed).forEach(k => resAdd(k, seed[k]));
+    // an old save: the seed is part of the starting inventory, not growth (no jump in the strip or the ranks)
+    if (A.inv0) ['troops', 'tanks', 'helis'].forEach(k => A.inv0[k] = (A.inv0[k] || 0) + (seed[k] || 0));
+    if (A.inv0) A.inv0.jets = (A.inv0.jets || 0) + seed.jets + seed.stealth + seed.bombers;
+}
+// the real defence plants of the big arms producers (approximate positions); everyone else builds their own
+const MIL_FACTORIES = {
+    USA: [['tank_factory', 'Lima Army Tank Plant', 40.73, -84.12], ['plane_factory', 'Fort Worth Aircraft Plant', 32.77, -97.44], ['shipyard', 'Newport News Shipbuilding', 36.99, -76.43], ['missile_factory', 'Tucson Missile Works', 32.15, -110.93], ['drone_factory', 'Poway Drone Plant', 32.96, -117.04]],
+    RUS: [['tank_factory', 'Uralvagonzavod', 57.92, 59.97], ['plane_factory', 'Komsomolsk-on-Amur Aircraft Plant', 50.6, 137.0], ['shipyard', 'Sevmash Shipyard', 64.58, 39.82], ['missile_factory', 'Obukhov Plant', 59.86, 30.45], ['drone_factory', 'Alabuga Drone Plant', 55.77, 52.04]],
+    CHN: [['tank_factory', 'Baotou Tank Works', 40.62, 109.84], ['plane_factory', 'Chengdu Aircraft Corporation', 30.7, 104.0], ['shipyard', 'Jiangnan Shipyard', 31.35, 121.74], ['missile_factory', 'Beijing Missile Works', 39.83, 116.29], ['drone_factory', 'Zigong UAV Plant', 29.33, 104.77]],
+    FRA: [['tank_factory', 'Roanne Armour Works', 46.04, 4.07], ['plane_factory', 'Dassault Mérignac Plant', 44.83, -0.69], ['shipyard', 'Lorient Naval Shipyard', 47.74, -3.36], ['missile_factory', 'Bourges Missile Works', 47.08, 2.41]],
+    GBR: [['tank_factory', 'Telford Armour Works', 52.68, -2.45], ['plane_factory', 'Warton Aircraft Plant', 53.74, -2.88], ['shipyard', 'Govan Shipyard', 55.86, -4.32], ['missile_factory', 'Bolton Missile Works', 53.57, -2.43]],
+    DEU: [['tank_factory', 'Munich Tank Works', 48.18, 11.46], ['plane_factory', 'Manching Aircraft Plant', 48.7, 11.53], ['shipyard', 'Kiel Naval Shipyard', 54.33, 10.15], ['missile_factory', 'Überlingen Missile Works', 47.77, 9.17]],
+    KOR: [['tank_factory', 'Changwon Tank Plant', 35.22, 128.68], ['plane_factory', 'Sacheon Aircraft Plant', 35.08, 128.07], ['shipyard', 'Ulsan Naval Shipyard', 35.51, 129.42], ['missile_factory', 'Gumi Missile Works', 36.12, 128.34]],
+    JPN: [['tank_factory', 'Sagamihara Tank Works', 35.57, 139.37], ['plane_factory', 'Komaki Aircraft Plant', 35.25, 136.92], ['shipyard', 'Nagasaki Shipyard', 32.73, 129.86]],
+    IND: [['tank_factory', 'Avadi Heavy Vehicles Factory', 13.11, 80.1], ['plane_factory', 'HAL Bengaluru Aircraft Plant', 12.96, 77.67], ['shipyard', 'Mazagon Dock', 18.96, 72.84], ['missile_factory', 'Hyderabad Missile Works', 17.49, 78.38]],
+    ITA: [['plane_factory', 'Turin-Caselle Aircraft Plant', 45.19, 7.65], ['shipyard', 'Riva Trigoso Shipyard', 44.26, 9.43]],
+    TUR: [['tank_factory', 'Sakarya Tank Works', 40.79, 30.4], ['plane_factory', 'Ankara Aerospace Plant', 39.99, 32.69], ['drone_factory', 'Istanbul Drone Works', 41.1, 28.65], ['shipyard', 'Gölcük Naval Shipyard', 40.72, 29.82], ['missile_factory', 'Ankara Missile Works', 39.72, 32.73]],
+    ISR: [['tank_factory', 'Merkava Tank Works', 32.04, 34.86], ['missile_factory', 'Haifa Missile Works', 32.83, 35.06], ['drone_factory', 'Haifa Drone Works', 32.79, 35.01]],
+    IRN: [['tank_factory', 'Tehran Armour Works', 35.6, 51.43], ['plane_factory', 'Isfahan Aircraft Plant', 32.75, 51.86], ['missile_factory', 'Khojir Missile Works', 35.68, 51.75], ['drone_factory', 'Isfahan Drone Works', 32.6, 51.75], ['shipyard', 'Bandar Abbas Naval Shipyard', 27.15, 56.21]],
+    PAK: [['tank_factory', 'Taxila Heavy Industries', 33.75, 72.84], ['plane_factory', 'Kamra Aeronautical Complex', 33.87, 72.4], ['shipyard', 'Karachi Shipyard', 24.84, 66.97]],
+    ESP: [['plane_factory', 'Getafe Aircraft Plant', 40.29, -3.72], ['shipyard', 'Ferrol Naval Shipyard', 43.48, -8.24]],
+    SWE: [['plane_factory', 'Linköping Aircraft Plant', 58.4, 15.68]],
+    UKR: [['tank_factory', 'Kharkiv Tank Works', 49.98, 36.31]]
+};
+function milStartFactories(me) {
+    (MIL_FACTORIES[me] || []).forEach(([type, name, lat, lng]) => {
+        if (!SITE_TYPES[type] || (state.sites || []).some(s => s.owner === me && s.type === type && s.milReal)) return;
+        const T = SITE_TYPES[type];
+        addSite({ name, type, owner: me, host: me, lat, lng, place: null, status: 'active', progress: 1, cost: Math.round(T.cost * 0.2), milReal: true,
+            specs: { Output: producesText(T.produces) }, notes: ['In service before 2026.'], layer: 'bases' });
+    });
+}
+
+// ---------- upkeep, deliveries ----------
+function armyMonthlyUpkeep(dry) {
+    const U = myUnits(), R = resOf(), me = state.playerIso;
+    const val = o => ASSET_KEYS.reduce((s, [k]) => s + (o[k] || 0) * milUnitValue(k), 0);
+    const up = (U.reduce((s, u) => s + val(u) * 0.01, 0) + val(R) * 0.005 + myBases().reduce((s, b) => s + 4e6 * (b.level || 1), 0)) * (typeof D === 'function' ? (D().cost || 1) : 1);
+    state.armyUpkeep = Math.round(up);
+    if (!dry && (U.length || resTotal()) && me) { const p = nationIso(me); if (p) p.treasury -= state.armyUpkeep; }
+}
+function milDeliver(o) {
+    resAdd(o.key, o.n);
+    // a new air-defence battery arrives with one full load of interceptors
+    if (ASSET[o.key] && ASSET[o.key].mag) resAdd(ASSET[o.key].msl, o.n * ASSET[o.key].mag);
+    milNote(`📦 ${milPl(o.n, o.key)} ${o.src === 'recruit' ? 'finished training and joined' : 'delivered' + (o.seller ? ' from ' + esc(shortName(o.seller)) : '') + ' to'} the national reserve.`, 'good');
+}
+
+// ---------- custom formations from the reserve ----------
+function crewNeed(comp) { let n = 0; Object.keys(comp || {}).forEach(k => { if (k !== 'troops' && ASSET[k] && comp[k] > 0) n += comp[k] * (ASSET[k].crew || 0); }); return Math.round(n); }
+function typeForComp(c) {
+    const g = k => c[k] || 0, ships = SHIP_KEYS.reduce((t, k) => t + g(k), 0), air = AIR_KEYS.reduce((t, k) => t + g(k), 0), land = ['tanks', 'ifv', 'guns', 'sam'].reduce((t, k) => t + g(k), 0), ad = AD_KEYS.reduce((t, k) => t + g(k), 0);
+    if (ships) return g('carriers') ? 'csg' : 'fleet';
+    if (air && !land && !ad && !g('helis')) return g('jets') && !g('bombers') && !g('drones') ? 'airwing' : 'airgroup';
+    if (g('helis') && !land && !air && !ad) return 'aviation';
+    if (ad && !land) return 'adgroup';
+    if (g('tanks') || g('ifv')) return 'battalion';
+    if (g('guns') && !g('tanks')) return 'artillery';
+    return 'infantry';
+}
+// "3rd Armoured Battalion", "1st Bomber Wing", "2nd Carrier Strike Group" — the name says what it holds
+function milDefaultName(c) {
+    const g = k => c[k] || 0, t = typeForComp(c);
+    let label = BRIG[t] ? BRIG[t].name : 'Battalion';
+    if (t === 'battalion') label = g('tanks') * 30 >= g('troops') ? 'Armoured Battalion' : 'Mechanised Battalion';
+    else if (t === 'infantry') label = g('troops') >= 3000 ? 'Infantry Brigade' : 'Infantry Battalion';
+    else if (t === 'airgroup') label = g('bombers') >= g('jets') + g('stealth') && g('bombers') >= g('drones') ? 'Bomber Wing' : g('drones') > g('jets') + g('stealth') ? 'Drone Squadron' : g('stealth') >= g('jets') ? 'Stealth Fighter Wing' : 'Air Group';
+    else if (t === 'airwing' && g('stealth') > g('jets')) label = 'Stealth Fighter Wing';
+    const A = army(); A.nameSeq = A.nameSeq || {};
+    const used = A.units.filter(u => u.name && u.name.endsWith(' ' + label)).length;
+    A.nameSeq[label] = Math.max((A.nameSeq[label] || 0), used) + 1;
+    return `${BRIG_ORD(A.nameSeq[label])} ${label}`;
+}
+function milCleanComp(comp) { const c = {}; ASSET_KEYS.forEach(([k]) => { const v = Math.max(0, Math.round(+(comp || {})[k] || 0)); if (v) c[k] = v; }); return c; }
+// form a new formation from the reserve and station it at one of your bases
+function formUnit(opt) {
+    opt = opt || {}; const me = state.playerIso, fail = why => { if (!opt.quiet) flashReply('⚠ ' + esc(why)); return { ok: false, why }; };
+    const comp = milCleanComp(opt.comp);
+    if (!Object.keys(comp).length) return fail('Choose what the new formation takes from the reserve (troops, tanks, aircraft, ships, air defence).');
+    if (['mslSR', 'mslMR', 'mslLR'].some(k => comp[k]) && !AD_KEYS.some(k => comp[k])) return fail('Interceptor missiles go with air-defence batteries — add a battery, or refill existing batteries instead.');
+    AD_KEYS.forEach(k => { const m = ASSET[k].msl; if (comp[m] > (comp[k] || 0) * ASSET[k].mag) comp[m] = (comp[k] || 0) * ASSET[k].mag; });
+    const need = crewNeed(comp);
+    if ((comp.troops || 0) < need) { if (opt.autoCrew !== false) comp.troops = need; else return fail(`Vehicles, aircraft and ships need crews: at least ${need.toLocaleString()} troops.`); }
+    const R = resOf(), short = Object.keys(comp).filter(k => (R[k] || 0) < comp[k]);
+    if (short.length) return fail(`The reserve is short of ${short.map(k => `${assetLabel(k)} (have ${(R[k] || 0).toLocaleString()}, need ${comp[k].toLocaleString()})`).join(', ')}. Buy or produce more in the Procure tab.`);
+    const b = (state.sites || []).find(s => s.id === opt.baseId);
+    const probe = Object.assign({ name: opt.name || 'The new formation' }, comp);
+    if (!b || b.owner !== me || !isMilBase(b)) { const ok = basesFor([probe]); return fail(ok.length ? `Pick a base for it: ${ok.slice(0, 3).map(x => x.name).join(', ')}…` : `You have no ${baseTypesFor(probe).map(t => BASE_TYPE_WORD[t]).join(' or ')} for it. Build one first (Build tab or "Build an ${baseTypesFor(probe)[0] === 'airbase' ? 'air base' : baseTypesFor(probe)[0] === 'naval' ? 'naval base' : 'army base'} near …").`); }
+    const fit = baseFits(b, [probe]); if (!fit.ok) return fail(fit.why);
+    resTake(comp);
+    const type = typeForComp(comp), name = String(opt.name || '').trim().slice(0, 60) || milDefaultName(comp);
+    const u = newUnit(type, comp.troops || 0, { lat: b.lat, lng: b.lng }, b, 0, comp, name);
+    u.status = 'garrison';
+    if (!opt.quiet) { playClick(); milNote(`🎖 ${esc(u.name)} formed from the reserve at ${esc(b.name)}: ${esc(unitKit(u))}.`, 'good'); }
+    armyRefreshMap(); renderMilPanel();
+    return { ok: true, unit: u };
+}
+// a formation back into the reserve (its equipment and people stay in the national pool)
+function disbandUnit(id) {
+    const u = unitById(id); if (!u) return false;
+    if (u.status === 'training') { flashReply('⚠ Units still in training cannot be disbanded.'); return false; }
+    ASSET_KEYS.forEach(([k]) => resAdd(k, u[k] || 0));
+    const A = army(); A.units.splice(A.units.indexOf(u), 1); A.sel = A.sel.filter(x => x !== id);
+    milNote(`⤓ ${esc(u.name)} stood down; ${esc(unitKit(u))} returned to the national reserve.`, 'neutral');
+    playClick(); armyRefreshMap(); renderMilPanel(); return true;
+}
+function renameUnit(id, name) {
+    const u = unitById(id); name = String(name || '').replace(/[<>]/g, '').trim().slice(0, 60); if (!u || !name) return false;
+    const old = u.name; u.name = name; if (ARMY_MK[id]) ARMY_MK[id]._sig = '';
+    milNote(`✎ ${esc(old)} renamed ${esc(name)}.`, 'neutral');
+    armyRefreshMap(); renderMilPanel(); return true;
+}
 
 // ---- intel panel: the armed forces of the selected country ----
 function milStripHTML(iso) {
