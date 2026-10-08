@@ -799,8 +799,19 @@
                     </div>
                     <div id="diff-desc" class="text-[10px] text-slate-500 mt-1 leading-snug">The intended balance. The world reacts realistically to what you do. 5 orders per week.</div>
                 </div>
+                <div id="nsa-setup">
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Play as</label>
+                    <div id="play-seg" class="dir-seg">
+                        <button type="button" data-v="state" class="on" onclick="nsaSetupMode('state')">A nation</button>
+                        <button type="button" data-v="nso" onclick="nsaSetupMode('nso')">A non-state actor</button>
+                    </div>
+                    <div id="nsa-setup-box" class="hidden mt-1.5">
+                        <select id="nsa-pick" onchange="nsaSetupPick(this.value)" class="w-full bg-slate-900 border border-slate-600 text-white rounded px-2 py-1.5 text-[12px] focus:outline-none"></select>
+                        <div id="nsa-pick-desc" class="text-[10px] text-slate-500 mt-1 leading-snug">Militias, separatists, breakaway regions, rebel movements and cartels. Pick one from the list, or click inside its area on the map.</div>
+                    </div>
+                </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Nation</label>
+                    <label id="target-lbl" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Nation</label>
                     <input type="text" id="country-display" readonly placeholder="CLICK MAP TO SELECT..." class="w-full bg-slate-900 border border-slate-600 text-slate-400 rounded px-3 py-2 text-sm font-mono cursor-default outline-none text-center">
                 </div>
                 <button id="deploy-btn" disabled class="gs-btn gs-btn-wide gs-btn-primary mt-2">
@@ -16278,7 +16289,7 @@ function grpRefresh(force) {
         ENT.tiles = new (viewCanvasClass())((cv, V) => drawCtlView(cv, V, { isos: [...GROUP_HOSTS] }), { pane: 'grpPane' });
     }
     if (typeof geojsonLayer === 'undefined' || !geojsonLayer) return;
-    const sig = grpTileSig(), need = !!ENT.sel || MAPVIEW === 'political';
+    const sig = grpTileSig(), need = !!ENT.sel || MAPVIEW === 'political' || !!(state.nsa && state.nsa.mode === 'nso');
     if (!need) { if (map.hasLayer(ENT.tiles)) map.removeLayer(ENT.tiles); ENT.sig = ''; return; }
     if (!map.hasLayer(ENT.tiles)) { ENT.tiles.addTo(map); ENT.sig = sig; return; }
     if (force || sig !== ENT.sig) { ENT.sig = sig; ENT.tiles.redraw(); }
@@ -19044,6 +19055,7 @@ function mapFind(q) {
 // saved with the game; a save from before these systems existed starts them fresh
 const NEW_FIELDS = ['proxies', 'treaties', 'obl', 'offers', 'cred', 'treatyCd', 'treatyCdFrom', 'treatyCdWhy', 'trSel', 'pol', 'regimes', 'unscLog', 'faiths', 'react', 'orgs', 'orgApp', 'orgCd', 'allyCalls', 'allyJoined', 'intel', 'counterOn', 'counterIntel'];
 NEW_FIELDS.forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+['nsa'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });          // non-state actor play: the movement, its network, recognition and statehood
 // buildings: the campaign's custom building types, last month's building ledger, rebel-held share at the start
 ['customSiteTypes', 'econ', 'rebel0'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 function systemsEnsure() {
@@ -19124,6 +19136,1635 @@ function systemsEnsure() {
     setGraphics = function () { _sg.apply(this, arguments); try { annexAlias(); } catch (e) { } };
     const _pi = proxiesIn;                  // armed groups in annexed land now operate inside the victor
     proxiesIn = function (iso) { const r = _pi.apply(this, arguments); try { const A = state.annexed || {}; Object.keys(A).forEach(l => { if (A[l].by === iso) _pi(l).forEach(p => { if (!r.includes(p)) r.push(p); }); }); } catch (e) { } return r; };
+}
+
+// =====================================================================
+//  NON-STATE ACTOR PLAY — lead an armed group, separatist movement, breakaway region, rebel army or cartel instead of a state
+//  · start screen "Play as → A non-state actor": pick a group from the list, or click inside its area on the map
+//  · the group becomes a pseudo-nation keyed by its control-map key (RSF, HOUTHI, SDF…), outside the club of states
+//    (NON_SOVEREIGN): a war chest, fighters, held ground (its host's control cells), support, legitimacy and heat
+//  · hidden safehouses and camps replace bases, cell recruitment replaces conscription, an illicit economy (black market,
+//    smuggling, extortion, ransom, patron money) replaces taxes; operations move the host's control cells and the host
+//    government fights back (counter-insurgency)
+//  · land held long enough + recognition by enough states → "Declare statehood": a new state on the map, run with the
+//    normal state tools. Everything works without an AI; with one connected, the AI is told these rules.
+// =====================================================================
+// states that recognised each movement / breakaway republic on 1 January 2026 (approximate)
+const NSA_RECOG0 = {
+    abkhazia: ['RUS', 'NIC', 'VEN', 'NRU'], sossetia: ['RUS', 'NIC', 'VEN', 'NRU'],
+    polisario: ['DZA', 'ZAF', 'NGA', 'AGO', 'MOZ', 'ZWE', 'NAM', 'UGA', 'TZA', 'ETH', 'LSO', 'BWA', 'SSD', 'IRN', 'CUB', 'VEN', 'BOL', 'MEX', 'NIC', 'URY', 'COL', 'TLS', 'PRK', 'VNM', 'LAO']
+};
+// what each group smuggles (and how lucrative it is relative to its shadow economy)
+const NSA_TRADE = {
+    rsf: ['gold and livestock', 1.2], splmn: ['cross-border trade', 0.5], houthi: ['fuel imports and port fees', 1.0], stc: ['port and fuel trade', 0.7], m23: ['coltan and gold', 1.5],
+    hezbollah: ['smuggling networks and remittances', 0.9], jnim: ['artisanal gold and cattle', 0.8], shabaab: ['charcoal and sugar', 0.8], sdf: ['oil from the north-east fields', 1.3],
+    sweida: ['cross-border trade', 0.4], krg: ['oil exports', 1.4], aa: ['border trade with Bangladesh', 0.6], kia: ['jade and rare earths', 1.5], uwsa: ['methamphetamine and tin', 1.6],
+    lna: ['oil and fuel smuggling', 1.5], polisario: ['aid diversion and cross-border trade', 0.3], tplf: ['cross-border trade', 0.4], transnistria: ['contraband and steel', 0.7],
+    abkhazia: ['contraband and tourism', 0.4], sossetia: ['Roki tunnel trade', 0.3], vivansanm: ['port and road rackets', 0.8], sinaloa: ['fentanyl and cocaine', 2.0],
+    eln: ['cocaine and illegal gold', 1.6], pmf: ['border crossings and oil', 1.0]
+};
+// groups for which kidnapping for ransom is a real part of the business model
+const NSA_RANSOM = new Set(['jnim', 'shabaab', 'vivansanm', 'eln', 'sinaloa', 'pmf']);
+// governments that on principle resist recognising secessions (their own separatists, territorial disputes)
+const NSA_SEP_FEAR = new Set('ESP CHN IND TUR IDN NGA ETH MAR IRN AZE UKR GEO MDA SRB CYP IRQ SYR PAK MMR SDN COD YEM SOM LBY MLI BFA HTI MEX COL'.split(' '));
+const NSA_WEST = new Set('USA GBR FRA DEU CAN AUS JPN ITA NLD BEL NOR SWE DNK FIN POL ESP NZL KOR CHE AUT IRL PRT CZE ISR'.split(' '));
+// the underground network: hidden from the host's forces until its intelligence finds them
+Object.assign(SITE_TYPES, {
+    safehouse: { name: 'Safehouse', icon: '🏚', days: [6, 14], cost: 4e6, fixed: true, cat: 'security', hidden: true, gen: true, nso: true, cap: 600, y: 0, u: 0.12, mw: 0, desc: 'Underground cell base: hides fighters, weapons and cash, and trains up to 600 new fighters at a time. Hidden unless the host\'s intelligence finds it.' },
+    nsa_camp: { name: 'Hidden Training Camp', icon: '⛺', days: [20, 40], cost: 25e6, fixed: true, cat: 'security', hidden: true, gen: true, nso: true, cap: 3000, y: 0, u: 0.12, mw: 0, desc: 'Remote camp where cells are formed and trained: up to 3,000 recruits at a time. Bigger than a safehouse, so easier to spot.' },
+    nsa_workshop: { name: 'Weapons Workshop', icon: '🔧', days: [15, 30], cost: 15e6, fixed: true, cat: 'security', hidden: true, gen: true, nso: true, cap: 0, y: 0, u: 0.12, mw: 0, desc: 'Builds IEDs and drones and repairs captured weapons: your fighters hit harder on every front and raids loot more.' },
+    nsa_checkpoint: { name: 'Checkpoint & Tax Post', icon: '🚧', days: [3, 7], cost: 1.5e6, fixed: true, cat: 'security', hidden: true, gen: true, nso: true, cap: 0, y: 0, u: 0.2, mw: 0, desc: 'Taxes traders and trucks on a road you hold: +15% extortion income each, but locals resent it.' },
+    nsa_clinic: { name: 'Movement Clinic & School', icon: '⛑', days: [20, 45], cost: 6e6, fixed: true, cat: 'security', hidden: true, gen: true, nso: true, cap: 0, y: 0, u: 0.2, mw: 0, desc: 'Parallel services for the people you control: +support and +legitimacy every month.' }
+});
+const NSA_SITES = ['safehouse', 'nsa_camp', 'nsa_workshop', 'nsa_checkpoint', 'nsa_clinic'];
+
+function nsaDef(id) { return PROXY_DEFS.find(d => d.id === id) || null; }
+function nsaKeyOf(d) { return d.key || d.id.toUpperCase().replace(/[^A-Z]/g, ''); }
+function nsaActive() { return !!(state.nsa && state.nsa.mode === 'nso'); }
+function nsaP() { return state.nsa && state.proxies ? proxyById(state.nsa.id) : null; }
+function nsaFronts() { const N = state.nsa; return N ? N.fronts : []; }
+function nsaDesignated() { return !!(state.nsa && TERROR_DESIGNATED.has(state.nsa.id)); }
+function nsaMySites(types, active) { const me = state.playerIso; return (state.sites || []).filter(s => s.owner === me && (types || NSA_SITES).includes(s.type) && (!active || s.status === 'active')); }
+
+// ---- the pseudo-nation tables (registered before a game starts or loads, restored afterwards) ----
+const NSA_REG = { key: null, snap: null };
+function nsaRegister(d, N) {
+    nsaUnregister();
+    if (!d) return null;
+    const key = nsaKeyOf(d), st = N && N.statehood, name = st ? st.name : (d.state_name || d.name);
+    const S = NSA_REG.snap = { key, world: WORLD[key] ? WORLD[key].slice() : null, names: {}, leaders: LEADERS[key] ? LEADERS[key].slice() : null, ns: NON_SOVEREIGN.has(key),
+        ctrl: CTRL_META[key] ? CTRL_META[key].slice() : null, groupAt: {}, hosts: [], hostRows: {}, cities: [], regime: null };
+    const hosts = d.host.filter(h => WORLD[h]);
+    const popM = Math.max(0.005, hosts.reduce((a, h) => a + WORLD[h][3] * d.popShare, 0)), gdpB = Math.max(0.05, hosts.reduce((a, h) => a + WORLD[h][2] * d.popShare * 0.45, 0));
+    WORLD[key] = ['x-' + d.id, name, +(N && N.gdpB || gdpB).toFixed(3), +(N && N.popM || popM).toFixed(4)];
+    [name, d.state_name || d.name].forEach(nm => { const k = normName(nm); if (!(k in S.names)) S.names[k] = WORLD_BY_NAME[k]; WORLD_BY_NAME[k] = key; });
+    LEADERS[key] = [d.leader, d.leader];
+    if (st) NON_SOVEREIGN.delete(key); else NON_SOVEREIGN.add(key);
+    if (!d.key) {        // keyless groups (cartels, guerrillas, militias inside the state) get a place on the control map
+        CTRL_META[key] = [d.short, d.color || '#94a3b8', d.aims];
+        d.host.forEach(h => { const k = h + '|' + key; S.groupAt[k] = GROUP_AT[k]; GROUP_AT[k] = d.id; if (!GROUP_HOSTS.has(h)) { GROUP_HOSTS.add(h); S.hosts.push(h); } });
+    }
+    if (st) nsaStatehoodStatic(d, N);
+    NSA_REG.key = key;
+    try { rankCache.key = null; } catch (e) { }
+    return key;
+}
+function nsaUnregister() {
+    const S = NSA_REG.snap; if (!S) return;
+    const key = S.key;
+    if (S.world) WORLD[key] = S.world; else delete WORLD[key];
+    Object.keys(S.names).forEach(k => { if (S.names[k] === undefined) delete WORLD_BY_NAME[k]; else WORLD_BY_NAME[k] = S.names[k]; });
+    if (S.leaders) LEADERS[key] = S.leaders; else delete LEADERS[key];
+    if (S.ns) NON_SOVEREIGN.add(key); else NON_SOVEREIGN.delete(key);
+    if (S.ctrl) CTRL_META[key] = S.ctrl; else delete CTRL_META[key];
+    Object.keys(S.groupAt).forEach(k => { if (S.groupAt[k] === undefined) delete GROUP_AT[k]; else GROUP_AT[k] = S.groupAt[k]; });
+    S.hosts.forEach(h => GROUP_HOSTS.delete(h));
+    Object.keys(S.hostRows).forEach(h => { WORLD[h] = S.hostRows[h]; });
+    S.cities.slice().reverse().forEach(([i, iso]) => { if (CITIES[i]) CITIES[i][1] = iso; });
+    try { Object.keys(_milBaseCache).forEach(k => { if (k === key || S.hostRows[k]) delete _milBaseCache[k]; }); } catch (e) { }
+    try { delete nameToIso[(S.world || [])[1]]; } catch (e) { }
+    NSA_REG.snap = null; NSA_REG.key = null;
+    try { rankCache.key = null; if (fpOf._c) fpOf._c = {}; } catch (e) { }
+    try { nsaGeoApply(true); } catch (e) { }
+}
+// a group flies its own flag (or a plain badge for designated terrorist organisations) everywhere a country flag is drawn
+{
+    const _fh = flagHTML;
+    flagHTML = function (t, h) {
+        if (t && typeof t.iso2 === 'string' && t.iso2.startsWith('x-')) { const d = nsaDef(t.iso2.slice(2)); if (d) return groupFlagHTML(d, h || 14); }
+        return _fh.apply(this, arguments);
+    };
+}
+
+// ---- the start screen: "Play as → A nation | A non-state actor" ----
+const NSA_SETUP = { on: false, pick: null };
+function nsaSetupFill() {
+    const sel = document.getElementById('nsa-pick'); if (!sel || sel.options.length) return;
+    const groups = {};
+    PROXY_DEFS.forEach(d => { const h = d.host[0]; (groups[h] = groups[h] || []).push(d); });
+    sel.innerHTML = `<option value="">— choose a group —</option>` + Object.keys(groups).sort((a, b) => shortName(a).localeCompare(shortName(b))).map(h =>
+        `<optgroup label="${esc(shortName(h))}">${groups[h].map(d => `<option value="${d.id}">${esc(d.state ? d.name : (d.state_name || d.name))} · ${esc(d.kind)}${d.state && WORLD[d.state] ? ' (plays as ' + esc(WORLD[d.state][1]) + ')' : ''}</option>`).join('')}</optgroup>`).join('');
+}
+function nsaSetupMode(m) {
+    if (state.phase !== 'setup') return;
+    try { playClick(); } catch (e) { }
+    NSA_SETUP.on = m === 'nso';
+    document.querySelectorAll('#play-seg button').forEach(b => b.classList.toggle('on', b.dataset.v === (NSA_SETUP.on ? 'nso' : 'state')));
+    const box = document.getElementById('nsa-setup-box'); if (box) box.classList.toggle('hidden', !NSA_SETUP.on);
+    const lab = document.getElementById('target-lbl'); if (lab) lab.textContent = NSA_SETUP.on ? 'Your movement' : 'Target Nation';
+    const disp = document.getElementById('country-display');
+    if (NSA_SETUP.on) { nsaSetupFill(); if (!state.proxies) proxyInit(); if (disp) disp.placeholder = 'PICK A GROUP OR CLICK ITS AREA...'; }
+    else { if (disp) disp.placeholder = 'CLICK MAP TO SELECT...'; }
+    // switching mode clears the previous pick
+    nsaUnregister(); NSA_SETUP.pick = null; ENT.sel = null;
+    try { if (playerFeature) geojsonLayer.resetStyle(playerFeature); } catch (e) { } playerFeature = null;
+    state.player = null; if (disp) disp.value = ''; const btn = document.getElementById('deploy-btn'); if (btn) btn.disabled = true;
+    const sel = document.getElementById('nsa-pick'); if (sel) sel.value = '';
+    try { grpRefresh(true); } catch (e) { }
+}
+function nsaSetupPick(id) {
+    if (state.phase !== 'setup') return;
+    const d = nsaDef(id), disp = document.getElementById('country-display'), btn = document.getElementById('deploy-btn'), desc = document.getElementById('nsa-pick-desc'), sel = document.getElementById('nsa-pick');
+    if (!d) return;
+    if (sel) sel.value = id;
+    nsaUnregister(); NSA_SETUP.pick = null;
+    if (d.state && WORLD[d.state]) {          // Hamas, Northern Cyprus, Somaliland already govern a territory on the map: you play that territory
+        ENT.sel = null;
+        const nm = isoToName(d.state), l = nameLayer[nm];
+        if (l) l.fire('click', { latlng: l.getBounds().getCenter(), _now: true, _exact: true, target: l });
+        else { state.player = nm; if (disp) disp.value = nm; if (btn) btn.disabled = false; }
+        if (desc) desc.innerHTML = `${groupFlagHTML(d, 12)} <b>${esc(d.name)}</b> already governs ${esc(WORLD[d.state][1])}: you lead it with the tools of a (largely unrecognised) state.`;
+        try { grpRefresh(true); } catch (e) { }
+        return;
+    }
+    try { playSelect(); } catch (e) { }
+    nsaRegister(d); NSA_SETUP.pick = id;
+    try { if (playerFeature) geojsonLayer.resetStyle(playerFeature); } catch (e) { } playerFeature = null;
+    state.player = d.state_name || d.name;
+    if (disp) disp.value = `${state.player} — ${d.kind}`;
+    if (btn) btn.disabled = false;
+    if (desc) desc.innerHTML = `${groupFlagHTML(d, 12)} <b>${esc(d.name)}</b> · ${esc(d.leader)} · inside ${esc(d.host.map(shortName).join(' & '))}${d.patrons.length ? ' · backed by ' + esc(d.patrons.filter(x => WORLD[x]).map(shortName).join(', ')) : ''}<br>${esc(d.aims)}`;
+    ENT.sel = id;
+    try { grpRefresh(true); } catch (e) { }
+    try {            // the start card sits in the middle of the screen: put the group's area to its right
+        window.__userCamAt = Date.now(); const z = 6, sz = map.getSize(), c = map.unproject(map.project(L.latLng(d.base[0], d.base[1]), z).subtract([sz.x * 0.25, 0]), z);
+        map.flyTo(c, z, { duration: 1.1 });
+    } catch (e) { }
+}
+// a click inside a group's area during the start screen picks that group (only in "non-state actor" mode)
+(function () {
+    const cont = map.getContainer();
+    cont.addEventListener('click', ev => {
+        if (state.phase !== 'setup' || !NSA_SETUP.on) return;
+        if (ev.target && ev.target.closest && ev.target.closest('.leaflet-control, .leaflet-popup, .leaflet-marker-icon, #setup-card')) return;
+        if (!state.proxies) proxyInit();
+        let g = null; try { g = grpAt(map.mouseEventToLatLng(ev)); } catch (e) { }
+        if (!g) return;
+        ev.stopPropagation(); ev.preventDefault();
+        if (!clickAllowed()) return;
+        cancelPendingClick();
+        nsaSetupPick(g.p.id);
+    }, true);
+    // "Assume Command": a country picked on the map after a group means a state start
+    document.addEventListener('click', ev => {
+        if (!ev.target || !ev.target.closest || !ev.target.closest('#deploy-btn') || state.phase !== 'setup') return;
+        const d = NSA_SETUP.pick && nsaDef(NSA_SETUP.pick);
+        if (d && state.player !== (d.state_name || d.name)) { nsaUnregister(); NSA_SETUP.pick = null; }
+    }, true);
+})();
+// the group areas are drawn on the start screen while picking a group; the player's own area is outlined in the player colour in game
+{
+    const _gr = grpRefresh;
+    grpRefresh = function (force) {
+        if (state.phase === 'setup') {
+            if (!NSA_SETUP.on) { try { if (ENT.tiles && map.hasLayer(ENT.tiles)) map.removeLayer(ENT.tiles); } catch (e) { } ENT.sig = ''; return; }
+            const pi = state.playerIso, mv = MAPVIEW; state.playerIso = pi || '__setup'; MAPVIEW = 'political';
+            try { return _gr.call(this, true); } finally { state.playerIso = pi; MAPVIEW = mv; }
+        }
+        return _gr.apply(this, arguments);
+    };
+    const _gp = grpPaintTile;
+    grpPaintTile = function (out, bx, by, masks, iso, w, h, dpr) {
+        if (state.phase === 'setup' && NSA_SETUP.on) { const mv = MAPVIEW; MAPVIEW = 'political'; try { return _gp.apply(this, arguments); } finally { MAPVIEW = mv; } }
+        const N = state.nsa;
+        if (!N || state.phase !== 'playing' || N.mode !== 'nso' || !masks[N.key] || ENT.sel === N.id) return _gp.apply(this, arguments);
+        const rest = {}; Object.keys(masks).forEach(k => { if (k !== N.key) rest[k] = masks[k]; });
+        _gp.call(this, out, bx, by, rest, iso, w, h, dpr);
+        nsaPaintOwn(out, bx, by, masks[N.key], w, h, dpr);
+    };
+}
+// your own area: a warm outline and tint, like the player's country
+function nsaPaintOwn(out, bx, by, mask, w, h, dpr) {
+    const mine = [], get = () => { const x = cvGet(w, h); mine.push(x); return x; };
+    try {
+        const mx = get(), r = 1.2 * dpr, M = mx.canvas;
+        [[0, 0], [-r, 0], [r, 0], [0, -r], [0, r]].forEach(([dx, dy]) => mx.drawImage(mask.canvas, dx, dy));
+        const lw = Math.max(1, 2.2 * dpr);
+        const ox = get(); ox.fillStyle = '#000'; ox.fillRect(0, 0, w, h); ox.globalCompositeOperation = 'destination-out'; ox.drawImage(M, 0, 0);
+        const gx = get();
+        [[-lw, 0], [lw, 0], [0, -lw], [0, lw], [-lw * .7, -lw * .7], [lw * .7, lw * .7], [-lw * .7, lw * .7], [lw * .7, -lw * .7]].forEach(([dx, dy]) => gx.drawImage(ox.canvas, dx, dy));
+        const ex = get(); ex.drawImage(M, 0, 0); ex.globalCompositeOperation = 'destination-in'; ex.drawImage(gx.canvas, 0, 0);
+        ex.globalCompositeOperation = 'source-in'; ex.fillStyle = '#f6e7a8'; ex.fillRect(0, 0, w, h);
+        const fx = get(); fx.globalAlpha = MAPVIEW === 'political' ? 0.32 : 0.16; fx.fillStyle = '#d9c06a'; fx.fillRect(0, 0, w, h);
+        fx.globalAlpha = 1; fx.globalCompositeOperation = 'destination-in'; fx.drawImage(M, 0, 0);
+        out.drawImage(fx.canvas, bx, by); out.drawImage(ex.canvas, bx, by);
+    } finally { mine.forEach(cvPut); }
+}
+
+// ---- a new campaign as the group ----
+function nsaStart(id) {
+    const d = nsaDef(id), p = proxyById(id), key = state.playerIso; if (!d || !p || !key) return;
+    const n = nationIso(key), designated = TERROR_DESIGNATED.has(id), breakaway = /breakaway|autonomous/.test(d.kind);
+    p.player = true;
+    const fronts = d.host.filter(h => WORLD[h]); if (d.claim && WORLD[d.claim] && !fronts.includes(d.claim)) fronts.push(d.claim);
+    state.nsa = { v: 1, id, key, mode: 'nso', fronts, gov: proxyGov(p), heat: designated ? 30 : /criminal/.test(d.kind) ? 25 : 15, coin: 25, pool: 0, fighters: d.fighters, f0: d.fighters,
+        sliders: { extort: 1, smuggle: 1, aid: 0.5, ransom: NSA_RANSOM.has(id) ? 0.5 : 0 }, routes: 0, seized: 0, sanctions: designated ? 1 : 0, low: 0, arms: 0,
+        recog: (NSA_RECOG0[id] || []).filter(i => WORLD[i] && !NON_SOVEREIGN.has(i)), asked: {}, ops: [], held0: 0, share0: 0, heldDays: 0, unlockedLog: false,
+        income: null, hist: [], start: { day: state.dayIndex || 0, date: fmtDate(state.date) }, statehood: null };
+    const N = state.nsa;
+    state.regimes = state.regimes || {}; state.regimes[key] = 'autocracy';      // no elections inside an armed movement
+    // conflicts: the group fights on the opposing side of its conflict
+    ensureOccState();
+    const c = d.conf && state.conflicts.find(k => k.id === d.conf);
+    if (c) { if (!c.sideB.includes(key) && !c.sideA.includes(key)) c.sideB.push(key); d.patrons.forEach(x => { if (WORLD[x] && !c.backB.includes(x) && !c.sideA.includes(x)) c.backB.push(x); }); }
+    fronts.forEach(h => { if (!state.occ.some(o => o.iso === h && o.by === key)) state.occ.push({ conf: c && (c.location || c.sideA).includes(h) ? c.id : null, iso: h, by: key, bias: 0 }); });
+    // keyless groups (cartels, guerrillas, militias) start from the area around their base
+    if (!d.key) {
+        const h = d.host[0], G = gridOf(h);
+        if (G) G.cells.slice().sort((a, b) => km({ lat: d.base[0], lng: d.base[1] }, a) - km({ lat: d.base[0], lng: d.base[1] }, b)).slice(0, clamp(Math.round(G.cells.length * 0.006), 6, 12)).forEach(x => setCell(h, x, key));
+        TERR.cache = {};
+    }
+    const T = nsaTerr(); N.held0 = T.km2; N.share0 = T.share; N.pool = Math.round(T.pop * 0.004);
+    // money, support and standing
+    n.treasury = clamp(n.gdp * 0.05, 25e6, 2.5e9);
+    n.stability = clamp((breakaway ? 58 : designated ? 42 : 48) + Math.round(rnd(-3, 3)), 20, 80);
+    p.legit = clamp(40 + (breakaway ? 12 : 0) + Math.min(15, N.recog.length) - (designated ? 15 : 0) - (/criminal/.test(d.kind) ? 15 : 0), 5, 80);
+    try { const s = socOf(key); s.debt = 0; s.flags.flow = 0; s.appr0 = n.stability; } catch (e) { }
+    // relations: patrons are friends, the government you fight is the enemy, its friends cold, its rivals curious
+    const host = N.gov;
+    d.patrons.forEach(x => { if (WORLD[x]) addRel(key, x, 55); });
+    N.recog.forEach(x => addRel(key, x, 25));
+    fronts.forEach(h => addRel(key, h, -70));
+    try { rivalsOf(host).forEach(x => { if (WORLD[x] && !d.patrons.includes(x)) addRel(key, x, 10); }); } catch (e) { }
+    try { Object.keys(WORLD).forEach(x => { if (x === key || x === host || NON_SOVEREIGN.has(x) || d.patrons.includes(x)) return; if (getRel(host, x) > 45) addRel(key, x, -15); }); } catch (e) { }
+    if (designated) NSA_WEST.forEach(x => { if (WORLD[x] && !d.patrons.includes(x)) addRel(key, x, -40); });
+    if (CTRL_BACKER[key] && WORLD[CTRL_BACKER[key]]) addRel(key, CTRL_BACKER[key], 15);
+    nsaSyncStrength();
+    logEvent(`🏴 You lead <b>${esc(d.name)}</b> — ${esc(d.kind)} inside ${esc(d.host.map(shortName).join(' & '))}. ${T.km2 ? `You hold ≈${T.km2.toLocaleString()} km² (${Math.round(T.share * 100)}% of ${esc(shortName(d.host[0]))}) with ${formatPop(T.pop)} people. ` : ''}${d.fighters.toLocaleString()} fighters, a war chest of ${formatVal(n.treasury)}. Open <a href="#" onclick="openSociety('nso');return false" class="underline">🏴 Movement</a> for your network, illicit economy and the road to statehood.`, 'good');
+}
+// the land, people and shadow economy the group controls (read off the same control map the player sees)
+function nsaTerr() {
+    const N = state.nsa, d = N ? nsaDef(N.id) : null, key = N ? N.key : state.playerIso; if (!d) return { km2: 0, share: 0, pop: 0, gdp: 0, by: {} };
+    let km2 = 0, share = 0; const by = {};
+    N.fronts.forEach(h => {
+        let x = null; try { x = territoryOf(h).others.find(o => o.key === key); } catch (e) { }
+        by[h] = { pct: x ? x.pct : 0, km2: x ? x.km2 : 0, places: x ? x.places : [] };
+        km2 += by[h].km2; if (d.host.includes(h)) share = Math.max(share, by[h].pct / 100);
+    });
+    const hostPop = d.host.reduce((a, h) => a + (WORLD[h] ? nationIso(h).pop : 0), 0), hostGdp = d.host.reduce((a, h) => a + (WORLD[h] ? nationIso(h).gdp : 0), 0);
+    const k0 = Math.max(N.held0 || km2, 300);
+    const pop = Math.round(clamp(hostPop * d.popShare * Math.pow(Math.max(km2, 150) / k0, 0.75), 2e4, hostPop * 0.95));
+    const gdp = Math.max(1e8, hostGdp * (hostPop ? pop / hostPop : 0) * 0.45);
+    return { km2, share, pop, gdp, by };
+}
+function nsaCityKey(c) {
+    const N = state.nsa; let h = null; try { h = isoAtPoint({ lat: c[2], lng: c[3] }); } catch (e) { }
+    h = h || c[1]; if (!N || !N.fronts.includes(h)) return null;
+    let k = 'GOV'; try { k = keyAtPoint(h, { lat: c[2], lng: c[3] }); } catch (e) { }
+    return { h, k };
+}
+function nsaSyncStrength() {
+    const N = state.nsa, p = nsaP(); if (!N || !p) return;
+    const sup = nationIso(N.key).stability || 50, wk = nsaMySites(['nsa_workshop'], true).length;
+    p.S = clamp(p.S0 * Math.sqrt(Math.max(N.fighters, 50) / Math.max(N.f0, 50)) * (0.85 + 0.3 * sup / 100) * (1 + 0.04 * wk), 3, 95);
+}
+// combat power of your fighters against the government's forces on one front
+function nsaRatio(h) {
+    const N = state.nsa, p = nsaP(), sup = nationIso(N.key).stability || 50;
+    const fr = N.fronts.length > 1 ? (nsaTerr().by[h] ? Math.max(0.25, (nsaTerr().by[h].km2 + 1) / (nsaTerr().km2 + N.fronts.length)) : 0.5) : 1;
+    const aid = p ? p.patrons.reduce((a, x) => a + (p.aid[x] || 0), 0) : 0;
+    const mine = (N.mode === 'nso' ? N.fighters * 0.6 : (milInventory(N.key).troops || N.fighters)) * fr * (1 + 0.08 * nsaMySites(['nsa_workshop'], true).length + 0.12 * aid + (N.arms || 0)) * (0.7 + 0.6 * sup / 100);
+    const hn = nationIso(h), c = nsaConflictWith(h);
+    const others = (state.occ || []).filter(o => o.iso === h && o.by !== N.key && o.conf && state.conflicts.some(k => k.id === o.conf && k.type === 'war')).length;
+    let theirs = (milInventory(h).troops || 20000) * 0.45 * (0.6 + 0.8 * (hn.stability || 50) / 100) * (1 + (N.coin || 0) / 200) / (1 + 0.6 * others);
+    if (c) { const back = c.sideA.includes(h) ? c.backA : c.backB; (back || []).forEach(b => { if (WORLD[b] && b !== N.key) theirs += (milInventory(b).troops || 0) * 0.03; }); }
+    return Math.max(0.05, mine / Math.max(theirs, 500));
+}
+// the war between you and a government (the shared civil war, or your own insurgency)
+function nsaConflictWith(h) {
+    const me = state.playerIso;
+    return state.conflicts.find(c => c.type !== 'resolved' && ((c.sideB.includes(me) && (c.sideA.includes(h) || (c.location || []).includes(h))) || (c.sideA.includes(me) && c.sideB.includes(h)))) || null;
+}
+function nsaEnsureWar(h, why) {
+    const N = state.nsa, me = N.key, d = nsaDef(N.id);
+    let c = nsaConflictWith(h);
+    if (c && ['war', 'insurgency'].includes(c.type)) return c;
+    if (c && c.id === 'nsa_' + me + '_' + h) { c.type = 'war'; c.intensity = Math.max(c.intensity, 45); return c; }
+    const id = 'nsa_' + me + '_' + h;
+    c = state.conflicts.find(k => k.id === id);
+    if (!c) {
+        c = { id, name: `${d.short} insurgency in ${shortName(h)}`, type: 'war', intensity: 45, sideA: [h], sideB: [me], backA: [], backB: d.patrons.filter(x => WORLD[x]), mediators: [], location: [h], nsaWar: true,
+            brief: `${d.name} has taken up arms against the government of ${shortName(h)}.`, flavor: [`Fighting between ${d.short} and government forces in ${shortName(h)}.`, `${d.short} fighters ambush an army convoy in ${shortName(h)}.`, `${shortName(h)} reinforces its garrisons against ${d.short}.`] };
+        state.conflicts.push(c);
+        logEvent(`⚔ <b>${esc(c.name)}</b>: ${esc(why || 'your fighters go on the offensive')}. ${esc(shortName(h))} declares a state of emergency.`, 'bad');
+    } else { c.type = 'war'; c.intensity = Math.max(c.intensity, 45); }
+    state.occ.forEach(o => { if (o.iso === h && o.by === me && !o.conf) o.conf = c.id; });
+    addRel(me, h, -10);
+    return c;
+}
+
+// ---- the illicit economy: black market, smuggling, extortion, ransom and patron money instead of taxes ----
+function nsaIncomeCalc() {
+    const N = state.nsa, p = nsaP(), n = nationIso(N.key), S = N.sliders || {}, day = state.dayIndex || 0;
+    const mo = Math.max(n.gdp, 2e8) / 12, sanc = Math.pow(0.85, N.sanctions || 0), low = N.low > day ? 0.7 : 1;
+    const tr = NSA_TRADE[N.id] || ['contraband', 0.6], cps = nsaMySites(['nsa_checkpoint'], true).length;
+    const black = mo * 0.035 * sanc * low;
+    const smuggle = mo * 0.03 * tr[1] * (S.smuggle || 0) * (1 + 0.25 * (N.routes || 0)) * sanc * (N.seized > day ? 0.5 : 1) * low;
+    const extort = mo * 0.045 * (S.extort || 0) * (1 + 0.15 * cps) * low;
+    const ransom = NSA_RANSOM.has(N.id) ? (S.ransom || 0) * 4e6 * clamp(Math.sqrt(n.gdp / 2e9), 0.5, 3) * low : 0;
+    const aidBy = {};
+    let aid = 0; if (p) p.patrons.forEach(x => { if (!WORLD[x] || !(p.aid[x] > 0)) return; const v = p.aid[x] * clamp(nationIso(x).gdp * 3e-5, 2e6, 60e6) * (getRel(N.key, x) > 0 ? 1 : 0.4); aidBy[x] = v; aid += v; });
+    const pay = N.fighters * 45, locals = mo * 0.03 * (S.aid || 0);
+    const net = black + smuggle + extort + ransom + aid - pay - locals;
+    return { black, smuggle, extort, ransom, aid, aidBy, pay, locals, net, trade: tr[0] };
+}
+function nsaSetSlider(k, v) {
+    const N = state.nsa; if (!N) return;
+    N.sliders[k] = clamp(+v, 0, 2);
+    const el = document.getElementById('nsa-sv-' + k); if (el) el.textContent = nsaSliderLabel(k);
+    const pr = document.getElementById('nsa-proj'); if (pr) pr.innerHTML = nsaIncomeTable(nsaIncomeCalc(), true);
+}
+function nsaSliderLabel(k) { const v = (state.nsa.sliders[k] || 0); return v === 0 ? 'off' : v < 0.75 ? 'low' : v < 1.35 ? 'normal' : v < 1.75 ? 'high' : 'maximum'; }
+
+// ---- monthly: money, cells, support, heat, discovery, recognition, statehood ----
+function nsaMonthly() {
+    const N = state.nsa; if (!N) return;
+    if (N.mode !== 'nso') { nsaStateMonthly(); return; }
+    const p = nsaP(), d = nsaDef(N.id), me = N.key, n = nationIso(me), S = N.sliders, day = state.dayIndex; if (!p || !d) return;
+    const T = nsaTerr();
+    n.pop = T.pop; n.gdp = T.gdp; WORLD[me][2] = +(T.gdp / 1e9).toFixed(3); WORLD[me][3] = +(T.pop / 1e6).toFixed(4);
+    const I = nsaIncomeCalc();
+    n.treasury += I.net; N.income = I; N.incomeDate = fmtDate(state.date);
+    const notes = [];
+    // the price of each money line
+    let dSup = 0, dLeg = 0, dHeat = 0;
+    if (S.extort > 0.6) { dSup -= (S.extort - 0.6) * 3; dLeg -= S.extort * 0.5; }
+    dHeat += (S.smuggle || 0) * 1.2 * (1 + 0.25 * (N.routes || 0));
+    if (S.ransom > 0) { dHeat += S.ransom * 4; dLeg -= S.ransom * 2; const w = [...NSA_WEST].filter(x => WORLD[x]); if (w.length && Math.random() < 0.5 * S.ransom) { const x = pick(w); addRel(me, x, -4); notes.push(`a ${shortName(x)} national is among the hostages (relations −4)`); } }
+    dSup += (S.aid || 0) * 2.5; dLeg += (S.aid || 0) * 0.8;
+    const clinics = nsaMySites(['nsa_clinic'], true).length; dSup += Math.min(4, clinics); dLeg += Math.min(2, clinics * 0.5);
+    dSup -= nsaMySites(['nsa_checkpoint'], true).length * 0.5;
+    if (Math.random() < 0.04 * (S.smuggle || 0) * (1 + 0.25 * (N.routes || 0))) {
+        N.seized = day + 30; const lost = Math.round(I.smuggle * 0.8); n.treasury -= lost;
+        logEvent(`🚨 ${esc(shortName(N.gov))} customs and police seize a ${esc(I.trade)} convoy of yours: −${formatVal(lost)}; smuggling income halved for a month.`, 'bad');
+    }
+    if ((nsaDesignated() || N.heat > 60) && Math.random() < 0.05 + N.heat / 1000 && (N.sanctions || 0) < 5) {
+        const w = [...NSA_WEST].filter(x => WORLD[x] && !p.patrons.includes(x)), x = w.length ? pick(w) : null;
+        if (x) { N.sanctions = (N.sanctions || 0) + 1; logEvent(`${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} sanctions ${esc(d.short)}'s financiers and front companies: black-market and smuggling income −15%.`, 'bad'); }
+    } else if ((N.sanctions || 0) > 0 && N.heat < 30 && Math.random() < 0.04) N.sanctions--;
+    if (n.treasury < 0) { const des = Math.round(N.fighters * 0.03); N.fighters -= des; dSup -= 2; n.treasury = 0; logEvent(`💸 The war chest is empty: unpaid fighters desert (−${des.toLocaleString()}).`, 'bad'); }
+    // patrons: money follows friendship
+    p.patrons.forEach(x => { if (!WORLD[x]) return; const r = getRel(me, x); if (r < 0) p.aid[x] = (p.aid[x] || 0) * 0.85; else if (r > 50 && (p.aid[x] || 0) < 0.6) p.aid[x] = Math.min(0.6, (p.aid[x] || 0) + 0.03); });
+    // cells form on their own where the movement is popular, has land and can pay; heat makes cells wither
+    const sup = n.stability, ideo = /jihad|islam/i.test(d.ideology) ? 1.2 : /criminal|traffick/i.test(d.ideology + d.kind) ? (n.treasury > 50e6 ? 1.15 : 0.7) : /self|autonomy|independence|separat|kurd|druze|kachin|rakhine|sahrawi|tigray/i.test(d.ideology + d.aims) ? 1.15 : 1;
+    const war = state.conflicts.some(c => c.type === 'war' && (c.sideA.includes(me) || c.sideB.includes(me)));
+    N.pool = Math.min(Math.round(T.pop * 0.012), Math.round(N.pool + T.pop * 0.00012 * (sup / 50) * ideo * (war ? 1.3 : 1) * (1 + 0.15 * nsaMySites(['nsa_camp'], true).length)));
+    const organic = Math.max(0, Math.round(Math.min(N.pool * 0.15, N.fighters * 0.02 + 200) * sup / 60));
+    N.fighters += organic; N.pool -= organic;
+    if (N.heat > 60) { const lost = Math.round(N.fighters * 0.005); N.fighters -= lost; }
+    // support, legitimacy, heat
+    n.stability = clamp(Math.round(n.stability + dSup - N.heat / 40 + (N.recog.length ? 0.3 : 0)), 0, 100);
+    p.legit = clamp(p.legit + dLeg + 0.08 * (n.stability - 50) / 10 + (T.km2 > N.held0 * 1.1 ? 0.5 : 0), 0, 100);
+    N.heat = clamp(N.heat * 0.92 + dHeat, 0, 100);
+    // hidden sites: the host's intelligence may find them
+    nsaMySites(null, false).forEach(s => {
+        if (s.exposed || ['destroyed', 'cancelled'].includes(s.status)) return;
+        const pr = (0.012 + N.heat / 600 + (N.coin || 0) / 1500) * (s.type === 'nsa_camp' ? 1.5 : s.type === 'nsa_checkpoint' ? 3 : 1) * (N.low > day ? 0.5 : 1);
+        if (Math.random() < pr) { s.exposed = true; s.specs = Object.assign({}, s.specs, { Cover: 'Exposed' }); s.notes = s.notes || []; s.notes.push(`${state.date.toLocaleDateString()}: Discovered by ${shortName(N.gov)}'s intelligence.`); try { updateSiteMarker(s); } catch (e) { } logEvent(`🛰 ${esc(shortName(N.gov))}'s intelligence has found your ${esc(siteT(s.type).name.toLowerCase())} near ${esc(s.place || '')}. Expect a raid.`, 'bad'); }
+    });
+    // recognition drifts with friendship
+    Object.keys(WORLD).forEach(x => {
+        if (x === me || NON_SOVEREIGN.has(x) || !(WORLD[x][3] > 0.05) || N.fronts.includes(x)) return;
+        const has = N.recog.includes(x), r = getRel(me, x);
+        if (!has && r > 60 && p.legit > 45 && !NSA_SEP_FEAR.has(x) && Math.random() < (p.patrons.includes(x) && p.aid[x] > 0.5 ? 0.03 : 0.006)) { N.recog.push(x); addRel(N.gov, x, -15); logEvent(`🏳 ${flagHTML(nationIso(x), 10)} <b>${esc(shortName(x))} recognises ${esc(state.player)}</b> (${N.recog.length} states now).`, 'good'); }
+        else if (has && r < -30 && Math.random() < 0.03) { N.recog = N.recog.filter(i => i !== x); logEvent(`${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} withdraws its recognition of ${esc(state.player)}.`, 'bad'); }
+    });
+    nsaSyncStrength();
+    N.hist.push({ d: fmtDate(state.date), f: N.fighters, s: n.stability, km: T.km2, t: Math.round(n.treasury), h: Math.round(N.heat), r: N.recog.length }); if (N.hist.length > 36) N.hist.shift();
+    const st = nsaStatehoodStatus();
+    if (st.unlocked && !N.unlockedLog) { N.unlockedLog = true; logEvent(`🏳 <b>Statehood is within reach.</b> You hold enough land, have held it long enough and enough states recognise you. <a href="#" onclick="openSociety('nsostate');return false" class="underline">Declare statehood</a>.`, 'good'); }
+    logEvent(`🏴 Monthly report: war chest ${I.net >= 0 ? '+' : '−'}${formatVal(Math.abs(I.net))} (black market ${formatVal(I.black)}, ${esc(I.trade)} ${formatVal(I.smuggle)}, extortion ${formatVal(I.extort)}${I.ransom ? `, ransoms ${formatVal(I.ransom)}` : ''}${I.aid ? `, patrons ${formatVal(I.aid)}` : ''}; pay −${formatVal(I.pay)}) · ${N.fighters.toLocaleString()} fighters${organic ? ` (+${organic.toLocaleString()} new)` : ''} · support ${Math.round(n.stability)}% · heat ${Math.round(N.heat)} · ${T.km2.toLocaleString()} km² held${notes.length ? ' · ' + esc(notes.join('; ')) : ''}.`, I.net >= 0 ? 'neutral' : 'bad');
+    try { updateEconomyUI(); } catch (e) { }
+}
+
+// ---- weekly: counter-insurgency by the host government, ops ending, the statehood clock ----
+function nsaWeekly(catchUp) {
+    const N = state.nsa; if (!N) return;
+    const me = N.key, n = nationIso(me), day = state.dayIndex, host = N.gov, d = nsaDef(N.id);
+    N.ops = (N.ops || []).filter(o => o.until > day);
+    const st = nsaStatehoodStatus();
+    N.heldDays = st.terr.cond ? (N.heldDays || 0) + 7 : 0;
+    if (N.mode !== 'nso') return;
+    const T = nsaTerr(), gained = Math.max(0, T.km2 - N.held0) / Math.max(N.held0, 2000);
+    const war = state.conflicts.some(c => c.type === 'war' && c.sideB.includes(me));
+    const target = clamp(15 + N.heat * 0.5 + gained * 30 + (war ? 15 : 0) - (N.low > day ? 10 : 0), 0, 100);
+    N.coin = clamp((N.coin || 0) + (target - (N.coin || 0)) * 0.3, 0, 100);
+    if (!WORLD[host] || Math.random() > N.coin / 220) return;
+    const hn = shortName(host), places = (T.by[host] && T.by[host].places) || d.cities || [], where = places.length ? pick(places) : (d.hq || d.cities[0]);
+    const exposed = nsaMySites(null, false).filter(s => s.exposed && !['destroyed', 'cancelled'].includes(s.status));
+    const roll = Math.random();
+    if (exposed.length && roll < 0.5) {
+        const s = pick(exposed), outc = Math.random() < 0.55 ? 'Success' : Math.random() < 0.5 ? 'Major success' : 'Partial';
+        let hit = false; try { hit = damageSite(s, outc, host); } catch (e) { }
+        const lost = Math.round((s.type === 'nsa_camp' ? rint(150, 600) : rint(20, 150)) * (hit ? 1 : 0.3)); N.fighters = Math.max(0, N.fighters - lost);
+        if (!catchUp || hit) logEvent(`💥 ${esc(hn)} forces raid your ${esc(siteT(s.type).name.toLowerCase())} near ${esc(s.place || where)}${hit ? ` — ${s.status === 'destroyed' ? 'destroyed' : 'damaged'}` : ' — the cell escaped'}; ${lost} fighters lost.`, 'bad');
+    } else if (roll < 0.8) {
+        const lost = Math.round(N.fighters * rnd(0.003, 0.01)); N.fighters = Math.max(0, N.fighters - lost); n.stability = clamp(n.stability + 0.5, 0, 100);
+        if (!catchUp) logEvent(`✈ ${esc(hn)} air and drone strikes hit your fighters near ${esc(where)}: ${lost.toLocaleString()} killed. Anger at the strikes helps your recruiters.`, 'bad');
+        N.pool += Math.round(lost * 0.5);
+    } else {
+        const arr = Math.round(N.pool * 0.1); N.pool -= arr; N.heat = Math.max(0, N.heat - 3);
+        if (!catchUp) logEvent(`🚔 ${esc(hn)} security services sweep ${esc(where)}: suspected ${esc(d.short)} supporters arrested (recruit pool −${arr.toLocaleString()}).`, 'bad');
+    }
+    nsaSyncStrength();
+}
+
+// ---- the front: your operations take cells of the host's territory, the government takes them back ----
+function nsaFrontTick(catchUp) {
+    const N = state.nsa; if (!N) return; ensureOccState();
+    const me = N.key, day = state.dayIndex, d = nsaDef(N.id); let moved = false;
+    N.fronts.forEach(h => {
+        const G = gridOf(h); if (!G || G.cells.length < 4) return;
+        const c = nsaConflictWith(h), op = (N.ops || []).filter(o => o.host === h && o.until > day).sort((a, b) => b.str - a.str)[0];
+        if (!op && !(c && ['war', 'insurgency'].includes(c.type))) return;        // frozen lines move only when you attack
+        if (N.mode === 'nso' && N.low > day && !op) return;
+        const R = nsaRatio(h), sup = nationIso(me).stability || 50;
+        const pg = clamp(0.5 + 0.28 * Math.tanh(Math.log(R)) + (op ? 0.1 * op.str : 0) + (sup - 50) / 300 - (N.mode === 'nso' ? N.heat / 600 + (N.coin || 0) / 500 : 0), 0.1, 0.9);
+        const inten = c ? c.intensity / 100 : 0.5;
+        const lam = (op ? 1.2 + op.str : 0.25 + inten * 0.5) * clamp(Math.sqrt(G.cells.length / 400), 0.6, 2);
+        let flips = Math.floor(lam) + (Math.random() < lam - Math.floor(lam) ? 1 : 0);
+        const own = x => cellOwnerG(h, x) === me, gov = x => cellOwnerG(h, x) === 'GOV';
+        const inBox = N.id === 'polisario' && h === 'MAR' ? x => x.lat < 27.7 && x.lng < -8.6 : () => true;     // Morocco's part of Western Sahara only
+        const done = [];
+        while (flips-- > 0) {
+            const gain = Math.random() < pg, cand = [], wts = [];
+            G.cells.forEach(x => {
+                if (!inBox(x) || (gain ? !gov(x) : !own(x))) return;
+                const nb = cellNeighbors(G, x).filter(y => gain ? own(y) : gov(y)).length; if (!nb) return;
+                let w = nb * nb; if (gain && op && op.target) w *= 1 + 4 * Math.exp(-km(x, op.target) / 120);
+                cand.push(x); wts.push(w);
+            });
+            if (!cand.length && gain && !G.cells.some(x => own(x) && inBox(x))) {      // no foothold yet: the nearest government cell to your base or target
+                const ref = op && op.target ? op.target : { lat: d.base[0], lng: d.base[1] };
+                const x = G.cells.filter(y => inBox(y) && gov(y)).sort((a, b) => km(ref, a) - km(ref, b))[0]; if (x) { cand.push(x); wts.push(1); }
+            }
+            if (!cand.length) continue;
+            let r = Math.random() * wts.reduce((a, b) => a + b, 0), x = cand[0];
+            for (let q = 0; q < cand.length; q++) { r -= wts[q]; if (r <= 0) { x = cand[q]; break; } }
+            setCell(h, x, gain ? me : 'GOV'); moved = true; done.push([gain, x]);
+        }
+        if (N.mode === 'nso') { const lost = Math.round(N.fighters * 0.0015 * (inten + (op ? 0.6 : 0))); N.fighters = Math.max(0, N.fighters - lost); }
+        if (c && op) c.intensity = clamp(c.intensity + 2, 0, 100);
+        if (done.length && !catchUp) done.forEach(([gain, x]) => { const near = nearestCityName(h, x.lat, x.lng), where = near ? `near <b>${esc(near)}</b>` : `in ${esc(shortName(h))}`;
+            logEvent(gain ? `🗺 Your fighters take ground ${where} (+${CELL_KM2} km²).` : `🗺 ${esc(shortName(h))}'s forces retake ground from you ${where} (−${CELL_KM2} km²).`, gain ? 'good' : 'bad'); });
+        if (op && op.target && !op.done) {
+            let k = null; try { k = keyAtPoint(h, op.target); } catch (e) { }
+            if (k === me) { op.done = true; op.until = day + 3; nationIso(me).stability = clamp(nationIso(me).stability + 2, 0, 100); const p = nsaP(); if (p) p.legit = clamp(p.legit + 1, 0, 100); logEvent(`🏴 <b>Your fighters seize ${esc(op.target.name)}!</b>`, 'good'); }
+        }
+    });
+    if (moved) { TERR.cache = {}; if (!catchUp) { try { refreshMapView(); } catch (e) { } } }
+}
+
+// ---- statehood: land held long enough, recognition, legitimacy ----
+function nsaStatehoodStatus() {
+    const N = state.nsa, p = nsaP(), d = N && nsaDef(N.id);
+    if (!N || !p || !d) return { unlocked: false, terr: {}, recog: {}, legit: {} };
+    const T = nsaTerr(), breakaway = /breakaway/.test(d.kind);
+    const needKm = breakaway ? Math.round(N.held0 * 0.95) : Math.round(N.held0 * 1.15 + 2000);
+    const cond = T.km2 >= 1500 && (T.share >= 0.33 || T.km2 >= needKm);
+    const days = N.heldDays || 0, terr = { cond, ok: cond && days >= 180, km2: T.km2, share: T.share, needKm, days, needDays: 180 };
+    const R = N.recog.filter(i => WORLD[i] && !NON_SOVEREIGN.has(i)), p5 = R.filter(i => UNSC_P5.includes(i)).length;
+    const recog = { n: R.length, p5, ok: (R.length >= 10 && p5 >= 1) || R.length >= 20 };
+    const sup = nationIso(N.key).stability || 0, legit = { legit: Math.round(p.legit), sup: Math.round(sup), ok: p.legit >= 50 && sup >= 40 };
+    return { terr, recog, legit, unlocked: terr.ok && recog.ok && legit.ok };
+}
+
+// ---- orders a movement gives: recruit, build the network, raid, offensives, smuggle, extort, patrons, recognition, talks ----
+const NSA_BUILD_RX = [
+    ['safehouse', /\b(safe ?houses?|hide ?outs?|hideaways?|underground (cell|base|bunker|network)s?|bunkers?|cell bases?)\b/],
+    ['nsa_workshop', /\b(workshops?|bomb (factory|workshop)|drone (factory|workshop|lab)|ied (factory|workshop)|weapons? (workshop|factory|lab))\b/],
+    ['nsa_checkpoint', /\b(checkpoints?|roadblocks?|tax posts?|toll (gates?|posts?))\b/],
+    ['nsa_clinic', /\b(clinics?|schools?|field hospitals?|hospitals?|services? cent(er|re)s?|aid (station|cent(er|re))s?)\b/],
+    ['nsa_camp', /\b(camps?|training (camp|base|ground)s?|bases?|barracks|compound)\b/]
+];
+const NSA_ACT_RX = [
+    ['declare', /\b(declare|proclaim|announce)\b.{0,40}\b(independence|statehood|state|republic|sovereignty)\b/],
+    ['recog', /\b(recogni[sz]\w*|recognition)\b/],
+    ['ransom', /\b(kidnap\w*|ransom\w*|hostages?|abduct\w*)\b/],
+    ['lielow', /\b(lie low|lay low|go quiet|go underground|keep a low profile|low profile|reduce (our )?(profile|activity)|disperse (the |our )?fighters|hunker down)\b/],
+    ['propaganda', /\b(propaganda|media campaign|information campaign|broadcast|recruitment videos?|win (the )?hearts|rally (support|the people)|messaging|social media|speech|address the people)\b/],
+    ['recruit', /\b(recruit\w*|enlist\w*|mobili[sz]\w*|conscript\w*|raise|train|form|grow)\b.{0,40}\b(fighters?|men|cells?|recruits?|militia\w*|volunteers?|troops|soldiers|youths?|units?|brigades?|ranks)\b|\brecruit\w*\b/],
+    ['patron', /\b(ask|request|seek|appeal|lobby|get|secure|obtain|beg|call on)\b.{0,50}\b(weapons|arms|drones|missiles|money|funds?|funding|cash|support|aid|backing|help|supplies|ammunition|training)\b/],
+    ['smuggle', /\b(smuggl\w*|traffick\w*|contraband|black.market|smuggling routes?|new (trade )?routes?|sell (gold|oil|drugs|coltan|jade|fuel)|export (gold|oil|drugs|coltan|jade))\b/],
+    ['extort', /\b(extort\w*|levy|levies|protection money|racket\w*|tax(es)? (the )?(traders|trucks|businesses|merchants|shops|farmers|convoys|locals|population)|impose (a )?tax|collect (taxes|fees|zakat))\b/],
+    ['services', /\b(aid to (the )?(locals|people|civilians|population)|distribute (food|aid|fuel|bread)|provide (services|food)|public services|feed the|run (clinics|schools)|help the (people|civilians))\b/],
+    ['talks', /\b(negotiat\w*|talks?|ceasefire|truce|peace|dialogue|deal|autonomy|power.sharing)\b/],
+    ['seize', /\b(seize|capture|take|occupy|storm|overrun|liberate|conquer)\b/],
+    ['offensive', /\b(offensive|advance|push|march|counter.?offensive|campaign|assault|drive|expand)\b/],
+    ['raid', /\b(raid|ambush|attack|strike|hit|bomb|ied|sabotage|shell|harass|assassinat\w*|destroy|target)\b/]
+];
+const NSA_CAT = { declare: 'diplomacy', recog: 'diplomacy', patron: 'diplomacy', talks: 'diplomacy', ransom: 'economy', smuggle: 'economy', extort: 'economy', lielow: 'domestic', recruit: 'domestic', propaganda: 'domestic', services: 'humanitarian', seize: 'military', offensive: 'military', raid: 'military' };
+// a city in your host country (or Morocco's part of Western Sahara for the Polisario) named in the order
+function nsaCityIn(text) {
+    const N = state.nsa, t = ' ' + normName(text) + ' ';
+    const list = CITIES.filter(c => N.fronts.includes(c[1]) || c[1] === N.key);
+    const c = list.filter(c => t.includes(' ' + normName(c[0]) + ' ')).sort((a, b) => b[0].length - a[0].length)[0];
+    if (c) { const r = nsaCityKey(c); return { name: c[0], lat: c[2], lng: c[3], host: r ? r.h : c[1] === N.key ? nsaDef(N.id).host[0] : c[1] }; }
+    return null;
+}
+// the nearest government-held city to your ground (the default target of an offensive)
+function nsaNearestGovCity(hostPref) {
+    const N = state.nsa, me = N.key, d = nsaDef(N.id); let best = null, bd = 1e9;
+    const ref = nsaHome();
+    CITIES.forEach(c => {
+        if (!N.fronts.includes(c[1]) || (hostPref && c[1] !== hostPref)) return;
+        if (N.id === 'polisario' && !(c[2] < 27.7 && c[3] < -8.6)) return;
+        const r = nsaCityKey(c); if (!r || r.k !== 'GOV' || (hostPref && r.h !== hostPref)) return;
+        const dd = km(ref, { lat: c[2], lng: c[3] }); if (dd < bd) { bd = dd; best = { name: c[0], lat: c[2], lng: c[3], host: r.h }; }
+    });
+    return best;
+}
+// the middle of your ground (or your HQ)
+function nsaHome() {
+    const N = state.nsa, d = N && nsaDef(N.id); if (!d) return { lat: 0, lng: 0 };
+    let la = 0, ln = 0, k = 0;
+    N.fronts.forEach(h => { const ov = (state.control || {})[h], G = gridOf(h); if (!G) return; G.cells.forEach(c => { if (cellOwnerG(h, c) === N.key) { la += c.lat; ln += c.lng; k++; } }); });
+    if (k >= 3) {      // the held cell closest to the centroid (a C-shaped area's centroid can lie outside it)
+        const m = { lat: la / k, lng: ln / k }; let best = null, bd = 1e9;
+        N.fronts.forEach(h => { const G = gridOf(h); if (G) G.cells.forEach(c => { if (cellOwnerG(h, c) === N.key) { const dd = km(m, c); if (dd < bd) { bd = dd; best = c; } } }); });
+        const dBase = km(m, { lat: d.base[0], lng: d.base[1] });
+        if (best && dBase > 400) return { lat: best.lat, lng: best.lng };
+    }
+    return { lat: d.base[0], lng: d.base[1] };
+}
+function nsaOrderOf(text) {
+    const N = state.nsa; if (!N) return null;
+    const s = ' ' + String(text).toLowerCase() + ' ', me = N.key;
+    const base = { targets: [], scale: /\b(massive|major|large|full|heavy|big|all.out)\b/.test(s) ? 1.5 : /\b(limited|small|modest|quiet|minor)\b/.test(s) ? 0.6 : 1, covert: false, blocs: [], kind: 'nso' };
+    // the underground network: "build a safehouse in Nyala", "set up a hidden camp", "open a clinic in Raqqa"
+    if (BUILD_RX.test(s) || /\b(dig|hide|set up|open|establish|build)\b/.test(s)) {
+        const bt = NSA_BUILD_RX.find(([, rx]) => rx.test(s));
+        if (bt && !/\b(recruit|offensive|attack|raid)\b/.test(s)) return { ...base, cat: 'construction', kind: 'build', siteType: bt[0], covert: true, intel: null, nsaBuild: true };
+    }
+    const act = (NSA_ACT_RX.find(([, rx]) => rx.test(s)) || [])[0];
+    if (!act) return null;
+    const named = detectCountries(text).map(f => f.iso).filter(i => i !== me && WORLD[i]);
+    const city = nsaCityIn(text);
+    const o = { ...base, cat: NSA_CAT[act], act, nsa: {} };
+    if (['recog', 'patron'].includes(act)) {
+        const x = named.find(i => !N.fronts.includes(i)) || (act === 'patron' ? nsaDef(N.id).patrons.find(i => WORLD[i]) : null);
+        if (!x) return act === 'recog' ? { ...o, nsa: { missing: 'Name the state you want recognition from — e.g. "Ask Russia to recognise us".' } } : null;
+        o.targets = [{ iso: x, stance: 'friendly' }];
+    } else if (act === 'talks') {
+        const x = named.find(i => N.fronts.includes(i)) || (named.length ? null : N.gov);
+        if (!x) return null;           // talks with a third country: the ordinary diplomacy engine
+        o.targets = [{ iso: x, stance: 'neutral' }];
+    } else if (['raid', 'offensive', 'seize'].includes(act)) {
+        const foreign = named.filter(i => !N.fronts.includes(i));
+        if (foreign.length && !city) return null;      // "strike Israel", "attack shipping": ordinary military orders
+        const tgt = city || nsaNearestGovCity();
+        if (tgt) { o.nsa.target = { name: tgt.name, lat: tgt.lat, lng: tgt.lng }; o.nsa.host = tgt.host; }
+        o.nsa.host = o.nsa.host || N.gov;
+        o.targets = [{ iso: o.nsa.host, stance: 'hostile' }];
+        o.loc = tgt ? { place: tgt.name, host: tgt.host, lat: tgt.lat, lng: tgt.lng } : undefined;
+    } else if (act === 'recruit') {
+        const m = s.replace(/,(?=\d{3})/g, '').match(/(\d+(?:\.\d+)?)\s*(k|thousand)?\s*(new\s+)?(fighters?|men|recruits?|militia\w*|volunteers?|troops|soldiers|youths?)/);
+        let n = m ? Math.round(+m[1] * (m[2] ? 1000 : 1)) : /\bcells?\b/.test(s) ? 150 * (+((s.match(/(\d+)\s*cells?/) || [])[1]) || 1) : 1000;
+        o.nsa.n = clamp(n, 50, 20000);
+    }
+    return o;
+}
+{
+    const _co = classifyOrder;
+    classifyOrder = function (text) {
+        if (nsaActive()) { try { const o = nsaOrderOf(text); if (o) return o; } catch (e) { console.warn('nsa order', e); } }
+        return _co.apply(this, arguments);
+    };
+    const _po = planOrder;
+    planOrder = function (text) {
+        const o = _po.apply(this, arguments);
+        if (!o || !state.nsa) return o;
+        if (o.nsaBuild) { try { nsaPlaceBuild(o); } catch (e) { console.warn('nsa build place', e); } return o; }
+        if (o.kind !== 'nso') return o;
+        const N = state.nsa, n = nationIso(N.key), mo = Math.max(n.gdp, 2e8) / 12, dc = D().cost || 1;
+        const C = { recruit: (o.nsa.n || 1000) * 1500, offensive: Math.max(2e6, N.fighters * 25 * o.scale), seize: Math.max(2e6, N.fighters * 30 * o.scale), raid: 1.5e6 * o.scale, services: mo * 0.02 * o.scale, propaganda: 0.6e6 * o.scale, smuggle: 2e6 };
+        o.cost = C[o.act] ? Math.max(1e6, Math.round(C[o.act] * dc)) : 0;
+        const Dd = { recruit: [15, 45], offensive: [3, 6], seize: [2, 5], raid: [2, 5], smuggle: [7, 14], extort: [3, 7], ransom: [5, 12], propaganda: [5, 10], services: [10, 20], patron: [5, 12], recog: [7, 20], talks: [5, 14], lielow: [1, 2], declare: [1, 1] }[o.act] || [3, 7];
+        o.days = o.act === 'recruit' ? clamp(Math.round(15 + (o.nsa.n || 1000) / 400), 15, 45) : rint(Dd[0], Dd[1]);
+        if (o.loc) o.eta = fmtDate(dateIn(o.days));
+        return o;
+    };
+    const _ro = resolveOrder;
+    resolveOrder = function (o) { if (o && o.kind === 'nso') return nsaResolve(o); return _ro.apply(this, arguments); };
+    // things only a state can do
+    const _vo = socValidateOrder;
+    socValidateOrder = function (o) {
+        const bad = nsaValidate(o); if (bad) return bad;
+        return _vo.apply(this, arguments);
+    };
+}
+function nsaValidate(o) {
+    if (!nsaActive() || !o) return null;
+    const N = state.nsa, d = nsaDef(N.id), sn = esc(d.name);
+    const no = why => `⛔ ${why} <span class="text-slate-400">${sn} is an armed movement, not a state — see 🏴 Movement for what you can do.</span>`;
+    if (o.kind === 'nso') {
+        if (o.nsa && o.nsa.missing) return '⛔ ' + esc(o.nsa.missing);
+        if (o.act === 'ransom' && !NSA_RANSOM.has(N.id)) return no(`Kidnapping for ransom is not how ${sn} operates — its leadership would never allow it.`);
+        if (o.act === 'recruit' && !nsaMySites(['safehouse', 'nsa_camp'], true).length) return no('You need a safehouse or hidden camp to form and train new cells. Build one first ("Build a safehouse in …").');
+        if (o.act === 'recog' && o.targets[0] && N.recog.includes(o.targets[0].iso)) return `⛔ ${esc(shortName(o.targets[0].iso))} already recognises you.`;
+        if (['recog', 'patron'].includes(o.act) && o.targets[0] && (N.asked[o.act + o.targets[0].iso] || -999) > state.dayIndex - 45) return `⛔ You asked ${esc(shortName(o.targets[0].iso))} recently. Give it time (${45 - (state.dayIndex - N.asked[o.act + o.targets[0].iso])} days) or improve relations first.`;
+        return null;
+    }
+    if (o.cat === 'construction' && o.kind === 'build' && !SITE_TYPES[o.siteType]?.nso) return no('No ministries, contractors or state budget: you cannot build state infrastructure. Build safehouses, hidden camps, workshops, checkpoints or clinics.');
+    if (o.kind === 'policy') return no('There is no state budget, tax office or central bank to give orders to. Set extortion, smuggling and aid to locals in Movement → Illicit economy.');
+    if (o.cat === 'economy' && ['revenue', 'borrow', 'tariff', 'tradeDeal', 'trade', 'spend'].includes(o.kind)) return no('Governments do not sign trade deals, loans or tariffs with an armed group. Run smuggling routes and the black market instead.');
+    if (o.kind === 'unsc' || (/\b(join|membership|accede|apply)\b/i.test(o.text || '') && /\b(un|united nations|nato|eu|european union|african union|arab league|brics|asean|sco|opec|g20|g7|organi[sz]ation)\b/i.test(o.text || ''))) return no('International organisations admit states only — declare statehood first, then apply.');
+    if (o.kind === 'nuke') return no('You have no nuclear programme.');
+    if (o.cat === 'domestic' && o.kind === 'politics') return no('Movements do not hold elections or referendums.');
+    if (o.kind === 'move' || o.kind === 'withdraw') return no('Your fighters are organised in cells, not formations: order an offensive, a raid or "seize <town>".');
+    if (o.cat === 'military' && ['invasion', 'blockade'].includes(o.kind)) return no('You cannot invade or blockade another country. Fight the government you rebel against with offensives and raids.');
+    if (o.cat === 'military' && o.kind === 'arms') return no('You cannot ship arms to other states.');
+    return null;
+}
+// where a network build order goes: a named city, else your HQ area; on your own ground, contested ground, or covertly inside the host
+function nsaPlaceBuild(o) {
+    const N = state.nsa, d = nsaDef(N.id), city = nsaCityIn(o.text);
+    let at = city ? { lat: city.lat + rnd(-0.08, 0.08), lng: city.lng + rnd(-0.08, 0.08), place: city.name } : null;
+    if (!at) { const h = nsaHome(); const nc = nearestCity(h.lat, h.lng, 250); at = { lat: h.lat + rnd(-0.15, 0.15), lng: h.lng + rnd(-0.15, 0.15), place: nc && N.fronts.includes(nc.iso) ? nc.name : (d.hq || d.cities[0]) }; }
+    const r = canBuildAt(o.siteType, at.lat, at.lng);
+    o.loc = { host: N.key, lat: at.lat, lng: at.lng, place: r.ok ? (at.place || r.place) : at.place };
+    o.nsaBad = r.ok ? null : r.reason;
+    o.targets = [];
+    try { refreshBuildOrder(o, true); } catch (e) { }
+}
+{
+    const _cb = canBuildAt;            // the network: hidden sites on your ground, in contested areas, or covertly in the host country
+    canBuildAt = function (key, lat, lng, opts) {
+        if (!nsaActive()) return _cb.apply(this, arguments);
+        const N = state.nsa, T = siteT(key);
+        if (!T.nso) return { ok: false, reason: `${T.name}: an armed movement cannot build state infrastructure — only safehouses, hidden camps, workshops, checkpoints and clinics.` };
+        let iso = null; try { iso = isoAtPoint({ lat, lng }); } catch (e) { }
+        if (!iso) return { ok: false, reason: 'That spot is open sea — pick a place on land.' };
+        if (!N.fronts.includes(iso)) return { ok: false, reason: `${T.name}: only inside ${N.fronts.map(shortName).join(' or ')} — your fighters have no network in ${shortName(iso)}.` };
+        let k = 'GOV'; try { k = keyAtPoint(iso, { lat, lng }); } catch (e) { }
+        const held = k === N.key;
+        if (!held && k !== 'GOV') return { ok: false, reason: `That area is held by ${ctlMeta(k, iso)[0]}.` };
+        if (key === 'nsa_checkpoint' && !held) return { ok: false, reason: 'A checkpoint needs a road you hold — pick a spot inside your area.' };
+        if (key === 'nsa_clinic' && !held) return { ok: false, reason: 'Clinics and schools serve the people under your control — pick a spot inside your area.' };
+        const nc = nearestCity(lat, lng, 150);
+        return { ok: true, host: N.key, own: true, covert: !held, place: nc && N.fronts.includes(nc.iso) ? nc.name : `${regionWord(iso, lat, lng)} ${shortName(iso)}` };
+    };
+    const _sfo = startSiteFromOrder;
+    startSiteFromOrder = function (o) {
+        const site = _sfo.apply(this, arguments);
+        try { if (site && SITE_TYPES[site.type] && SITE_TYPES[site.type].nso) { site.hidden = true; site.specs = Object.assign({}, site.specs || {}, { Cover: 'Hidden', ...(SITE_TYPES[site.type].cap ? { Capacity: SITE_TYPES[site.type].cap.toLocaleString() + ' recruits in training' } : {}) }); updateSiteMarker(site); } } catch (e) { }
+        return site;
+    };
+    const _sp = sitePopupHTML;
+    sitePopupHTML = function (site) {
+        let h = _sp.apply(this, arguments);
+        try { if (site && SITE_TYPES[site.type] && SITE_TYPES[site.type].nso && site.owner === state.playerIso) h = h.replace(/<\/div>\s*$/, `<div class="sp-row" style="margin-top:4px"><span>Cover</span><span style="color:${site.exposed ? '#fca5a5' : '#86efac'}">${site.exposed ? '⚠ Exposed — the government knows where it is' : '● Hidden from the government'}</span></div></div>`); } catch (e) { }
+        return h;
+    };
+}
+function nsaResolve(o) {
+    const N = state.nsa, p = nsaP(), d = nsaDef(N.id), me = N.key, n = nationIso(me), day = state.dayIndex;
+    const effects = []; const fx = (txt, good) => effects.push({ txt, good });
+    if (!N || !p) { o.outcome = 'Failure'; o.effects = [{ txt: 'The movement no longer exists', good: false }]; return o; }
+    const tgt = o.targets[0] && o.targets[0].iso, tn = tgt ? shortName(tgt) : '';
+    let prob = clamp(0.6 + (n.stability - 50) / 300 + (D().prob || 0) - N.heat / 500, 0.1, 0.92);
+    if (o.act === 'recog' && tgt) prob = nsaRecogChance(tgt);
+    if (o.act === 'patron' && tgt) prob = nsaPatronChance(tgt);
+    if (o.act === 'talks') prob = clamp(0.3 + (p.legit - 40) / 200 + (nsaRatio(tgt || N.gov) - 1) * 0.08 - (fpOf(tgt || N.gov).style === 'hawk' ? 0.12 : 0) + (nsaDesignated() ? -0.12 : 0), 0.05, 0.75);
+    if (['offensive', 'seize', 'raid'].includes(o.act)) prob = clamp(0.35 + 0.25 * Math.tanh(Math.log(nsaRatio(o.nsa.host || N.gov))) + (n.stability - 50) / 300 + (N.arms || 0) - N.heat / 600, 0.1, 0.9);
+    const outcome = rollOutcome(prob), m = OUT_MULT[outcome], mE = Math.max(m, 0);
+    o.outcome = outcome;
+    switch (o.act) {
+        case 'recruit': {
+            const cap = nsaMySites(['safehouse', 'nsa_camp'], true).reduce((a, s) => a + (SITE_TYPES[s.type].cap || 0), 0);
+            let want = o.nsa.n || 1000; if (want > cap) { fx(`Your camps and safehouses can train ${cap.toLocaleString()} at a time`, null); want = cap; }
+            if (want > N.pool) { fx(`Only ${N.pool.toLocaleString()} willing recruits were available`, null); want = N.pool; }
+            const got = Math.max(0, Math.round(want * (outcome === 'Major success' ? 1.1 : outcome === 'Success' ? 1 : outcome === 'Partial' ? 0.6 : 0.3)));
+            N.fighters += got; N.pool = Math.max(0, N.pool - got); N.heat = clamp(N.heat + got / 1500, 0, 100);
+            fx(`${got.toLocaleString()} new fighters trained and formed into cells (now ${N.fighters.toLocaleString()})`, got > 0);
+            break; }
+        case 'offensive': case 'seize': {
+            const h = o.nsa.host || N.gov; nsaEnsureWar(h, o.act === 'seize' ? `your fighters move on ${o.nsa.target ? o.nsa.target.name : 'government towns'}` : 'your fighters launch an offensive');
+            const str = (o.act === 'seize' ? 0.9 : 0.6) + 0.5 * mE * o.scale;
+            N.ops.push({ type: o.act, host: h, target: o.nsa.target || null, str, until: day + (o.act === 'seize' ? 30 : 42) });
+            N.heat = clamp(N.heat + 6, 0, 100); N.coin = clamp((N.coin || 0) + 8, 0, 100);
+            const lost = Math.round(N.fighters * (m > 0 ? 0.004 : 0.012)); N.fighters -= lost;
+            fx(`${o.act === 'seize' ? 'Assault' : 'Offensive'} ${o.nsa.target ? 'toward ' + o.nsa.target.name + ' ' : ''}under way for ${o.act === 'seize' ? 30 : 42} days (strength ${str.toFixed(1)}) — the front moves faster in your favour`, mE > 0);
+            fx(`${lost.toLocaleString()} fighters lost in the first assaults`, false);
+            try { nsaFrontTick(true); refreshMapView(); } catch (e) { }
+            break; }
+        case 'raid': {
+            const h = o.nsa.host || N.gov; nsaEnsureWar(h, 'your fighters raid government positions');
+            const wk = nsaMySites(['nsa_workshop'], true).length;
+            if (mE > 0) {
+                const loot = Math.round(rnd(2e6, 12e6) * mE * o.scale * (1 + 0.2 * wk)); n.treasury += loot; N.arms = clamp((N.arms || 0) + 0.02 * mE, 0, 0.3);
+                state.milTrend = state.milTrend || {}; state.milTrend[h] = clamp((state.milTrend[h] || 1) * (1 - 0.004 * mE), 0.3, 2);
+                fx(`Raid ${o.nsa.target ? 'near ' + o.nsa.target.name : ''} succeeds: ${formatVal(loot)} in cash, fuel and weapons seized; ${shortName(h)}'s forces weakened`, true);
+                const G = gridOf(h);
+                if (G && o.nsa.target && outcome === 'Major success') { const x = G.cells.filter(c => cellOwnerG(h, c) === 'GOV' && cellNeighbors(G, c).some(y => cellOwnerG(h, y) === me)).sort((a, b) => km(o.nsa.target, a) - km(o.nsa.target, b))[0]; if (x) { setCell(h, x, me); TERR.cache = {}; fx(`Your fighters hold the ground they raided (+${CELL_KM2} km²)`, true); try { refreshMapView(); } catch (e) { } } }
+            } else { const lost = rint(150, 700); N.fighters = Math.max(0, N.fighters - lost); fx(`The raid was beaten off: ${lost} fighters lost`, false); }
+            N.heat = clamp(N.heat + 3, 0, 100);
+            break; }
+        case 'smuggle': {
+            if (mE > 0) { N.routes = Math.min(4, (N.routes || 0) + 1); fx(`New ${(NSA_TRADE[N.id] || ['contraband'])[0]} route opened: smuggling income +25% (${N.routes} extra routes)`, true); }
+            else { N.seized = day + 30; fx('The new route was betrayed: the first shipment was seized', false); }
+            N.heat = clamp(N.heat + 4, 0, 100);
+            break; }
+        case 'extort': {
+            const cash = Math.round(Math.max(n.gdp, 2e8) / 12 * 0.04 * Math.max(mE, 0.2) * o.scale); n.treasury += cash;
+            n.stability = clamp(n.stability - 3, 0, 100); p.legit = clamp(p.legit - 2, 0, 100); N.heat = clamp(N.heat + 1, 0, 100);
+            fx(`${formatVal(cash)} collected from traders and trucks`, true); fx('Support −3, legitimacy −2: people resent the levies', false);
+            break; }
+        case 'ransom': {
+            if (mE > 0) { const cash = Math.round(rnd(3e6, 20e6) * mE); n.treasury += cash; fx(`Hostages released for ${formatVal(cash)} in ransom`, true); }
+            else fx('The kidnapping went wrong — no ransom paid', false);
+            N.heat = clamp(N.heat + 6, 0, 100); p.legit = clamp(p.legit - 5, 0, 100);
+            const w = [...NSA_WEST].filter(x => WORLD[x]); if (w.length) { const x = pick(w); addRel(me, x, -6); fx(`${shortName(x)} condemns the abduction (relations −6); heat +6, legitimacy −5`, false); }
+            break; }
+        case 'propaganda': {
+            n.stability = clamp(n.stability + 3 * mE * o.scale, 0, 100); p.legit = clamp(p.legit + 2 * mE, 0, 100); N.pool += Math.round(nsaTerr().pop * 0.0008 * mE);
+            N.heat = clamp(N.heat + 1, 0, 100);
+            fx(mE > 0 ? `Support +${(3 * mE * o.scale).toFixed(0)}, legitimacy +${(2 * mE).toFixed(0)}, more volunteers` : 'The campaign fell flat', mE > 0);
+            break; }
+        case 'services': {
+            n.stability = clamp(n.stability + 5 * mE * o.scale, 0, 100); p.legit = clamp(p.legit + 3 * mE, 0, 100);
+            fx(`Food, fuel and clinics for the people you control: support +${(5 * mE * o.scale).toFixed(0)}, legitimacy +${(3 * mE).toFixed(0)}`, mE > 0);
+            break; }
+        case 'lielow': {
+            N.low = day + 30; N.heat = clamp(N.heat - 15 * Math.max(mE, 0.4), 0, 100); N.ops = [];
+            fx(`Cells go quiet for 30 days: heat −${Math.round(15 * Math.max(mE, 0.4))}, income −30%, no offensives`, true);
+            break; }
+        case 'patron': {
+            N.asked['patron' + tgt] = day;
+            if (mE > 0) {
+                p.aid[tgt] = clamp((p.aid[tgt] || 0) + 0.2 * mE, 0, 1); if (!p.patrons.includes(tgt)) p.patrons.push(tgt);
+                const gift = Math.round(clamp(nationIso(tgt).gdp * 1e-5, 1e6, 80e6) * mE); n.treasury += gift; N.arms = clamp((N.arms || 0) + 0.03 * mE, 0, 0.3);
+                addRel(me, tgt, 4); addRel(N.gov, tgt, -8);
+                fx(`${tn} agrees: ${formatVal(gift)} and a weapons shipment now, regular support ${Math.round(p.aid[tgt] * 100)}%`, true);
+                fx(`${shortName(N.gov)} protests ${tn}'s support for you (their relations −8)`, null);
+                try { queueMessage(tgt, pick([`We will help you. A shipment is on its way; use it wisely.`, `Our support is approved. Do not make us regret it.`])); } catch (e) { }
+            } else { addRel(me, tgt, -2); fx(`${tn} turns you down`, false); try { queueMessage(tgt, nsaRefusalLine(tgt, 'support')); } catch (e) { } }
+            break; }
+        case 'recog': {
+            N.asked['recog' + tgt] = day;
+            if (mE > 0) nsaGrantRecog(tgt, fx);
+            else { addRel(me, tgt, -2); fx(`${tn} declines to recognise you`, false); try { queueMessage(tgt, nsaRefusalLine(tgt, 'recog')); } catch (e) { } }
+            break; }
+        case 'talks': {
+            const h = tgt || N.gov, c = nsaConflictWith(h);
+            if (mE > 0) {
+                p.legit = clamp(p.legit + 6 * mE, 0, 100); n.stability = clamp(n.stability + 3, 0, 100); N.coin = Math.max(0, (N.coin || 0) - 15); addRel(me, h, 15);
+                if (c && ['war', 'insurgency'].includes(c.type)) { c.type = 'ceasefire'; c.intensity = Math.min(c.intensity, 25); c.ceasefireByPlayer = true; c.ceasefireDay = day; fx(`${shortName(h)} agrees to a ceasefire in the ${c.name}`, true); }
+                else fx(`Talks with ${shortName(h)} open; tension eases`, true);
+                if (outcome === 'Major success' && nsaTerr().share > 0.2 && p.legit > 50) { p.legit = clamp(p.legit + 8, 0, 100); fx(`${shortName(h)} accepts your self-administration in the areas you hold (legitimacy +8) — but not independence`, true); }
+                fx(`Legitimacy +${Math.round(6 * mE)}, support +3`, true);
+            } else { addRel(me, h, -3); fx(`${shortName(h)} refuses to negotiate with "${d.short}" and vows to fight on`, false); }
+            break; }
+        case 'declare': {
+            const S = nsaStatehoodStatus();
+            if (S.unlocked) { const nm = (o.text.match(/\b(?:as|called|named)\s+(?:the\s+)?([A-Z][^.,;]{2,40})/) || [])[1]; nsaDeclare(nm ? nm.trim() : null); fx('Independence declared — see the news', true); o.outcome = 'Success'; }
+            else { o.outcome = 'Failure'; fx(`Not yet: ${nsaMissing(S).join('; ')}`, false); }
+            break; }
+    }
+    n.treasury = Math.max(0, n.treasury);
+    nsaSyncStrength();
+    o.effects = effects; o.doneDay = day;
+    try { updateEconomyUI(); } catch (e) { }
+    return o;
+}
+function nsaMissing(S) {
+    const out = [];
+    if (!S.terr.cond) out.push(`hold ≥33% of your host or ${S.terr.needKm.toLocaleString()} km² (now ${S.terr.km2.toLocaleString()} km²)`);
+    else if (!S.terr.ok) out.push(`keep it for ${S.terr.needDays - S.terr.days} more days`);
+    if (!S.recog.ok) out.push(`recognition by 10 states incl. a permanent Security Council member, or by 20 (now ${S.recog.n}${S.recog.p5 ? ', ' + S.recog.p5 + ' P5' : ''})`);
+    if (!S.legit.ok) out.push(`legitimacy ≥50 and support ≥40 (now ${S.legit.legit} / ${S.legit.sup}%)`);
+    return out;
+}
+function nsaRecogChance(x) {
+    const N = state.nsa, p = nsaP(), me = N.key, host = N.gov;
+    if (N.recog.includes(x)) return 0.95;
+    if (N.fronts.includes(x) || !WORLD[x] || NON_SOVEREIGN.has(x)) return 0.02;
+    let c = 0.04 + Math.max(0, getRel(me, x)) / 140 + (p.patrons.includes(x) && (p.aid[x] || 0) > 0.3 ? 0.25 : 0) + (getRel(x, host) < -30 ? 0.15 : 0) + (p.legit - 50) / 250 + N.recog.length * 0.006 + (nsaTerr().share >= 0.5 ? 0.05 : 0);
+    if (NSA_SEP_FEAR.has(x)) c -= 0.2;
+    if (nsaDesignated()) c -= NSA_WEST.has(x) ? 0.4 : 0.1;
+    if (UNSC_P5.includes(x)) c -= 0.08;
+    try { if (fpOf(x).style === 'dove') c -= 0.03; } catch (e) { }
+    return clamp(c, 0.01, 0.85);
+}
+function nsaPatronChance(x) {
+    const N = state.nsa, p = nsaP(), me = N.key;
+    let c = 0.15 + getRel(me, x) / 120 + (p.patrons.includes(x) ? 0.35 : 0) + (getRel(x, N.gov) < -20 ? 0.15 : 0) - (getRel(x, N.gov) > 40 ? 0.25 : 0);
+    if (nsaDesignated() && NSA_WEST.has(x)) c -= 0.6;
+    return clamp(c, 0.02, 0.9);
+}
+function nsaGrantRecog(x, fx) {
+    const N = state.nsa, me = N.key; if (N.recog.includes(x)) return;
+    N.recog.push(x); addRel(me, x, 10); addRel(N.gov, x, -20);
+    const p = nsaP(); if (p) p.legit = clamp(p.legit + 3, 0, 100);
+    const t = `🏳 ${flagHTML(nationIso(x), 10)} <b>${esc(shortName(x))} recognises ${esc(state.player)}</b> — ${N.recog.length} state${N.recog.length > 1 ? 's' : ''} now. ${esc(shortName(N.gov))} recalls its ambassador in protest.`;
+    if (fx) fx(`${shortName(x)} recognises you (${N.recog.length} states); legitimacy +3; ${shortName(N.gov)} furious (−20 with ${shortName(x)})`, true);
+    logEvent(t, 'good');
+}
+function nsaRefusalLine(x, what) {
+    const f = (() => { try { return fpOf(x); } catch (e) { return { style: 'firm' }; } })(), d = nsaDef(state.nsa.id);
+    if (nsaDesignated() && NSA_WEST.has(x)) return `We do not deal with terrorist organisations. ${d.short} must lay down its arms.`;
+    if (what === 'recog') return { hawk: `Recognition? Not while you are an armed gang inside ${shortName(state.nsa.gov)}.`, firm: `We respect the territorial integrity of ${shortName(state.nsa.gov)}. Recognition is not on the table.`, pragmatic: `Recognition has a price you cannot pay yet. Hold your ground and we can talk again.`, dove: `We support a negotiated settlement inside ${shortName(state.nsa.gov)}'s borders, not secession.` }[f.style] || 'Not at this time.';
+    return { hawk: `Why would we arm you? Show us you can win first.`, firm: `We cannot support an armed group fighting a recognised government.`, pragmatic: `Our help would cost us too much with ${shortName(state.nsa.gov)} right now.`, dove: `We only support peaceful solutions.` }[f.style] || 'Not at this time.';
+}
+
+// ---- statehood: the tables a declared state changes (applied on declaration and again on load) ----
+function nsaStatehoodStatic(d, N) {
+    const S = NSA_REG.snap, st = N.statehood, key = nsaKeyOf(d);
+    Object.keys(st.hostCut || {}).forEach(h => {                    // the host loses the people and the output
+        if (!WORLD[h]) return; if (!S.hostRows[h]) S.hostRows[h] = WORLD[h].slice();
+        const c = st.hostCut[h]; WORLD[h][2] = +Math.max(0.01, WORLD[h][2] - c.gdpB).toFixed(3); WORLD[h][3] = +Math.max(0.001, WORLD[h][3] - c.popM).toFixed(4);
+    });
+    (st.cities || []).forEach(nm => { const i = CITIES.findIndex(c => c[0] === nm && c[1] !== key && (d.host.includes(c[1]) || c[1] === d.claim)); if (i >= 0) { S.cities.push([i, CITIES[i][1]]); CITIES[i][1] = key; } });
+    d.host.forEach(h => { const k = h + '|' + key; if (GROUP_AT[k]) { if (!(k in S.groupAt)) S.groupAt[k] = GROUP_AT[k]; delete GROUP_AT[k]; } });   // its area is a country now, not a group
+    const cm = CTRL_META[key] || ['', d.color || '#94a3b8', ''];
+    CTRL_META[key] = [st.name, cm[1], `${st.name}: independent state declared ${st.date}`];
+    nameToIso[st.name] = key; S.nameIso = st.name;
+    try { Object.keys(_milBaseCache).forEach(k => { if (k === key || d.host.includes(k)) delete _milBaseCache[k]; }); } catch (e) { }
+}
+function nsaDefaultStateName(d) {
+    const nm = (d.state_name || d.name).replace(/\s*\([^)]*\)\s*/g, ' ').trim();
+    return /^(Sudan|Yemen|Somalia|Sahel)$/.test(nm) ? ({ rsf: 'Republic of Darfur', houthi: 'Yemen Arab Republic', shabaab: 'Islamic Emirate of Somalia', jnim: 'Emirate of the Sahel' }[d.id] || nm) : nm;
+}
+const NSA_REGIME = { 'Democratic confederalism': 'hybrid', 'Kurdish autonomy': 'hybrid', 'Salafi-jihadism': 'theocracy', 'Zaidi Shia Islamism': 'theocracy', 'Shia Islamism': 'theocracy', 'Islamist nationalism': 'theocracy', 'Paramilitary power-seeking': 'junta', 'Military authority': 'junta', 'Criminal rule': 'autocracy', 'Drug trafficking': 'autocracy', 'Wa autonomy': 'one-party' };
+function nsaDeclare(nameIn) {
+    const N = state.nsa; if (!N || N.mode !== 'nso') return false;
+    const d = nsaDef(N.id), p = nsaP(), me = N.key, n = nationIso(me);
+    const S0 = nsaStatehoodStatus();
+    if (!S0.unlocked) { flashReply(`🏳 Not yet: ${esc(nsaMissing(S0).join('; '))}.`); return false; }
+    let name = String(nameIn || (document.getElementById('nsa-state-name') || {}).value || nsaDefaultStateName(d)).replace(/[<>"]/g, '').trim().slice(0, 48) || nsaDefaultStateName(d);
+    if (WORLD_BY_NAME[normName(name)] && WORLD_BY_NAME[normName(name)] !== me) name = name + ' (' + d.short + ')';
+    const T = nsaTerr(), old = state.player;
+    let geo = null; try { geo = nsaBuildGeo(); } catch (e) { console.warn('statehood map', e); }
+    // the host gives up the people and output of the land
+    const hostCut = {};
+    d.host.forEach(h => {
+        if (!WORLD[h] || !T.by[h]) return; const f = T.km2 ? T.by[h].km2 / T.km2 : 1 / d.host.length, hn = nationIso(h);
+        const popH = Math.min(T.pop * f, hn.pop * 0.9), gdpH = Math.min(T.gdp * f, hn.gdp * 0.9);
+        hostCut[h] = { popM: popH / 1e6, gdpB: gdpH / 1e9 };
+        try { const hs = socOf(h); hs.debt *= Math.max(0.1, 1 - gdpH / Math.max(hn.gdp, 1)); } catch (e) { }
+        hn.pop -= popH; hn.gdp -= gdpH;
+    });
+    const cities = []; try { CITIES.forEach(c => { if (!N.fronts.includes(c[1])) return; const r = nsaCityKey(c); if (r && r.k === me && !cities.includes(c[0])) cities.push(c[0]); }); } catch (e) { }
+    N.statehood = { name, day: state.dayIndex, date: fmtDate(state.date), from: old, geo, geoV: 1, hostCut, cities, recog0: N.recog.length, cellSig: nsaCellSig() };
+    N.mode = 'state'; N.gdpB = T.gdp / 1e9; N.popM = T.pop / 1e6; N.ops = [];
+    nsaRegister(d, N);
+    // you are now that state
+    state.nations[name] = state.nations[old] || n; if (name !== old) delete state.nations[old];
+    state.player = name; if (state.target === old) state.target = name;
+    const nn = nationIso(me); nn.pop = T.pop; nn.gdp = T.gdp;
+    try { delete state.soc[me]; const s = socOf(me); s.debt = nn.gdp * 0.12; s.debtPct0 = 12; s.appr0 = nn.stability; s.flags.flow = 0; } catch (e) { console.warn('statehood soc', e); }
+    state.regimes = state.regimes || {}; state.regimes[me] = NSA_REGIME[d.ideology] || (/breakaway|autonomous|regional|separatist|self/.test(d.kind + d.ideology) ? 'hybrid' : 'autocracy');
+    try { state.pol = null; polInit(); } catch (e) { }
+    p.stateNow = me;
+    try { nsaConvertArmy(); } catch (e) { console.warn('statehood army', e); }
+    // the world reacts
+    N.recog.forEach(x => addRel(me, x, 10));
+    N.fronts.forEach(h => addRel(me, h, -30));
+    Object.keys(WORLD).forEach(x => { if (x === me || NON_SOVEREIGN.has(x) || N.recog.includes(x) || !(WORLD[x][3] > 0.5)) return; if (NSA_SEP_FEAR.has(x) || getRel(x, N.gov) > 50) addRel(me, x, -6); });
+    try { rankCache.key = null; fpOf._c = {}; Object.keys(BASE_REL_CACHE).forEach(k => { if (k.includes(me)) delete BASE_REL_CACHE[k]; }); } catch (e) { }
+    try { Object.keys(BORDER_CACHE).forEach(k => delete BORDER_CACHE[k]); Object.keys(CELL_CACHE).forEach(k => delete CELL_CACHE[k]); } catch (e) { }
+    TERR.cache = {};
+    nsaGeoSoon();
+    logEvent(`🏳 <b>Independence: ${esc(name)}.</b> ${esc(d.name)} proclaims a sovereign state on the ${T.km2.toLocaleString()} km² it holds (${formatPop(T.pop)} people, ${formatVal(T.gdp)} of output) in ${esc(d.host.map(shortName).join(' & '))}. ${N.recog.length} state${N.recog.length === 1 ? '' : 's'} recognise${N.recog.length === 1 ? 's' : ''} it at once; ${esc(shortName(N.gov))} calls it an illegal partition.`, 'good');
+    try { queueMessage(N.gov, `${shortName(N.gov)} will never accept the partition of its territory. Your so-called state is an occupation.`); } catch (e) { }
+    N.recog.slice(0, 3).forEach(x => { try { queueMessage(x, `Congratulations on your independence. ${shortName(x)} looks forward to full diplomatic relations with ${name}.`); } catch (e) { } });
+    nsaBodyClass();
+    try { updateTopbarNation(); updateEconomyUI(); renderDiplomacyMenu(); renderWarButton(); renderSituation(); } catch (e) { }
+    try { closeSociety(); } catch (e) { }
+    return true;
+}
+// fighters become the new state's army: hidden camps become bases, cells become infantry brigades
+function nsaConvertArmy() {
+    const N = state.nsa, me = N.key;
+    nsaMySites(['nsa_camp'], false).forEach(s => {
+        if (['destroyed', 'cancelled'].includes(s.status)) return;
+        s.type = 'base'; s.name = String(s.name).replace(/hidden training camp|hidden camp|training camp|camp/i, 'Garrison'); s.level = Math.max(1, s.level || 1); s.hidden = false; delete s.exposed;
+        s.specs = Object.assign({}, s.specs, { Cover: 'Open military base' }); try { updateSiteMarker(s); } catch (e) { }
+    });
+    if (typeof army !== 'function' || typeof newUnit !== 'function' || typeof BRIG === 'undefined' || !BRIG.infantry) return;
+    const A = army(); A.init = me;
+    let bases = myBases();
+    if (!bases.length) { const h = nsaHome(); bases = [addSite({ name: `${(capitalOf(me) || {}).label || 'Capital'} Military District HQ`, type: 'base', owner: me, host: me, lat: h.lat + 0.1, lng: h.lng + 0.1, place: (capitalOf(me) || {}).label, status: 'active', progress: 1, specs: { Role: 'Command & capital defence' }, notes: [], fromGame: true, level: 2 })]; }
+    let left = N.fighters, i = 0;
+    while (left >= 400 && i < 40) {
+        const t = Math.min(BRIG.infantry.troops, left), b = bases[i % bases.length];
+        const u = newUnit('infantry', t, { lat: b.lat, lng: b.lng }, null, 0);
+        if (baseLoad(b) + u.troops <= baseCap(b)) u.baseId = b.id; else { u.status = 'deployed'; u.lat += rnd(-0.3, 0.3); u.lng += rnd(-0.3, 0.3); }
+        left -= t; i++;
+    }
+    A.inv0 = null; try { A.p0 = armyPower(); armyRefreshMap(); } catch (e) { }
+}
+function nsaCellSig() { const N = state.nsa; let s = ''; (N ? N.fronts : []).forEach(h => { const ov = (state.control || {})[h] || {}; s += h + ':' + Object.keys(ov).filter(k => ov[k] === N.key).length + ';'; }); return s; }
+// after independence: the old networks wind down, recognition keeps coming, the border follows the front once a month
+function nsaStateMonthly() {
+    const N = state.nsa, st = N.statehood, p = nsaP(), me = N.key, n = nationIso(me); if (!st || !p) return;
+    const mo = (state.dayIndex - st.day) / 30;
+    if (mo < 12) { const I = nsaIncomeCalc(), v = Math.max(0, (I.black + I.smuggle + I.extort + I.aid) * 0.5 * (1 - mo / 12)); if (v > 0) { n.treasury += v; logEvent(`🏴 The movement's old networks still bring in ${formatVal(v)} this month (winding down as the state takes over).`, 'neutral'); } }
+    Object.keys(WORLD).forEach(x => {
+        if (x === me || NON_SOVEREIGN.has(x) || !(WORLD[x][3] > 0.05) || N.recog.includes(x) || N.fronts.includes(x)) return;
+        const r = getRel(me, x); if (r > 35 && !NSA_SEP_FEAR.has(x) && Math.random() < 0.02 + r / 3000) nsaGrantRecog(x);
+    });
+    const sig = nsaCellSig();
+    if (sig !== st.cellSig) { st.cellSig = sig; try { const g = nsaBuildGeo(); if (g) { st.geo = g; st.geoV = (st.geoV || 1) + 1; nsaGeoApply(); } } catch (e) { console.warn('statehood border', e); } }
+}
+
+// ---- the new state's borders: drawn from the control map (provinces, control points and the ~28 km squares), traced into polygons ----
+function nsaOwnerRaster(iso, MX) {
+    const geom = geomFor(iso); if (!geom) return null;
+    const crings = geomRings(geom); if (!crings.length) return null;
+    const [w, s, e, n] = ringsBox(crings); if (e - w > 200) return null;
+    const my = la => Math.log(Math.tan(Math.PI / 4 + la * Math.PI / 360)), yN = my(n), yS = my(s), asp = (yN - yS) / ((e - w) * Math.PI / 180);
+    let W, H; if (asp <= 1) { W = MX; H = Math.max(8, Math.ceil(W * asp)); } else { H = MX; W = Math.max(8, Math.ceil(H / asp)); }
+    const PX = x => (x - w) / (e - w) * W, PY = y => (yN - my(y)) / (yN - yS) * H;
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const cx = cv.getContext('2d', { willReadFrequently: true });
+    const fill = polys => { cx.clearRect(0, 0, W, H); cx.fillStyle = '#000'; polys.forEach(rings => { cx.beginPath(); rings.forEach(r => r.forEach((p, k) => k ? cx.lineTo(PX(p[0]), PY(p[1])) : cx.moveTo(PX(p[0]), PY(p[1])))); cx.fill('evenodd'); }); return cx.getImageData(0, 0, W, H).data; };
+    const mask = fill([crings]);
+    const keys = ['GOV'], ki = { GOV: 0 }, K = k => (k in ki) ? ki[k] : (ki[k] = keys.push(k) - 1);
+    const g = new Uint8Array(W * H);
+    const latRow = new Float64Array(H); for (let j = 0; j < H; j++) latRow[j] = (2 * Math.atan(Math.exp(yN - (j + 0.5) / H * (yN - yS))) - Math.PI / 2) * 180 / Math.PI;
+    const lngCol = new Float64Array(W); for (let i = 0; i < W; i++) lngCol[i] = w + (i + 0.5) / W * (e - w);
+    (CTRL_LAYERS[iso] || []).forEach(Ly => {
+        const P = (Ly.adm || Ly.poly || Ly.ds) ? layerPolys(Ly) : null, lm = P ? fill(P) : null;
+        const pk = Ly.pts ? Ly.pts.map(p => K(p[0])) : null, kx = Math.cos((s + n) / 2 * Math.PI / 180);
+        const px = Ly.pts ? Ly.pts.map(p => p[2] * kx) : null, py = Ly.pts ? Ly.pts.map(p => p[1]) : null, kk = Ly.k ? K(Ly.k) : 0;
+        for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+            const o = j * W + i; if (mask[o * 4 + 3] < 20) continue;
+            if (lm && lm[o * 4 + 3] < 128) continue;
+            if (Ly.bbox && !inBox(Ly.bbox, lngCol[i], latRow[j])) continue;
+            if (pk) { const x = lngCol[i] * kx, y = latRow[j]; let b = 0, bd = 1e18; for (let q = 0; q < pk.length; q++) { const dd = (px[q] - x) ** 2 + (py[q] - y) ** 2; if (dd < bd) { bd = dd; b = q; } } g[o] = pk[b]; }
+            else g[o] = kk;
+        }
+    });
+    const ov = (state.control || {})[iso], G = ov && Object.keys(ov).length ? gridOf(iso) : null;
+    if (G) for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        const o = j * W + i; if (mask[o * 4 + 3] < 20) continue;
+        const k = ov[Math.floor(latRow[j] / G.gy) + '_' + Math.floor(lngCol[i] / G.gx)]; if (k) g[o] = K(k);
+    }
+    return { g, keys, mask, W, H, w, s, e, n, yN, yS };
+}
+// binary mask → rings around the pixels (inside on the right), simplified, as GeoJSON polygons in lng/lat
+function nsaTracePolys(M, R) {
+    const W = R.W, H = R.H, W1 = W + 1, nxt = new Map();
+    const at = (i, j) => i >= 0 && j >= 0 && i < W && j < H && M[j * W + i] === 1;
+    const add = (a, b) => { const L = nxt.get(a); if (L) L.push(b); else nxt.set(a, [b]); };
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        if (M[j * W + i] !== 1) continue;
+        if (!at(i, j - 1)) add(j * W1 + i, j * W1 + i + 1);
+        if (!at(i + 1, j)) add(j * W1 + i + 1, (j + 1) * W1 + i + 1);
+        if (!at(i, j + 1)) add((j + 1) * W1 + i + 1, (j + 1) * W1 + i);
+        if (!at(i - 1, j)) add((j + 1) * W1 + i, j * W1 + i);
+    }
+    const rings = [];
+    for (const [start, L0] of nxt) {
+        while (L0.length) {
+            const ring = []; let cur = start, dx = 0, dy = 0, guard = 0;
+            do {
+                const L = nxt.get(cur); if (!L || !L.length) break;
+                let k = 0;
+                if (L.length > 1) { const want = [-dy, dx]; k = Math.max(0, L.findIndex(v => (v % W1) - (cur % W1) === want[0] && Math.floor(v / W1) - Math.floor(cur / W1) === want[1])); }
+                const nx = L.splice(k, 1)[0], ndx = (nx % W1) - (cur % W1), ndy = Math.floor(nx / W1) - Math.floor(cur / W1);
+                if (ndx !== dx || ndy !== dy) ring.push([cur % W1, Math.floor(cur / W1)]);
+                dx = ndx; dy = ndy; cur = nx;
+            } while (cur !== start && ++guard < 4e6);
+            if (ring.length >= 4) rings.push(ring);
+        }
+    }
+    const area = r => { let t = 0; for (let i = 0; i < r.length; i++) { const a = r[i], b = r[(i + 1) % r.length]; t += a[0] * b[1] - b[0] * a[1]; } return t / 2; };
+    const dp = (pts, eps) => {            // Douglas-Peucker on an open polyline
+        if (pts.length < 3) return pts.slice();
+        const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1; const st = [[0, pts.length - 1]];
+        while (st.length) {
+            const [a, b] = st.pop(); let bi = -1, bd = eps;
+            const ax = pts[a][0], ay = pts[a][1], vx = pts[b][0] - ax, vy = pts[b][1] - ay, L = Math.hypot(vx, vy) || 1;
+            for (let i = a + 1; i < b; i++) { const d = Math.abs((pts[i][0] - ax) * vy - (pts[i][1] - ay) * vx) / L; if (d > bd) { bd = d; bi = i; } }
+            if (bi > 0) { keep[bi] = 1; st.push([a, bi], [bi, b]); }
+        }
+        return pts.filter((p, i) => keep[i]);
+    };
+    const simp = r => { let far = 0, fd = -1; r.forEach((p, i) => { const d = (p[0] - r[0][0]) ** 2 + (p[1] - r[0][1]) ** 2; if (d > fd) { fd = d; far = i; } });
+        const A = dp(r.slice(0, far + 1), 0.7), B = dp(r.slice(far).concat([r[0]]), 0.7); return A.concat(B.slice(1, -1)); };
+    const outs = [], holes = [];
+    rings.forEach(r => { const a = area(r); if (Math.abs(a) < 4) return; const s = simp(r); if (s.length < 3) return; (a > 0 ? outs : holes).push({ r: s, a: Math.abs(a) }); });
+    const inR = (x, y, r) => { let ins = false; for (let i = 0, j = r.length - 1; i < r.length; j = i++) { const xi = r[i][0], yi = r[i][1], xj = r[j][0], yj = r[j][1]; if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) ins = !ins; } return ins; };
+    const polys = outs.sort((a, b) => b.a - a.a).map(o => ({ o, h: [] }));
+    holes.forEach(h => { const [x, y] = h.r[0]; const P = polys.filter(p => inR(x + 0.01, y + 0.01, p.o.r)).sort((a, b) => a.o.a - b.o.a)[0]; if (P) P.h.push(h); });
+    const toLL = ([x, y]) => [+(R.w + x / W * (R.e - R.w)).toFixed(4), +((2 * Math.atan(Math.exp(R.yN - y / H * (R.yN - R.yS))) - Math.PI / 2) * 180 / Math.PI).toFixed(4)];
+    const close = r => { const c = r.map(toLL).reverse(); c.push(c[0].slice()); return c; };     // reversed: outer rings counter-clockwise, holes clockwise (RFC 7946)
+    return polys.map(P => [close(P.o.r)].concat(P.h.map(h => close(h.r))));
+}
+function nsaOrigFeat(h) { const sw = NSA_GEO.swaps.find(([o]) => annexFeatIso(o) === h); return sw ? sw[0] : (RAW_GEO.features || []).find(f => annexFeatIso(f) === h) || null; }
+function nsaBuildGeo() {
+    const N = state.nsa, me = N.key, out = { feat: null, hosts: {} }, polys = [];
+    N.fronts.forEach(h => {
+        const R = nsaOwnerRaster(h, 1600); if (!R) return;
+        const k = R.keys.indexOf(me); if (k < 0) return;
+        const M = new Uint8Array(R.W * R.H), Rest = new Uint8Array(R.W * R.H); let inC = 0, mine = 0;
+        for (let o = 0; o < M.length; o++) { if (R.mask[o * 4 + 3] < 128) continue; inC++; if (R.g[o] === k) { M[o] = 1; mine++; } else Rest[o] = 1; }
+        if (!mine) return;
+        const hf = nsaOrigFeat(h); if (!hf) return;
+        if (mine / Math.max(inC, 1) >= 0.97) {          // the whole territory (the Polisario's Western Sahara, a fully held host)
+            const g = hf.geometry; (g.type === 'Polygon' ? [g.coordinates] : g.type === 'MultiPolygon' ? g.coordinates : []).forEach(pl => polys.push(pl));
+            out.hosts[h] = { whole: true, name: featName(hf) };
+        } else {
+            nsaTracePolys(M, R).forEach(pl => polys.push(pl));
+            out.hosts[h] = { whole: false, name: featName(hf), geom: { type: 'MultiPolygon', coordinates: nsaTracePolys(Rest, R) } };
+        }
+    });
+    if (!polys.length) return null;
+    out.feat = { type: 'MultiPolygon', coordinates: polys };
+    return out;
+}
+const NSA_GEO = { applied: '', swaps: [], added: null, hostGeom: {}, isoBack: null, timer: null, removedNames: [] };
+function nsaGeoApply(resetOnly) {
+    if (typeof RAW_GEO === 'undefined' || !RAW_GEO || !RAW_GEO.features || typeof geojsonLayer === 'undefined' || !geojsonLayer || !COUNTRY_OPTS) return false;
+    const N = state.nsa, st = !resetOnly && N && N.mode === 'state' && N.statehood && N.statehood.geo ? N.statehood : null;
+    const want = st ? [N.key, st.name, st.geoV || 0].join('|') : '';
+    if (want === NSA_GEO.applied) return true;
+    // 1. back to the borders of 1 January 2026
+    NSA_GEO.swaps.forEach(([orig, repl]) => { const i = repl ? RAW_GEO.features.indexOf(repl) : -1; if (i >= 0) RAW_GEO.features[i] = orig; else if (!RAW_GEO.features.includes(orig)) RAW_GEO.features.push(orig); });
+    if (NSA_GEO.added) RAW_GEO.features = RAW_GEO.features.filter(f => f !== NSA_GEO.added);
+    if (NSA_GEO.isoBack) Object.keys(NSA_GEO.isoBack).forEach(i => { if (NSA_GEO.isoBack[i]) isoFeature[i] = NSA_GEO.isoBack[i]; else delete isoFeature[i]; });
+    NSA_GEO.swaps = []; NSA_GEO.added = null; NSA_GEO.isoBack = null;
+    if (!st) NSA_GEO.hostGeom = {};
+    // 2. the new state cut out of its host(s)
+    if (st) {
+        const d = nsaDef(N.id); NSA_GEO.isoBack = { [N.key]: isoFeature[N.key] || null };
+        Object.keys(st.geo.hosts).forEach(h => {
+            const H = st.geo.hosts[h], orig = RAW_GEO.features.find(f => annexFeatIso(f) === h) || RAW_GEO.features.find(f => featName(f) === H.name); if (!orig) return;
+            if (!NSA_GEO.hostGeom[h]) { try { NSA_GEO.hostGeom[h] = geomFor(h); } catch (e) { } }      // fronts and control keep the host's own 2026 grid
+            NSA_GEO.isoBack[h] = isoFeature[h] || null;
+            const repl = H.whole ? null : { type: 'Feature', properties: Object.assign({}, orig.properties || {}, { _nsa: 1 }), geometry: H.geom };
+            const i = RAW_GEO.features.indexOf(orig); if (repl) RAW_GEO.features[i] = repl; else RAW_GEO.features.splice(i, 1);
+            NSA_GEO.swaps.push([orig, repl]);
+            if (repl) isoFeature[h] = repl; else { delete isoFeature[h]; NSA_GEO.removedNames.push(H.name); }
+        });
+        const props = { ADMIN: st.name, name: st.name, NAME: st.name, _iso: N.key, _nsa: 1 }; if (/^[A-Z]{3}$/.test(N.key)) props.ISO_A3 = N.key;
+        NSA_GEO.added = { type: 'Feature', properties: props, geometry: st.geo.feat };
+        RAW_GEO.features.push(NSA_GEO.added);
+        try { NATION_COL[st.name] = mixCol(d.color || '#94a3b8', '#6b6450', 0.4); } catch (e) { NATION_COL[st.name] = d.color || '#94a3b8'; }
+    }
+    NSA_GEO.applied = want;
+    // 3. redraw the countries (the same recipe as a graphics change or an annexation; both map engines)
+    try {
+        try { map.removeLayer(geojsonLayer); } catch (e) { }
+        playerFeature = null; targetFeature = null;
+        geojsonLayer = L.geoJSON(simplifyGeo(RAW_GEO), COUNTRY_OPTS).addTo(map);
+        try { annexAlias(); } catch (e) { }
+        nsaGeoAlias();
+        if (state.phase === 'playing') highlightPlayerCountry();
+        if (state.target && nameLayer[state.target] && nameLayer[state.target] !== playerFeature) { targetFeature = nameLayer[state.target]; try { targetFeature.setStyle(getHighlightStyle('target')); } catch (e) { } }
+        GEO_INDEX = null; TERR.cache = {};
+        try { buildHalo(RAW_GEO); } catch (e) { }
+        try { buildLabels(RAW_GEO); } catch (e) { }
+        try { applyMapStyle(); } catch (e) { }
+        try { refreshMapView(); } catch (e) { }
+        try { grpRefresh(true); } catch (e) { }
+    } catch (e) { console.warn('statehood map', e); }
+    return true;
+}
+function nsaGeoAlias() {
+    const N = state.nsa;
+    NSA_GEO.removedNames.forEach(nm => { if (!RAW_GEO.features.some(f => featName(f) === nm)) delete nameLayer[nm]; });
+    if (!N || !N.statehood || !NSA_GEO.added) return;
+    nameToIso[N.statehood.name] = N.key; isoFeature[N.key] = NSA_GEO.added;
+    NSA_GEO.swaps.forEach(([o, r]) => { if (r) { const i = annexFeatIso(o); if (i) isoFeature[i] = r; } });
+}
+function nsaGeoSoon() {
+    if (nsaGeoApply()) return;
+    clearInterval(NSA_GEO.timer); let k = 0;
+    NSA_GEO.timer = setInterval(() => { if (nsaGeoApply() || ++k > 120) clearInterval(NSA_GEO.timer); }, 1000);
+}
+{
+    const _gf = geomFor;
+    geomFor = function (iso) { return NSA_GEO.hostGeom[iso] || _gf.apply(this, arguments); };
+    const _sg = setGraphics;
+    setGraphics = function () { const r = _sg.apply(this, arguments); try { nsaGeoAlias(); } catch (e) { } return r; };
+}
+
+// ---- screens: the top bar, the overview panel, the Movement window, the Build tab, the group profile ----
+function nsaK(v) { v = Math.round(v || 0); return v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v / 1000) + 'k' : v >= 1000 ? (v / 1000).toFixed(1) + 'k' : String(v); }
+function nsaTile(l, v, s, col, bar) { return `<div class="gs-stat"><div class="gs-stat-lbl">${l}</div><div class="gs-stat-val" style="color:${col}">${v}</div><div class="gs-stat-sub">${s}</div>${bar !== undefined ? `<div class="gs-stat-bar"><div style="width:${clamp(bar, 0, 100)}%;background:${col}"></div></div>` : ''}</div>`; }
+function nsaChip(label, order, title) { return `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" title="${esc(title || order)}" onclick="helpFill('${String(order).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">${esc(label)}</button>`; }
+function nsaAddBtn(label, order) { return `<button type="button" class="gs-btn" onclick="quickAddOrder('${String(order).replace(/'/g, "\\'").replace(/"/g, '&quot;')}')">${label}</button>`; }
+const NSA_LBL = { 'stat-approval': 'Support', 'stat-gdp': 'Shadow economy', 'stat-growth': 'Fighters', 'stat-treasury': 'War chest', 'stat-pop': 'Under control', 'stat-gdp-capita': 'Heat' };
+function nsaBodyClass() {
+    const on = nsaActive(); document.body.classList.toggle('nso', on);
+    Object.keys(NSA_LBL).forEach(id => { const v = document.getElementById(id), l = v && v.parentElement && v.parentElement.querySelector('.gs-res-lbl'); if (!l) return; if (l.dataset.orig === undefined) l.dataset.orig = l.textContent; l.textContent = on ? NSA_LBL[id] : l.dataset.orig; });
+    const sw = (sel, html) => { const b = document.querySelector(sel); if (!b) return; if (b.dataset.orig === undefined) b.dataset.orig = b.innerHTML; b.innerHTML = on ? html : b.dataset.orig; };
+    sw('#top-right-controls button[onclick="openSociety()"]', '🏴<span class="tb-lbl"> Movement</span>');
+    sw('#mil-btn', '🔫<span class="tb-lbl"> Fighters</span>');
+    const h = document.querySelector('#domestic-header .gs-title'); if (h) { if (h.dataset.orig === undefined) h.dataset.orig = h.textContent; h.textContent = on ? 'Movement Overview' : h.dataset.orig; }
+    const t = document.querySelector('#soc-modal .gs-title'); if (t) { if (t.dataset.orig === undefined) t.dataset.orig = t.innerHTML; t.innerHTML = on ? `🏴 ${esc(nsaDef(state.nsa.id).name)}` : t.dataset.orig; }
+    const soc = document.querySelector('#left-panel details[data-k="soc"]'); if (soc) soc.style.display = on ? 'none' : '';
+}
+(function () { const st = document.createElement('style'); st.textContent = `body.nso #coup-btn { display: none !important; }
+    .nsa-bar { height: 7px; background: #23231a; border: 1px solid #3b3726; border-radius: 2px; overflow: hidden; margin: 3px 0 2px; } .nsa-bar > div { height: 100%; }
+    .nsa-row { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; border-bottom: 1px solid #2c2b20; } .nsa-row span:last-child { text-align: right; }
+    .nsa-sec { font-family: 'Oswald','Arial Narrow',Arial,sans-serif; letter-spacing: .12em; text-transform: uppercase; font-size: 10.5px; color: #ab9f80; margin: 10px 0 4px; }
+    #nsa-setup .dir-seg button { font-size: 10.5px; }`; document.head.appendChild(st); })();
+function nsaGroupTiles() {
+    const N = state.nsa, p = nsaP(), n = nationIso(N.key), T = nsaTerr(), d = nsaDef(N.id);
+    return nsaTile('Strength', Math.round(p.S) + '<span class="gs-stat-of">/100</span>', `${p.S >= p.S0 ? '▲' : '▼'} ${Math.abs(p.S - p.S0).toFixed(0)} since start`, socColor(p.S + 10), p.S) +
+        nsaTile('Legitimacy', Math.round(p.legit), N.recog.length ? `recognised by ${N.recog.length}` : 'recognised by no state', socColor(p.legit), p.legit) +
+        nsaTile('Territory', T.share ? Math.round(T.share * 100) + '%' : T.km2 ? nsaK(T.km2) + ' km²' : '—', `of ${esc(shortName(d.host[0]))} · ${T.km2.toLocaleString()} km²`, d.color || '#d8b45a', T.share * 100) +
+        nsaTile('Support', Math.round(n.stability) + '%', 'people in your areas', socColor(n.stability), n.stability);
+}
+{
+    const _ue = updateEconomyUI;
+    updateEconomyUI = function () {
+        const r = _ue.apply(this, arguments);
+        try {
+            if (!nsaActive() || state.phase !== 'playing') return r;
+            const N = state.nsa, g = document.getElementById('stat-growth'), h = document.getElementById('stat-gdp-capita');
+            if (g) { g.textContent = nsaK(N.fighters); g.style.color = '#d8b45a'; }
+            if (h) { h.textContent = Math.round(N.heat) + '/100'; h.style.color = N.heat > 60 ? '#ef4444' : N.heat > 35 ? '#fbbf24' : '#86efac'; }
+            const ps = document.getElementById('player-status'); if (ps) ps.innerHTML = nsaGroupTiles();
+            const I = N.income || nsaIncomeCalc(), w = document.getElementById('stat-growth-why');
+            if (w) w.innerHTML = `Illicit economy ${I.net >= 0 ? '+' : '−'}${formatVal(Math.abs(I.net))}/month · black market ${formatVal(I.black)} · ${esc(I.trade)} ${formatVal(I.smuggle)} · extortion ${formatVal(I.extort)}${I.ransom ? ' · ransoms ' + formatVal(I.ransom) : ''}${I.aid ? ' · patrons ' + formatVal(I.aid) : ''} · pay −${formatVal(I.pay)}`;
+            const es = document.getElementById('dom-econ-sum'); if (es) es.textContent = 'illicit economy';
+        } catch (e) { console.warn('nsa topbar', e); }
+        return r;
+    };
+    const _rd = renderDomestic;
+    renderDomestic = function () {
+        if (!nsaActive() || state.phase !== 'playing') return _rd.apply(this, arguments);
+        const N = state.nsa, n = nationIso(N.key), T = nsaTerr(), S = nsaStatehoodStatus(), I = N.income || nsaIncomeCalc();
+        const k = document.getElementById('dom-keys');
+        const cell = (l, v, c) => `<div class="dk"><span>${l}</span><b${c ? ` style="color:${c}"` : ''}>${v}</b></div>`;
+        if (k) k.innerHTML = cell('War chest', formatVal(n.treasury)) + cell('Income', (I.net >= 0 ? '+' : '−') + formatVal(Math.abs(I.net)) + '/mo', I.net >= 0 ? '#93b25f' : '#e0975a') + cell('Fighters', nsaK(N.fighters)) +
+            cell('Recruit pool', nsaK(N.pool)) + cell('Heat', Math.round(N.heat), N.heat > 60 ? '#c4553c' : N.heat > 35 ? '#d8b45a' : '#93b25f') + cell('Recognised', N.recog.length + ' states');
+        const ss = document.getElementById('dom-status-sum'); if (ss) ss.textContent = 'strength · legitimacy · land';
+        const t = document.getElementById('dom-terr'), sum = document.getElementById('dom-terr-sum');
+        if (t) {
+            const rows = N.fronts.map(h => { const b = T.by[h] || { pct: 0, km2: 0, places: [] }, c = nsaConflictWith(h); return `<div class="dt-row"><i style="background:${nsaDef(N.id).color || '#d8b45a'}"></i><span>You hold <b>${b.pct ? '≈' + b.pct + '% of ' : ''}${esc(shortName(h))}</b> (${b.km2.toLocaleString()} km²) · ${c ? esc(c.type === 'war' ? 'at war' : c.type) : 'frozen line'}<em>${esc((b.places || []).slice(0, 5).join(', '))}</em></span></div>`; });
+            (N.ops || []).filter(o => o.until > state.dayIndex).forEach(o => rows.push(`<div class="dt-note">⚔ ${o.type === 'seize' ? 'Assault on' : 'Offensive toward'} ${esc(o.target ? o.target.name : shortName(o.host))} — ${o.until - state.dayIndex} days left</div>`));
+            rows.push(`<div class="dt-note">Statehood: land ${S.terr.ok ? '✔' : S.terr.cond ? `held ${S.terr.days}/${S.terr.needDays} days` : '✖'} · recognition ${S.recog.n}/${S.recog.p5 ? 10 : 20} ${S.recog.ok ? '✔' : ''} · legitimacy ${S.legit.ok ? '✔' : S.legit.legit}</div>`);
+            t.innerHTML = rows.join('');
+        }
+        if (sum) sum.textContent = `${T.km2.toLocaleString()} km² held`;
+    };
+    // the Movement window replaces Government & Society while you lead a group
+    const _rs = renderSociety;
+    renderSociety = function () {
+        const N = state.nsa;
+        if (!N || state.phase !== 'playing') return _rs.apply(this, arguments);
+        if (N.mode === 'state') {
+            if (socTab === 'nsostate') { const T0 = socTab; socTab = 'overview'; _rs.apply(this, arguments); socTab = T0; }
+            else _rs.apply(this, arguments);
+            const body = document.getElementById('soc-body'), bar = body && body.firstElementChild;
+            if (bar) { const b = document.createElement('button'); b.type = 'button'; b.className = 'gs-btn' + (socTab === 'nsostate' ? ' gs-btn-primary' : ''); b.textContent = '🏳 Independence'; b.onclick = () => socSetTab('nsostate'); bar.appendChild(b); }
+            if (socTab === 'nsostate' && body) { [...body.children].slice(1).forEach(c => c.remove()); body.insertAdjacentHTML('beforeend', nsaIndependenceHTML()); }
+            return;
+        }
+        const tabs = [['nso', '🏴 Movement'], ['nsoeco', '💰 Illicit economy'], ['nsofor', '🔫 Cells & network'], ['nsoter', '🗺 Territory & fronts'], ['nsostate', '🏳 Recognition & statehood'], ['war', 'War & casualties'], ['actors', 'Non-state actors'], ['world', 'World rankings']];
+        if (!tabs.some(t => t[0] === socTab)) socTab = 'nso';
+        const bar = `<div class="flex flex-wrap gap-1 mb-3 soc-xwrap" style="flex-wrap:wrap;overflow-x:visible">${tabs.map(([k, l]) => `<button type="button" class="gs-btn ${socTab === k ? 'gs-btn-primary' : ''}" onclick="socSetTab('${k}')">${l}</button>`).join('')}</div>`;
+        const body = document.getElementById('soc-body'); if (!body) return;
+        if (['war', 'actors', 'world'].includes(socTab)) { _rs.apply(this, arguments); if (body.firstElementChild) body.firstElementChild.outerHTML = bar; return; }
+        let h = bar;
+        try { h += socTab === 'nsoeco' ? nsaEconHTML() : socTab === 'nsofor' ? nsaForcesHTML() : socTab === 'nsoter' ? nsaTerrHTML() : socTab === 'nsostate' ? nsaStateHTML() : nsaOverviewHTML(); }
+        catch (e) { console.warn('nsa panel', e); h += `<div class="text-red-400">Panel error: ${esc(e.message)}</div>`; }
+        body.innerHTML = h;
+    };
+    const _om = openMilPanel;
+    openMilPanel = function () { if (nsaActive()) { openSociety('nsofor'); return; } return _om.apply(this, arguments); };
+}
+function nsaOverviewHTML() {
+    const N = state.nsa, d = nsaDef(N.id), p = nsaP(), n = nationIso(N.key), T = nsaTerr(), S = nsaStatehoodStatus();
+    const pats = p.patrons.filter(x => WORLD[x] && (p.aid[x] || 0) > 0).map(x => `${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} ${Math.round(p.aid[x] * 100)}%`).join(', ') || 'none';
+    const tgt = nsaNearestGovCity(), pat = p.patrons.find(x => WORLD[x]);
+    const spark = (k, col) => { const v = N.hist.map(x => x[k]); if (v.length < 2) return ''; const lo = Math.min(...v), hi = Math.max(...v), rg = hi - lo || 1; return `<svg width="120" height="24" style="display:block"><polyline fill="none" stroke="${col}" stroke-width="1.4" points="${v.map((x, i) => `${(i / (v.length - 1) * 118 + 1).toFixed(1)},${(22 - (x - lo) / rg * 20).toFixed(1)}`).join(' ')}"/></svg>`; };
+    return `<div class="flex gap-3 items-start mb-2"><div>${groupFlagHTML(d, 34)}</div><div class="flex-1"><div style="font-size:15px;font-weight:700">${esc(d.name)}</div>
+        <div class="text-slate-400 text-[11.5px]">${esc(d.kind)} · ${esc(d.ideology)} · founded ${d.founded} · inside ${esc(d.host.map(shortName).join(' & '))}${d.claim ? ' · claimed by ' + esc(shortName(d.claim)) : ''}</div>
+        <div class="text-slate-300 text-[11.5px] mt-1">${esc(d.aims)}</div></div></div>
+        <div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+        ${nsaTile('War chest', formatVal(n.treasury), `${N.income ? (N.income.net >= 0 ? '+' : '−') + formatVal(Math.abs(N.income.net)) + ' last month' : 'first report on the 1st'}`, '#d1ad5b')}
+        ${nsaTile('Fighters', N.fighters.toLocaleString(), `${N.pool.toLocaleString()} willing recruits`, '#d8b45a')}
+        ${nsaTile('Support', Math.round(n.stability) + '%', 'people in your areas', socColor(n.stability), n.stability)}
+        ${nsaTile('Legitimacy', Math.round(p.legit), 'at home and abroad', socColor(p.legit), p.legit)}
+        ${nsaTile('Heat', Math.round(N.heat), N.heat > 60 ? 'hunted: sites get found' : N.heat > 35 ? 'watched' : 'low profile', N.heat > 60 ? '#c4553c' : N.heat > 35 ? '#d8b45a' : '#93b25f', N.heat)}
+        ${nsaTile('Territory', T.km2.toLocaleString() + ' km²', `${Math.round(T.share * 100)}% of ${esc(shortName(d.host[0]))}`, d.color || '#d8b45a', T.share * 100)}
+        ${nsaTile('People', formatPop(T.pop), 'under your control', '#ab9f80')}
+        ${nsaTile('Shadow economy', formatVal(n.gdp), 'a year, in your areas', '#ab9f80')}
+        ${nsaTile('Recognition', N.recog.length + ' states', S.recog.ok ? 'enough for statehood' : 'statehood needs 10 incl. a P5, or 20', S.recog.ok ? '#93b25f' : '#d8b45a', Math.min(100, N.recog.length * 5))}
+        ${nsaTile('Counter-insurgency', Math.round(N.coin || 0), `${esc(shortName(N.gov))}'s pressure on you`, (N.coin || 0) > 50 ? '#c4553c' : '#d8b45a', N.coin || 0)}</div>
+        <div class="grid gap-3 mt-3" style="grid-template-columns:1fr 1fr"><div><div class="nsa-sec">Trend (monthly)</div>${N.hist.length > 1 ? `<div class="text-[10.5px] text-slate-400">Fighters</div>${spark('f', '#d8b45a')}<div class="text-[10.5px] text-slate-400 mt-1">Territory</div>${spark('km', d.color || '#93b25f')}<div class="text-[10.5px] text-slate-400 mt-1">Support</div>${spark('s', '#93b25f')}` : '<div class="text-[11px] text-slate-500">Charts start after two monthly reports.</div>'}</div>
+        <div><div class="nsa-sec">Who you are</div><div class="nsa-row"><span>Leader of the movement</span><span>${esc(nationIso(N.key).hog)} <span class="text-slate-500">(in place of ${esc(d.leader)})</span></span></div><div class="nsa-row"><span>HQ</span><span>${esc(d.hq || '—')}</span></div><div class="nsa-row"><span>Fighting</span><span>${esc(shortName(N.gov))}</span></div><div class="nsa-row"><span>Patrons</span><span>${pats}</span></div><div class="nsa-row"><span>Designated terrorist</span><span>${nsaDesignated() ? 'yes — most Western states refuse contact' : 'no'}</span></div></div></div>
+        <div class="nsa-sec">Orders (click to put one in the order bar)</div><div class="flex flex-wrap gap-1">
+        ${nsaChip('Recruit 2,000 fighters', 'Recruit 2000 fighters')}${tgt ? nsaChip('Offensive toward ' + tgt.name, `Launch an offensive toward ${tgt.name}`) + nsaChip('Seize ' + tgt.name, `Seize ${tgt.name}`) + nsaChip('Raid near ' + tgt.name, `Raid government positions near ${tgt.name}`) : ''}
+        ${nsaChip('Build a safehouse', `Build a safehouse in ${d.hq || d.cities[0]}`)}${nsaChip('Open a smuggling route', 'Open a new smuggling route')}${nsaChip('Extort traders', 'Extort the traders and trucks on our roads')}
+        ${NSA_RANSOM.has(N.id) ? nsaChip('Kidnap for ransom', 'Kidnap foreigners for ransom') : ''}${pat ? nsaChip(`Ask ${shortName(pat)} for weapons`, `Ask ${shortName(pat)} for weapons and money`) : ''}
+        ${nsaChip('Propaganda campaign', 'Run a propaganda campaign')}${nsaChip('Aid to locals', 'Distribute food and aid to the people in our areas')}${nsaChip(`Talks with ${shortName(N.gov)}`, `Negotiate a ceasefire with ${shortName(N.gov)}`)}${nsaChip('Lie low', 'Lie low and keep a low profile')}</div>
+        <div class="text-[11px] text-slate-500 mt-3">You lead a movement, not a government: there is no budget, central bank, election or UN seat. Money comes from the illicit economy, fighters from cells you recruit, land from the front. Hold enough land long enough and win recognition, and you can declare a state.</div>`;
+}
+function nsaIncomeTable(I, proj) {
+    const row = (k, v, col) => `<div class="nsa-row"><span>${k}</span><span style="color:${col || (v >= 0 ? '#93b25f' : '#e0975a')}">${v >= 0 ? '+' : '−'}${formatVal(Math.abs(v))}</span></div>`;
+    return `<div class="gs-stat-lbl mb-1">${proj ? 'Next month (projected)' : 'Last month'}</div>${row('Black-market trade', I.black)}${row('Smuggling: ' + esc(I.trade), I.smuggle)}${row('Extortion & checkpoint "taxes"', I.extort)}${I.ransom || NSA_RANSOM.has(state.nsa.id) ? row('Kidnapping ransoms', I.ransom) : ''}
+        ${Object.keys(I.aidBy || {}).map(x => row(`${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} (patron)`, I.aidBy[x])).join('')}${row('Fighters\' pay', -I.pay)}${I.locals ? row('Aid to locals', -I.locals) : ''}
+        <div class="h-px bg-slate-700/60 my-1"></div>${row('<b>Net</b>', I.net)}<div class="text-[10.5px] text-slate-500 mt-1">Safehouses, camps and other sites cost their upkeep on top (Sites ledger).</div>`;
+}
+function nsaEconHTML() {
+    const N = state.nsa, p = nsaP(), S = N.sliders, ransom = NSA_RANSOM.has(N.id);
+    const sl = (k, l, risk) => `<div class="mb-3"><div class="flex justify-between text-[12px]"><span><b>${l}</b> <span class="text-slate-500">· ${risk}</span></span><span id="nsa-sv-${k}" class="font-mono text-[11px]" style="color:#d1ad5b">${nsaSliderLabel(k)}</span></div><input type="range" min="0" max="2" step="0.25" value="${S[k] || 0}" oninput="nsaSetSlider('${k}', this.value)" style="width:100%"></div>`;
+    const cand = Object.keys(WORLD).filter(x => !NON_SOVEREIGN.has(x) && !N.fronts.includes(x) && WORLD[x][3] > 1 && !p.patrons.includes(x)).map(x => [x, nsaPatronChance(x)]).sort((a, b) => b[1] - a[1]).slice(0, 6);
+    return `<div class="grid gap-3" style="grid-template-columns:minmax(0,3fr) minmax(240px,2fr)"><div>
+        <div class="text-[11.5px] text-slate-300 mb-2">No taxes, no budget: your war chest fills from the black market, smuggling, "taxes" at gunpoint, ransoms and foreign patrons. Each line has a price.</div>
+        ${sl('extort', '🚧 Extortion of traders and trucks', 'more money, less support and legitimacy')}
+        ${sl('smuggle', '📦 Smuggling (' + esc((NSA_TRADE[N.id] || ['contraband'])[0]) + ')', 'more money, more heat; convoys get seized; Western sanctions')}
+        ${ransom ? sl('ransom', '🔗 Kidnapping for ransom', 'cash, but heat, condemnation and lost legitimacy') : ''}
+        ${sl('aid', '🍞 Aid to locals', 'costs money, buys support and legitimacy')}
+        <div class="nsa-sec">State of the networks</div>
+        <div class="nsa-row"><span>Extra smuggling routes</span><span>${N.routes || 0} / 4 (+25% each)</span></div>
+        <div class="nsa-row"><span>Sanctions on your financiers</span><span style="color:${N.sanctions ? '#e0975a' : '#93b25f'}">${N.sanctions || 0} package${N.sanctions === 1 ? '' : 's'} (−15% each)</span></div>
+        <div class="nsa-row"><span>Seized convoys</span><span>${N.seized > state.dayIndex ? 'smuggling halved for ' + (N.seized - state.dayIndex) + ' days' : 'none recently'}</span></div>
+        <div class="nsa-row"><span>Checkpoints</span><span>${nsaMySites(['nsa_checkpoint'], true).length} (+15% extortion each)</span></div>
+        <div class="nsa-sec">Patrons</div>
+        ${p.patrons.filter(x => WORLD[x]).map(x => `<div class="nsa-row"><span>${flagHTML(nationIso(x), 12)} ${esc(shortName(x))} · relations ${getRel(N.key, x)}</span><span>support ${Math.round((p.aid[x] || 0) * 100)}% ${nsaAddBtn('Ask', `Ask ${shortName(x)} for weapons and money`)}</span></div>`).join('') || '<div class="text-[11px] text-slate-500">No state backs you yet.</div>'}
+        <div class="text-[11px] text-slate-400 mt-2">Could back you: ${cand.map(([x, c]) => `${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} <span class="text-slate-500">${Math.round(c * 100)}%</span> ${nsaAddBtn('Ask', `Ask ${shortName(x)} for support`)}`).join(' · ')}</div>
+        </div><div><div id="nsa-proj" class="gs-stat" style="padding:8px 10px;font-size:11.5px">${nsaIncomeTable(nsaIncomeCalc(), true)}</div>
+        ${N.income ? `<div class="gs-stat mt-2" style="padding:8px 10px;font-size:11.5px">${nsaIncomeTable(N.income, false)}</div>` : ''}</div></div>`;
+}
+function nsaForcesHTML() {
+    const N = state.nsa, d = nsaDef(N.id), sites = nsaMySites(null, false).filter(s => s.status !== 'cancelled');
+    const cap = nsaMySites(['safehouse', 'nsa_camp'], true).reduce((a, s) => a + (SITE_TYPES[s.type].cap || 0), 0);
+    const tr = (state.orders.history || []).filter(o => o.kind === 'nso' && o.act === 'recruit' && o.status === 'active');
+    const per = 1500 * (D().cost || 1);
+    const build = NSA_SITES.map(k => { const T = SITE_TYPES[k]; return `<div class="cc-card !py-1.5 flex items-center gap-2"><div class="site-dot st-active" style="width:24px;height:24px;font-size:12px">${T.icon}</div><div class="flex-1 min-w-0"><b class="text-[11.5px]">${T.name}</b> <span class="text-[10.5px] text-slate-400">${formatVal(T.cost)} · ${T.days[0]}–${T.days[1]} days</span><div class="text-[10.5px] text-slate-400">${esc(T.desc)}</div></div><button type="button" class="gs-btn" onclick="closeSociety();startBuildPick('${k}')">📍 Place</button></div>`; }).join('');
+    return `<div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+        ${nsaTile('Fighters', N.fighters.toLocaleString(), 'in cells, ready', '#d8b45a')}${nsaTile('In training', tr.reduce((a, o) => a + (o.nsa.n || 0), 0).toLocaleString(), tr.length ? tr.length + ' recruitment drive(s)' : 'none', '#ab9f80')}
+        ${nsaTile('Recruit pool', N.pool.toLocaleString(), 'willing volunteers', '#93b25f')}${nsaTile('Training capacity', cap.toLocaleString(), 'per drive (safehouses + camps)', '#ab9f80')}</div>
+        <div class="text-[11.5px] text-slate-300 mt-2">Cells, not conscripts: volunteers come from the people you control — more when support is high, when you hold more land, when you can pay and when the cause (${esc(d.ideology)}) is popular. Every month some join on their own; a recruitment drive trains more at once (${formatVal(per)} per fighter) at your safehouses and camps. Heat above 60 makes cells wither.</div>
+        <div class="flex flex-wrap gap-1 mt-2">${[500, 2000, 5000].map(k => nsaAddBtn(`➕ Recruit ${k.toLocaleString()} · ${formatVal(k * per)}`, `Recruit ${k} fighters`)).join('')}</div>
+        <div class="nsa-sec">Your network (${sites.length})</div>
+        ${sites.length ? `<table class="w-full text-[11.5px]"><tbody>${sites.map(s => `<tr class="border-t border-slate-800"><td class="py-1">${siteT(s.type).icon} <a href="#" onclick="event.preventDefault();closeSociety();focusSite('${s.id}')" style="color:#e6c66e">${esc(s.name)}</a></td><td>${esc(STATUS_LABEL[s.status] || s.status)}</td><td style="color:${s.exposed ? '#fca5a5' : '#86efac'}">${s.exposed ? 'exposed' : 'hidden'}</td><td class="text-slate-400">${esc(s.place || '')}</td></tr>`).join('')}</tbody></table>` : '<div class="text-[11px] text-slate-500">No sites yet.</div>'}
+        <div class="text-[10.5px] text-slate-500 mt-1">Hidden sites are safe until ${esc(shortName(N.gov))}'s intelligence finds them (more likely when heat is high); exposed sites get raided. Lie low to cool things down.</div>
+        <div class="nsa-sec">Build (only on your ground, contested ground, or covertly inside ${esc(N.fronts.map(shortName).join(' / '))})</div><div class="flex flex-col gap-1">${build}</div>`;
+}
+function nsaTerrHTML() {
+    const N = state.nsa, d = nsaDef(N.id), T = nsaTerr();
+    const fr = N.fronts.map(h => {
+        const b = T.by[h] || { pct: 0, km2: 0, places: [] }, c = nsaConflictWith(h), R = nsaRatio(h);
+        const tg = [], home = nsaHome(); try { CITIES.filter(x => N.fronts.includes(x[1]) && (N.id !== 'polisario' || (x[2] < 27.7 && x[3] < -8.6))).forEach(x => { const r = nsaCityKey(x); if (r && r.h === h && r.k === 'GOV') tg.push([x, km(home, { lat: x[2], lng: x[3] })]); }); } catch (e) { }
+        tg.sort((a, b) => a[1] - b[1]);
+        return `<div class="gs-stat" style="padding:8px 10px;margin-bottom:8px"><div class="flex justify-between"><b>${flagHTML(nationIso(h), 12)} ${esc(shortName(h))}</b><span class="text-[11px]">${c ? `${esc(c.name)} · ${esc(c.type)} · intensity ${Math.round(c.intensity)}` : 'no fighting — the line is frozen until you attack'}</span></div>
+            <div class="nsa-bar"><div style="width:${b.pct}%;background:${d.color || '#d8b45a'}"></div></div>
+            <div class="text-[11px]">You hold <b>${b.pct}%</b> (${b.km2.toLocaleString()} km²)${b.places && b.places.length ? ': ' + esc(b.places.slice(0, 8).join(', ')) : ''}</div>
+            <div class="text-[11px] text-slate-400">Balance of forces ${R.toFixed(2)}× (${R > 1.2 ? 'in your favour' : R < 0.8 ? 'against you' : 'even'}) · counter-insurgency ${Math.round(N.coin || 0)}</div>
+            <div class="flex flex-wrap gap-1 mt-1">${tg.slice(0, 4).map(([x]) => nsaChip('⚔ Offensive → ' + x[0], `Launch an offensive toward ${x[0]}`) + nsaChip('Seize ' + x[0], `Seize ${x[0]}`)).join('')}${nsaChip('Raid', `Raid ${shortName(h)}'s army positions`)}${nsaChip('Ceasefire talks', `Negotiate a ceasefire with ${shortName(h)}`)}</div></div>`;
+    }).join('');
+    const ops = (N.ops || []).filter(o => o.until > state.dayIndex);
+    return `<div class="text-[11.5px] text-slate-300 mb-2">Your ground is the squares of ${esc(N.fronts.map(shortName).join(' & '))} you hold on the map (🗺 Map view → <i>Internal control</i> or <i>Front lines</i>). Offensives and assaults move the front faster toward a town; ${esc(shortName(N.gov))}'s army and air force push back every week. In wars the front creeps on its own; frozen lines move only when you attack.</div>
+        ${fr}${ops.length ? `<div class="nsa-sec">Operations under way</div>${ops.map(o => `<div class="nsa-row"><span>${o.type === 'seize' ? 'Assault on' : 'Offensive toward'} ${esc(o.target ? o.target.name : shortName(o.host))}</span><span>${o.until - state.dayIndex} days left · strength ${o.str.toFixed(1)}</span></div>`).join('')}` : ''}
+        <div class="text-[10.5px] text-slate-500 mt-2">Start of the campaign: ${N.held0.toLocaleString()} km². Now: ${T.km2.toLocaleString()} km² and ${formatPop(T.pop)} people.</div>`;
+}
+function nsaBar(pct, col) { return `<div class="nsa-bar"><div style="width:${clamp(pct, 0, 100)}%;background:${col}"></div></div>`; }
+function nsaStateHTML() {
+    const N = state.nsa, d = nsaDef(N.id), S = nsaStatehoodStatus();
+    const ok = b => b ? '<span style="color:#93b25f">✔</span>' : '<span style="color:#e0975a">✖</span>';
+    const rec = N.recog.filter(x => WORLD[x]).map(x => `<span style="white-space:nowrap">${flagHTML(nationIso(x), 12)} ${esc(shortName(x))}${UNSC_P5.includes(x) ? ' <b>(P5)</b>' : ''}</span>`).join(', ') || '<span class="text-slate-500">no state yet</span>';
+    const cand = Object.keys(WORLD).filter(x => !NON_SOVEREIGN.has(x) && !N.recog.includes(x) && !N.fronts.includes(x) && WORLD[x][3] > 0.3).map(x => [x, nsaRecogChance(x)]).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const tPct = S.terr.cond ? Math.min(100, S.terr.days / S.terr.needDays * 100) : Math.min(99, Math.max(S.terr.share / 0.33, S.terr.km2 / Math.max(S.terr.needKm, 1)) * 100);
+    const need = S.recog.p5 ? 10 : 20;
+    return `<div class="text-[11.5px] text-slate-300 mb-2">The road to a recognised state: <b>hold enough land</b> (a third of ${esc(shortName(d.host[0]))}, or ${S.terr.needKm.toLocaleString()} km²${/breakaway/.test(d.kind) ? ' — your whole region' : ''}) <b>for six months</b>, win <b>recognition</b> from 10 states including a permanent member of the UN Security Council (or from 20), and keep <b>legitimacy ≥ 50</b> and <b>support ≥ 40%</b>. Then you can declare statehood: your land becomes a country on the map and you run it with the full tools of a state.</div>
+        <div class="gs-stat" style="padding:8px 10px"><div class="flex justify-between"><b>1. Land ${ok(S.terr.ok)}</b><span class="text-[11px]">${S.terr.km2.toLocaleString()} km² · ${Math.round(S.terr.share * 100)}% of ${esc(shortName(d.host[0]))} · ${S.terr.cond ? `held ${S.terr.days} of ${S.terr.needDays} days` : 'not enough yet'}</span></div>${nsaBar(tPct, S.terr.ok ? '#93b25f' : '#d8b45a')}</div>
+        <div class="gs-stat mt-2" style="padding:8px 10px"><div class="flex justify-between"><b>2. Recognition ${ok(S.recog.ok)}</b><span class="text-[11px]">${S.recog.n} state${S.recog.n === 1 ? '' : 's'} · ${S.recog.p5} permanent member${S.recog.p5 === 1 ? '' : 's'} · need ${need}${S.recog.p5 ? '' : ' (or 10 with a P5)'}</span></div>${nsaBar(S.recog.n / need * 100, S.recog.ok ? '#93b25f' : '#d8b45a')}<div class="text-[11px] mt-1">${rec}</div></div>
+        <div class="gs-stat mt-2" style="padding:8px 10px"><div class="flex justify-between"><b>3. Legitimacy & support ${ok(S.legit.ok)}</b><span class="text-[11px]">legitimacy ${S.legit.legit}/50 · support ${S.legit.sup}/40%</span></div>${nsaBar(Math.min(S.legit.legit / 50, S.legit.sup / 40) * 100, S.legit.ok ? '#93b25f' : '#d8b45a')}</div>
+        <div class="nsa-sec">Ask for recognition (best odds first)</div><div class="flex flex-wrap gap-1">${cand.map(([x, c]) => `<span class="cc-chip !py-0.5 !px-2 !text-[10.5px]" style="cursor:pointer" onclick="quickAddOrder('Ask ${esc(shortName(x)).replace(/'/g, "\\'")} to recognise our independence')">${flagHTML(nationIso(x), 10)} ${esc(shortName(x))} ${Math.round(c * 100)}%</span>`).join('')}</div>
+        <div class="text-[10.5px] text-slate-500 mt-1">Patrons, rivals of ${esc(shortName(N.gov))} and friends recognise most readily; states with separatists of their own almost never${nsaDesignated() ? '; as a designated terrorist group Western states will not' : ''}. You can also ask in the Diplomacy chat.</div>
+        <div class="nsa-sec">Declare statehood</div>
+        <div class="flex gap-2 items-center"><input id="nsa-state-name" type="text" value="${esc(nsaDefaultStateName(d))}" class="bg-slate-900 border border-slate-600 text-white rounded px-2 py-1 text-[12px]" style="flex:1" maxlength="48" title="Name of the new state">
+        <button type="button" class="gs-btn ${S.unlocked ? 'gs-btn-primary' : ''}" ${S.unlocked ? '' : 'disabled title="Not unlocked yet"'} onclick="nsaDeclare()">🏳 Declare statehood</button></div>
+        <div class="text-[11px] mt-1" style="color:${S.unlocked ? '#93b25f' : '#ab9f80'}">${S.unlocked ? 'All conditions met. Declaring creates the new state on the map; your fighters become its army, your camps its bases, your shadow economy its GDP. The war with ' + esc(shortName(N.gov)) + ' goes on as a war between states.' : 'Still missing: ' + esc(nsaMissing(S).join('; ')) + '.'}</div>`;
+}
+function nsaIndependenceHTML() {
+    const N = state.nsa, st = N.statehood, d = nsaDef(N.id);
+    const rec = N.recog.filter(x => WORLD[x]).map(x => `${flagHTML(nationIso(x), 12)} ${esc(shortName(x))}`).join(', ') || 'none';
+    const un = (() => { try { return inOrg('un', N.key, false) ? 'member' : (state.orgApp || []).some(a => a.id === 'un') ? 'application under review' : 'not a member — apply in Organizations'; } catch (e) { return '—'; } })();
+    return `<div class="flex gap-3 items-center mb-2">${groupFlagHTML(d, 30)}<div><div style="font-size:15px;font-weight:700">${esc(st.name)}</div><div class="text-[11.5px] text-slate-400">independent since ${esc(st.date)} · formerly ${esc(d.name)} inside ${esc(d.host.map(shortName).join(' & '))}</div></div></div>
+        <div class="nsa-row"><span>Recognised by</span><span>${N.recog.length} states</span></div><div class="text-[11px] mb-2">${rec}</div>
+        <div class="nsa-row"><span>United Nations</span><span>${un}</span></div>
+        <div class="nsa-row"><span>Territory held</span><span>${nsaTerr().km2.toLocaleString()} km² (the border follows the front once a month)</span></div>
+        <div class="text-[11px] text-slate-500 mt-2">Your government now has a budget, taxes, an army, elections if your system has them, and a seat at the table: open the other tabs. More states recognise you over time as relations improve.</div>`;
+}
+{
+    const _rb = renderBuildTab;
+    renderBuildTab = function () {
+        if (!nsaActive()) return _rb.apply(this, arguments);
+        const list = document.getElementById('cc-build-list'), cats = document.getElementById('cc-build-cats');
+        if (!list || document.getElementById('cc-build').classList.contains('hidden')) return;
+        const p = nationIso(state.playerIso), pick = state.buildPick;
+        if (cats) cats.innerHTML = `<button type="button" class="cc-tab cc-tab-active">Underground network (${NSA_SITES.length})</button>`;
+        const nEl = document.getElementById('cc-build-n'); if (nEl) nEl.textContent = `${NSA_SITES.length} network sites · war chest ${formatVal(p.treasury)}`;
+        list.innerHTML = (pick ? `<div class="cc-card !py-2 text-[11.5px]" style="border-color:#d1ad5b !important">📍 Placing <b>${esc(siteT(pick).name)}</b> — click a spot on your ground, on contested ground, or covertly inside ${esc(state.nsa.fronts.map(shortName).join(' / '))}.</div>` : '') +
+            NSA_SITES.map(k => { const T = SITE_TYPES[k], cost = Math.round(T.cost * (D().cost || 1)), poor = cost > p.treasury;
+                return `<div class="cc-card !py-2 bld-card${pick === k ? ' bld-on' : ''}"><div class="flex items-center gap-2"><div class="site-dot st-active" style="width:26px;height:26px;font-size:12px;flex-shrink:0">${T.icon}</div>
+                <div class="flex-1 min-w-0"><div class="text-[12px] font-bold text-slate-200 truncate">${esc(T.name)}</div><div class="text-[10px] text-slate-400">Underground network · ${T.days[0]}–${T.days[1]} days · hidden</div></div>
+                <div class="text-right flex flex-col items-end gap-1"><span class="text-[12px] font-bold font-mono" style="color:${poor ? '#f87171' : '#e6c66e'}">${formatVal(cost)}</span><button type="button" class="gs-btn bld-place" onclick="startBuildPick('${k}')">📍 Place</button></div></div>
+                <div class="text-[10.5px] text-slate-300 mt-1 leading-snug">${esc(T.desc)}</div></div>`; }).join('') +
+            `<div class="text-center text-[10.5px] text-slate-500 py-2">An armed movement cannot build state infrastructure. After statehood the full catalogue opens.</div>`;
+    };
+    const _es = entSelect;
+    entSelect = function (id) {
+        const r = _es.apply(this, arguments);
+        try {
+            const N = state.nsa; if (!N || id !== N.id || N.mode !== 'nso') return r;
+            const rel = document.getElementById('target-relation'); if (rel) rel.innerHTML = `<span style="color:#f6e08f">This is you</span>`;
+            const ts = document.getElementById('target-status'); if (ts) ts.innerHTML = nsaGroupTiles();
+            const ex = document.getElementById('proxy-extra'), box = ex && ex.querySelector('.flex.flex-wrap.gap-1:last-child');
+            const tgt = nsaNearestGovCity();
+            if (box) box.innerHTML = nsaChip('Recruit', 'Recruit 2000 fighters') + (tgt ? nsaChip('Offensive', `Launch an offensive toward ${tgt.name}`) : '') + nsaChip('Propaganda', 'Run a propaganda campaign') + nsaChip('Smuggle', 'Open a new smuggling route') + `<button type="button" class="cc-chip !py-0.5 !px-2 !text-[10.5px]" onclick="openSociety('nso')">🏴 Movement</button>`;
+            const g = document.getElementById('target-gdp'), pp = document.getElementById('target-pop'); const n = nationIso(N.key); if (g) g.textContent = formatVal(n.gdp); if (pp) pp.textContent = formatPop(n.pop);
+        } catch (e) { console.warn('nsa profile', e); }
+        return r;
+    };
+    const _ut = updateTargetUI;
+    updateTargetUI = function () {
+        const r = _ut.apply(this, arguments);
+        try { const N = state.nsa, tp = document.getElementById('target-prox'); if (N && tp) tp.querySelectorAll(`[onclick="entSelect('${N.id}')"] b`).forEach(b => { if (!/\(you\)/.test(b.textContent)) b.insertAdjacentHTML('beforeend', ' <span style="color:#f6e08f">(you)</span>'); }); } catch (e) { }
+        return r;
+    };
+    const _ph = proxiesHTML;           // your own movement is not in the list of armed groups you can arm or strike
+    proxiesHTML = function () {
+        const p = nsaP(); if (!p || p.status === 'dissolved') return _ph.apply(this, arguments);
+        const s0 = p.status; p.status = 'dissolved';
+        try { return `<div class="text-[11.5px] mb-2" style="color:#f6e08f">${groupFlagHTML(p, 14)} You lead <b>${esc(p.name)}</b>${state.nsa.mode === 'state' ? ` — now the state of ${esc(state.nsa.statehood.name)}` : ''}; it is not listed below.</div>` + _ph.apply(this, arguments); } finally { p.status = s0; }
+    };
+    const _pm = proxiesMonthly;        // your own group's numbers come from your play, not the world simulation
+    proxiesMonthly = function () {
+        const p = nsaP(); if (!p) return _pm.apply(this, arguments);
+        const s0 = p.status; p.status = 'dissolved';
+        try { return _pm.apply(this, arguments); } finally { p.status = s0; }
+    };
+    const _po = proxyOrderOf;          // "Arm the RSF" when you are the RSF is not an order to yourself
+    proxyOrderOf = function (text) { const o = _po.apply(this, arguments); return o && state.nsa && o.proxyId === state.nsa.id ? null : o; };
+    const _oh = openHelp;
+    openHelp = function () {
+        if (!nsaActive()) return _oh.apply(this, arguments);
+        const keep = {}; Object.keys(HELP_ORDERS).forEach(k => { keep[k] = HELP_ORDERS[k]; delete HELP_ORDERS[k]; });
+        const N = state.nsa, d = nsaDef(N.id), tgt = nsaNearestGovCity(), pat = d.patrons.find(x => WORLD[x]), h = shortName(N.gov);
+        Object.assign(HELP_ORDERS, {
+            'Fighters & network': ['Recruit 2000 fighters', `Build a safehouse in ${d.hq || d.cities[0]}`, 'Set up a hidden training camp', 'Build a weapons workshop', 'Set up a checkpoint on the main road', 'Lie low and keep a low profile'],
+            'Operations': tgt ? [`Launch an offensive toward ${tgt.name}`, `Seize ${tgt.name}`, `Raid government positions near ${tgt.name}`, `Ambush an army convoy in ${h}`] : [`Raid ${h}'s army positions`],
+            'Illicit economy': ['Open a new smuggling route', 'Extort the traders and trucks on our roads', ...(NSA_RANSOM.has(N.id) ? ['Kidnap foreigners for ransom'] : []), 'Distribute food and aid to the people in our areas'],
+            'Patrons, recognition & talks': [...(pat ? [`Ask ${shortName(pat)} for weapons and money`] : []), 'Ask Russia to recognise our independence', `Negotiate a ceasefire with ${h}`, 'Run a propaganda campaign', 'Declare independence']
+        });
+        try { return _oh.apply(this, arguments); } finally { Object.keys(HELP_ORDERS).forEach(k => delete HELP_ORDERS[k]); Object.assign(HELP_ORDERS, keep);
+            try { const m = document.querySelector('#help-modal .mb-3.text-slate-300'); if (m) m.innerHTML = `You lead <b>${esc(d.name)}</b>, an armed movement inside ${esc(h)}, from 1 January 2026 — not a government. Give orders in plain English in the order bar; <b>click an example</b> to use it. 🏴 <b>Movement</b> shows your network, illicit economy, fronts and the road to statehood.`; } catch (e) { } }
+    };
+    const _oi = offlineIdeas;
+    offlineIdeas = function () {
+        if (!nsaActive()) return _oi.apply(this, arguments);
+        const N = state.nsa, d = nsaDef(N.id), n = nationIso(N.key), tgt = nsaNearestGovCity(), pat = d.patrons.find(x => WORLD[x]), out = [];
+        if (N.pool > 1500 && nsaMySites(['safehouse', 'nsa_camp'], true).length) out.push(`Recruit ${Math.min(5000, Math.round(N.pool / 1000) * 1000)} fighters`);
+        if (!nsaMySites(['nsa_camp'], false).length) out.push(`Set up a hidden training camp near ${d.hq || d.cities[0]}`);
+        if (tgt) out.push(`Launch an offensive toward ${tgt.name}`);
+        if (N.heat > 55) out.push('Lie low and keep a low profile');
+        if (n.stability < 45) out.push('Distribute food and aid to the people in our areas');
+        if (n.treasury < 30e6) out.push('Open a new smuggling route');
+        if (pat) out.push(`Ask ${shortName(pat)} for weapons and money`);
+        const S = nsaStatehoodStatus(); if (!S.recog.ok) { const c = Object.keys(WORLD).filter(x => !NON_SOVEREIGN.has(x) && !N.recog.includes(x) && !N.fronts.includes(x) && WORLD[x][3] > 0.3).map(x => [x, nsaRecogChance(x)]).sort((a, b) => b[1] - a[1])[0]; if (c) out.push(`Ask ${shortName(c[0])} to recognise our independence`); }
+        if (S.unlocked) out.unshift('Declare independence');
+        out.push('Run a propaganda campaign');
+        const why = { recruit: `${N.pool.toLocaleString()} willing recruits are waiting; support ${Math.round(n.stability)}%.`, offensive: `Balance of forces ${nsaRatio(N.gov).toFixed(2)}× against ${shortName(N.gov)}.`, low: `Heat ${Math.round(N.heat)}: the government is finding your sites.`, aid: `Support is only ${Math.round(n.stability)}% in your areas.`, smuggle: `The war chest is down to ${formatVal(n.treasury)}.`, recog: `Recognition: ${N.recog.length} states so far.` };
+        out.forEach(t => { if (!IDEA_WHY[t]) IDEA_WHY[t] = /^Recruit/.test(t) ? why.recruit : /offensive/.test(t) ? why.offensive : /Lie low/.test(t) ? why.low : /aid to the people/.test(t) ? why.aid : /smuggling/.test(t) ? why.smuggle : /recognis/.test(t) ? why.recog : 'Builds the movement toward statehood.'; });
+        let res = out.filter(t => !state.usedIdeas.has(t)); if (!res.length) { out.forEach(t => state.usedIdeas.delete(t)); res = out; }
+        return res.slice(0, 6);
+    };
+}
+
+// ---- diplomacy: governments answer an armed group by their stance toward it ----
+function nsaDiploReply(iso, text) {
+    const N = state.nsa, d = nsaDef(N.id), p = nsaP(), me = N.key, s = ' ' + String(text).toLowerCase() + ' ', rel = getRel(me, iso);
+    const out = (reply, dRel = 0, quick, binding = true) => ({ reply, dRel, quick, binding });
+    let f = { style: 'firm' }; try { f = fpOf(iso); } catch (e) { }
+    // the government you fight
+    if (N.fronts.includes(iso)) {
+        if (/\b(ceasefire|truce|peace|talks?|negotiat\w*|stop the fighting|autonomy|deal)\b/.test(s)) {
+            const c = nsaConflictWith(iso), ch = clamp(0.25 + (p.legit - 40) / 200 + (nsaRatio(iso) - 1) * 0.1 - (f.style === 'hawk' ? 0.1 : 0) - (nsaDesignated() ? 0.1 : 0) - ((N.asked['talk' + iso] || -99) > state.dayIndex - 20 ? 0.3 : 0), 0.03, 0.7);
+            N.asked['talk' + iso] = state.dayIndex;
+            if (Math.random() < ch) {
+                if (c && ['war', 'insurgency'].includes(c.type)) { c.type = 'ceasefire'; c.intensity = Math.min(c.intensity, 25); c.ceasefireByPlayer = true; c.ceasefireDay = state.dayIndex; }
+                p.legit = clamp(p.legit + 4, 0, 100); N.coin = Math.max(0, (N.coin || 0) - 10);
+                logEvent(`🕊 ${flagHTML(nationIso(iso), 10)} ${esc(shortName(iso))} agrees to a ceasefire with ${esc(d.short)}${c ? ' in the ' + esc(c.name) : ''}.`, 'good');
+                return out(`We will hold our fire from today, on condition that your fighters stay where they are and stop all attacks. This is a ceasefire, not recognition: ${shortName(iso)}'s borders are not up for negotiation.`, 6, ['We accept.', 'We want autonomy guarantees.']);
+            }
+            return out(pick([`There is nothing to negotiate. Lay down your arms and the courts will decide your fate.`, `We do not sit at a table with an armed rebellion. Withdraw from the towns you occupy first.`, `Your "talks" are a stalling tactic while you rearm. The army will continue its operations.`]), -1, ['We will not disarm.', 'Then the war goes on.']);
+        }
+        return out(pick([`${d.short} is an illegal armed group. Surrender, and lives will be spared.`, `We have nothing to say to you except this: return what you have taken.`, `Every week you fight, our forces grow stronger. Think about the people you claim to defend.`]), 0, ['We want a ceasefire.', 'We will never surrender.'], false);
+    }
+    // states that refuse any contact with a designated or hated group
+    if ((nsaDesignated() && NSA_WEST.has(iso) && !p.patrons.includes(iso)) || rel < -55)
+        return out(nsaDesignated() ? `${shortName(iso)} does not negotiate with designated terrorist organisations. ${d.short} must end its violence and release all hostages.` : `We have no interest in talking to ${d.short}. Our position will not change while your fighters threaten ${shortName(N.gov)}.`, 0, undefined, true);
+    // recognition
+    if (/\b(recogni[sz]\w*|recognition|independence|statehood|our state)\b/.test(s)) {
+        if (N.recog.includes(iso)) return out(`We already recognise you, and we stand by it.`, 1);
+        const k = 'recog' + iso;
+        if ((N.asked[k] || -99) > state.dayIndex - 45) return out(`We gave you our answer. Ask us again when the situation on the ground has changed.`, 0);
+        N.asked[k] = state.dayIndex;
+        if (Math.random() < nsaRecogChance(iso)) { nsaGrantRecog(iso); return out(`After careful consideration, ${shortName(iso)} recognises your government as of today. We expect you to protect civilians and respect the agreements we will sign.`, 8, ['Thank you — we will open a mission.', 'Will you support us at the UN?']); }
+        return out(nsaRefusalLine(iso, 'recog'), -1, ['What would change your mind?', 'We hold the ground; the world will have to accept it.']);
+    }
+    // weapons, money, support
+    if (/\b(weapons|arms|drones|missiles|money|funds?|funding|cash|support|aid|backing|help|supplies|ammunition|training)\b/.test(s) && /\b(need|send|give|ask|request|provide|support|help|can you|could you|would you|please)\b/.test(s)) {
+        const k = 'patron' + iso;
+        if ((N.asked[k] || -99) > state.dayIndex - 30) return out(`We are still considering what we sent last time. Use it well first.`, 0);
+        N.asked[k] = state.dayIndex;
+        if (Math.random() < nsaPatronChance(iso)) {
+            p.aid[iso] = clamp((p.aid[iso] || 0) + 0.15, 0, 1); if (!p.patrons.includes(iso)) p.patrons.push(iso);
+            const gift = Math.round(clamp(nationIso(iso).gdp * 6e-6, 1e6, 50e6)); nationIso(me).treasury += gift; addRel(N.gov, iso, -6);
+            logEvent(`🤝 ${flagHTML(nationIso(iso), 10)} ${esc(shortName(iso))} quietly sends ${esc(d.short)} ${formatVal(gift)} and supplies (regular support now ${Math.round(p.aid[iso] * 100)}%).`, 'good');
+            return out(`We can help — quietly. ${formatVal(gift)} and a shipment of supplies will reach you through the usual channels. Do not make us regret it.`, 4, ['Thank you.', 'We will need more.']);
+        }
+        return out(nsaRefusalLine(iso, 'support'), -1);
+    }
+    return null;           // anything else: the ordinary diplomacy engine (with the briefing below for the AI)
+}
+function nsaRulesText() {
+    const N = state.nsa; if (!N) return '';
+    const d = nsaDef(N.id), S = nsaStatehoodStatus();
+    if (N.mode === 'state') return `\nTHE PLAYER'S STATE IS NEW: ${N.statehood.name} was ${d.name}, an armed movement inside ${d.host.map(shortName).join(' & ')}, and declared independence on ${N.statehood.date}. ${N.recog.length} states recognise it; ${shortName(N.gov)} calls it an illegal partition. It now has the normal tools of a state (budget, army, diplomacy, UN application).`;
+    return `\nTHE PLAYER IS NOT A STATE: the player leads ${d.name} (${d.kind}; ${d.ideology}) inside ${d.host.map(shortName).join(' & ')}${nsaDesignated() ? ', a DESIGNATED TERRORIST ORGANISATION — Western governments refuse contact' : ''}. Rules for a non-state actor:
+- No budget, taxes, central bank, elections, UN seat, treaties, trade deals or state infrastructure. Orders a state gives (taxes, sanctions, trade deals, invasions of other countries, UN resolutions) are refused.
+- Money: black-market trade, smuggling (${(NSA_TRADE[N.id] || ['contraband'])[0]}), extortion/checkpoint "taxes"${NSA_RANSOM.has(N.id) ? ', kidnapping for ransom' : ''} and money from patron states (${d.patrons.filter(x => WORLD[x]).map(shortName).join(', ') || 'none'}). Each has risks: lost support, heat (government attention), seizures, sanctions.
+- Fighters (${N.fighters.toLocaleString()}) are recruited as cells from the people it controls, trained at hidden safehouses and camps that the government raids once found.
+- Land: offensives, assaults ("seize <town>") and raids move the host's control squares; ${shortName(N.gov)} fights back with counter-insurgency. It holds ${S.terr.km2.toLocaleString()} km² (${Math.round(S.terr.share * 100)}% of ${shortName(d.host[0])}).
+- Statehood: hold ≥33% of the host (or a larger area) for 180 days, win recognition from 10 states incl. a UN P5 member (or 20), keep legitimacy ≥50 and support ≥40%, then "Declare statehood". Now: ${S.recog.n} recognitions (${S.recog.p5} P5), land ${S.terr.ok ? 'met' : 'not met'}, legitimacy ${S.legit.legit}, support ${S.legit.sup}%.
+- Example orders: "Recruit 2000 fighters", "Build a safehouse in <town>", "Launch an offensive toward <town>", "Seize <town>", "Raid government positions near <town>", "Open a new smuggling route", "Ask <state> for weapons and money", "Ask <state> to recognise our independence", "Negotiate a ceasefire with ${shortName(N.gov)}", "Run a propaganda campaign", "Lie low".`;
+}
+{
+    const _on = offlineNegotiate;
+    offlineNegotiate = function (name, iso, text) {
+        if (nsaActive() && iso) { try { const r = nsaDiploReply(iso, text); if (r) return r; } catch (e) { console.warn('nsa diplomacy', e); } }
+        return _on.apply(this, arguments);
+    };
+    const _db = diploBrief;
+    diploBrief = function (iso) {
+        const b = _db.apply(this, arguments); const N = state.nsa; if (!N) return b;
+        try {
+            const d = nsaDef(N.id), T = nsaTerr();
+            if (N.mode === 'nso') return `THE OTHER SIDE IS NOT A STATE: you are speaking with the leadership of ${d.name} (${d.kind}, ${d.ideology}), an armed group inside ${d.host.map(shortName).join(' & ')} holding ≈${T.km2.toLocaleString()} km² (${Math.round(T.share * 100)}% of ${shortName(d.host[0])}). ${nsaDesignated() ? 'It is a designated terrorist organisation. ' : ''}Your government ${N.recog.includes(iso) ? 'RECOGNISES it' : 'does NOT recognise it'}${(nsaP().aid[iso] || 0) > 0 ? ' and backs it with money and weapons' : ''}. ${N.fronts.includes(iso) ? 'It is fighting YOUR government.' : `It is fighting the government of ${shortName(N.gov)}, with which your relations are ${getRel(iso, N.gov)}.`} Answer as a government would answer an armed movement: recognition, weapons or money are serious decisions that cost you with ${shortName(N.gov)}; many governments refuse contact. Never offer it trade agreements, treaties or UN cooperation.\n` + b;
+            return `${N.statehood.name.toUpperCase()} IS A NEW STATE: it declared independence from ${shortName(N.gov)} on ${N.statehood.date}; ${N.recog.length} states recognise it, your government ${N.recog.includes(iso) ? 'does' : 'does NOT'}.\n` + b;
+        } catch (e) { return b; }
+    };
+    const _agr = aiGameRules;
+    aiGameRules = function () { const b = _agr.apply(this, arguments); try { return state.nsa ? b + nsaRulesText() : b; } catch (e) { return b; } };
+    const _awc = aiWorldContext;
+    aiWorldContext = function (forIso) {
+        const b = _awc.apply(this, arguments); const N = state.nsa; if (!N || N.mode !== 'nso') return b;
+        try { const T = nsaTerr(), n = nationIso(N.key); return `${state.player} is an ARMED NON-STATE MOVEMENT, not a state: ${N.fighters.toLocaleString()} fighters, war chest ${formatVal(n.treasury)}, support ${Math.round(n.stability)}%, heat ${Math.round(N.heat)}, holds ${T.km2.toLocaleString()} km² of ${shortName(N.gov)}, recognised by ${N.recog.length} states.\n` + b; } catch (e) { return b; }
+    };
+    const _wd = weeklyDiplomacy;           // patrons, the government you fight and curious rivals write to a movement — not trade ministers
+    weeklyDiplomacy = function () {
+        if (!nsaActive()) return _wd.apply(this, arguments);
+        const N = state.nsa, d = nsaDef(N.id), p = nsaP(), msgs = [];
+        const pats = p.patrons.filter(x => WORLD[x] && (p.aid[x] || 0) > 0);
+        if (pats.length && Math.random() < 0.35) msgs.push([pick(pats), pick([`Our support continues. Show us results on the ground.`, `We are following your operations closely. Do not provoke a reaction that embarrasses us.`, `What do you need most urgently? Be specific.`])]);
+        if (Math.random() < 0.25) msgs.push([N.gov, pick([`Lay down your arms. An amnesty is still possible for fighters who surrender.`, `Your attacks will be answered. The army's patience is not unlimited.`, `Release the towns you hold and we can discuss the future of the region.`])]);
+        if (Math.random() < 0.15) { const r = Object.keys(WORLD).filter(x => !NON_SOVEREIGN.has(x) && WORLD[x][3] > 1 && getRel(x, N.gov) < -30 && !p.patrons.includes(x) && !(nsaDesignated() && NSA_WEST.has(x))); if (r.length) msgs.push([pick(r), `We follow your struggle against ${shortName(N.gov)} with interest. Perhaps we have common interests.`]); }
+        msgs.filter(([iso, t]) => routineAllowed(iso, t)).slice(0, 2).forEach(([iso, t]) => queueMessage(iso, t));
+    };
+}
+
+// ---- state-only systems switched off or adapted for a movement ----
+{
+    const _spc = startPlayerCoup;
+    startPlayerCoup = function () {
+        if (!nsaActive()) return _spc.apply(this, arguments);
+        const N = state.nsa, d = nsaDef(N.id), n = nationIso(N.key), lost = Math.round(N.fighters * rnd(0.04, 0.1));
+        N.fighters -= lost; n.stability = clamp(n.stability - 4, 0, 100);
+        logEvent(`⚠ <b>Split in ${esc(d.short)}:</b> a commander breaks away with ${lost.toLocaleString()} fighters, accusing the leadership of ${pick(['corruption', 'betraying the cause', 'talking to the enemy', 'favouring its own clan'])}. Support −4.`, 'bad');
+    };
+    const _dc = domesticCrisisTick;
+    domesticCrisisTick = function () {
+        if (!nsaActive()) return _dc.apply(this, arguments);
+        if (Math.random() >= D().crisisChance) return;
+        const N = state.nsa, n = nationIso(N.key), p = nsaP(), sev = D().crisisSev;
+        const C = [
+            ['Locals protest your fighters\' checkpoints and levies.', () => { n.stability = clamp(n.stability - 3 * sev, 0, 100); }, 'Distribute food and aid to the people in our areas'],
+            ['A video of fighters abusing civilians goes viral.', () => { p.legit = clamp(p.legit - 4 * sev, 0, 100); }, 'Run a propaganda campaign'],
+            ['An informer betrays a cell; arrests follow.', () => { N.pool = Math.round(N.pool * 0.85); N.heat = clamp(N.heat + 5, 0, 100); }, 'Lie low and keep a low profile'],
+            ['Commanders quarrel over smuggling money.', () => { n.treasury -= Math.min(n.treasury, 3e6 * sev); }, 'Open a new smuggling route'],
+            ['Food prices soar in the areas you hold.', () => { n.stability = clamp(n.stability - 2 * sev, 0, 100); }, 'Distribute food and aid to the people in our areas']
+        ], c = pick(C);
+        c[1]();
+        logEvent(`🚨 <b>Trouble in the movement:</b> ${esc(c[0])} <a href="#" onclick="helpFill('${c[2].replace(/'/g, "\\'")}');return false" class="underline">Respond</a>`, 'bad');
+    };
+    const _rp = rivalPressureTick;
+    rivalPressureTick = function () {
+        if (!nsaActive()) return _rp.apply(this, arguments);
+        if (Math.random() >= D().rivalChance) return;
+        const N = state.nsa, n = nationIso(N.key), me = N.key, d = nsaDef(N.id);
+        const foes = Object.keys(WORLD).filter(x => x !== me && !NON_SOVEREIGN.has(x) && WORLD[x][3] > 0.5 && getRel(me, x) < -30 && !N.fronts.includes(x)); if (!foes.length) return;
+        const r = pick(foes), nm = shortName(r);
+        const acts = [
+            () => { if ((N.sanctions || 0) < 5) N.sanctions = (N.sanctions || 0) + 1; aiNews(r, `${esc(nm)} designates ${esc(d.short)}'s financiers and freezes their accounts.`, 'bad'); },
+            () => { const v = Math.min(n.treasury, n.treasury * 0.04); n.treasury -= v; aiNews(r, `${esc(nm)} seizes ${formatVal(v)} of ${esc(d.short)} money moving through its banks.`, 'bad'); },
+            () => { const lost = Math.round(N.fighters * 0.004); N.fighters -= lost; aiNews(r, `${esc(nm)} shares intelligence with ${esc(shortName(N.gov))}; a strike kills ${lost} of your fighters.`, 'bad'); },
+            () => { addRel(r, N.gov, 4); aiNews(r, `${esc(nm)} pledges more support to ${esc(shortName(N.gov))}'s fight against ${esc(d.short)}.`, 'bad'); }
+        ];
+        pick(acts)(); addRel(me, r, -2); try { updateEconomyUI(); } catch (e) { }
+    };
+    const _pe = polElection;
+    polElection = function () { if (nsaActive()) return; return _pe.apply(this, arguments); };
+    const _co = capitulationOffer;          // a movement does not accept a government's capitulation — it declares statehood instead
+    capitulationOffer = function () { if (nsaActive()) return; return _co.apply(this, arguments); };
+    const _oc = orgCanApply;
+    orgCanApply = function (o) { if (nsaActive()) return [false, 'Armed movements cannot join — declare statehood first']; return _oc.apply(this, arguments); };
+    const _sm = socMonthly;                 // no taxes, bonds or state debt: the movement's money is the illicit economy
+    socMonthly = function () {
+        if (!nsaActive()) return _sm.apply(this, arguments);
+        const N = state.nsa, n = nationIso(N.key), tr = n.treasury;
+        const r = _sm.apply(this, arguments);
+        n.treasury = tr; try { const s = socOf(N.key); s.debt = 0; s.flags.flow = 0; s.crisis = 0; } catch (e) { }
+        return r;
+    };
+    const _sa = socAnchor;                  // a movement's people rally in war: fighting costs it far less support than it costs a government
+    socAnchor = function () { const a = _sa.apply(this, arguments); if (!nsaActive()) return a; try { return a + playerAtWar().reduce((t, c) => t + c.intensity / 15, 0) * 0.75; } catch (e) { return a; } };
+    const _se = socEvents;
+    socEvents = function () { if (nsaActive()) return; return _se.apply(this, arguments); };
+    const _me = monthlyEconomy;             // the state's monthly budget report makes no sense for a movement (it gets its own)
+    monthlyEconomy = function () {
+        if (!nsaActive()) return _me.apply(this, arguments);
+        const le = logEvent;
+        logEvent = function (msg) { if (/^📊 Monthly report|is borrowing .* a month at/.test(String(msg))) return; return le.apply(this, arguments); };
+        try { return _me.apply(this, arguments); } finally { logEvent = le; }
+    };
+    const _ai = armyInit;                   // no state army for a movement: its fighters are cells (see the Movement window)
+    armyInit = function () {
+        const N = state.nsa;
+        if (N && state.playerIso === N.key) {
+            try { const A = army(); if (A.init !== N.key) { A.units = A.units.filter(u => u.owner !== N.key); A.init = N.key; A.sel = []; } } catch (e) { }
+            if (N.mode === 'nso') { try { nsaSitesInit(); } catch (e) { console.warn('nsa sites', e); } }
+            return;
+        }
+        return _ai.apply(this, arguments);
+    };
+    const _ft = frontTick;                  // your own front lines are moved by your operations (nsaFrontTick), not by the generic war model
+    frontTick = function (catchUp) {
+        const N = state.nsa, mine = N && state.occ ? state.occ.filter(o => o.by === N.key) : [], saved = mine.map(o => o.conf);
+        mine.forEach(o => { o.conf = null; });
+        try { _ft.apply(this, arguments); } finally { mine.forEach((o, i) => { o.conf = saved[i]; }); }
+        if (N && state.phase === 'playing') { try { nsaFrontTick(catchUp); } catch (e) { console.warn('nsa front', e); } }
+    };
+    const _dt = dailyTick;
+    dailyTick = function (catchUp) {
+        const r = _dt.apply(this, arguments);
+        if (state.phase !== 'playing' || !state.nsa) return r;
+        try {
+            if (state.dayIndex % 7 === 1) nsaWeekly(catchUp);
+            if (state.date.getDate() === 1) nsaMonthly();
+        } catch (e) { console.warn('nsa tick', e); }
+        return r;
+    };
+}
+// the movement's starting network: a hidden camp at its HQ and safehouses in towns it holds
+function nsaSitesInit() {
+    const N = state.nsa; if (!N || N.sitesInit) return; N.sitesInit = true;
+    const d = nsaDef(N.id), me = N.key, place = [];
+    const held = CITIES.filter(c => N.fronts.includes(c[1])).filter(c => { const r = nsaCityKey(c); return r && r.k === me; });
+    const named = (d.cities || []).map(nm => held.find(c => normName(c[0]) === normName(nm))).filter(Boolean);
+    const towns = named.concat(held.filter(c => !named.includes(c)));
+    const mk = (type, name, lat, lng, pl) => addSite({ name, type, owner: me, host: me, lat, lng, place: pl, status: 'active', progress: 1, cost: SITE_TYPES[type].cost, specs: { Cover: 'Hidden', ...(SITE_TYPES[type].cap ? { Capacity: SITE_TYPES[type].cap.toLocaleString() + ' recruits in training' } : {}) }, notes: [`${state.date.toLocaleDateString()}: Part of the movement's network on 1 January 2026.`], fromGame: true, hidden: true, started: state.date.toLocaleDateString() });
+    const hq = d.hq ? d.hq.replace(/\s*\(.*$/, '').split(/[\/,]/)[0].trim() : d.cities[0];
+    mk('nsa_camp', `${hq} hidden camp`, d.base[0] + rnd(-0.12, 0.12), d.base[1] + rnd(-0.12, 0.12), hq);
+    towns.filter(c => km({ lat: c[2], lng: c[3] }, { lat: d.base[0], lng: d.base[1] }) > 15 && normName(c[0]) !== normName(hq)).slice(0, Math.min(3, Math.max(1, Math.round(N.fighters / 30000)))).forEach(c => { mk('safehouse', `${c[0]} safehouse`, c[2] + rnd(-0.05, 0.05), c[3] + rnd(-0.05, 0.05), c[0]); place.push(c[0]); });
+    if (!place.length) mk('safehouse', `${hq} safehouse`, d.base[0] + rnd(-0.2, 0.2), d.base[1] + rnd(-0.2, 0.2), hq);
+    try { renderSitesTab(); updateSitesStat(); } catch (e) { }
+}
+
+// ---- new game, saves and loading ----
+function nsaReset() {
+    nsaUnregister();
+    try { nsaGeoApply(true); } catch (e) { }
+    NSA_GEO.hostGeom = {};
+}
+{
+    const _iw = initWorld;
+    initWorld = function () {
+        const pick0 = NSA_SETUP.pick, d = pick0 && nsaDef(pick0);
+        state.nsa = null; nsaReset();
+        if (d && state.player === (d.state_name || d.name)) nsaRegister(d);
+        const r = _iw.apply(this, arguments);
+        state.nsa = null;
+        if (d && state.playerIso === nsaKeyOf(d)) { try { nsaStart(pick0); } catch (e) { console.warn('nsa start', e); } }
+        NSA_SETUP.pick = null; NSA_SETUP.on = false; ENT.sel = null;
+        nsaBodyClass();
+        if (state.nsa) setTimeout(() => { try { armyInit(); grpRefresh(true); updateEconomyUI(); refreshIdeas(); } catch (e) { } }, 700);
+        return r;
+    };
+    const _as = applySave;
+    applySave = function (d) {
+        try { state.nsa = null; nsaReset(); const N = d && d.state && d.state.nsa; if (N && nsaDef(N.id)) nsaRegister(nsaDef(N.id), N); NSA_SETUP.on = false; NSA_SETUP.pick = null; } catch (e) { console.warn('nsa load', e); }
+        const r = _as.apply(this, arguments);
+        try {
+            state.nsa = (d && d.state && d.state.nsa) || null;
+            const p = nsaP(); if (p) { p.player = true; if (state.nsa.mode === 'state') p.stateNow = state.nsa.key; }
+            nsaBodyClass();
+            if (state.nsa && state.nsa.mode === 'state') nsaGeoSoon();
+            updateTopbarNation(); updateEconomyUI(); grpRefresh(true);
+        } catch (e) { console.warn('nsa load', e); }
+        return r;
+    };
 }
 
 // =====================================================================
