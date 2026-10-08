@@ -23896,7 +23896,7 @@ function milUnitsIn(text) {
     const s = milExpandOrdinals(milNorm(text)), GEN = new Set(['brigade', 'group', 'battalion', 'wing', 'force', 'task', 'the', 'of', 'unit', 'squadron', 'fleet', 'division', 'detachment', 'and', 'a']);
     const hits = [];
     // words already used as equipment ("build 10 stealth fighters") must not name a unit loosely ("1st Fighter Wing")
-    let itemTxt = ''; try { itemTxt = ' ' + milItemsIn(text).filter(x => !x.guessed).map(x => milNorm(x.word).trim()).join(' ') + ' '; } catch (e) { }
+    let itemTxt = ''; try { itemTxt = ' ' + milItemsIn(text).filter(x => !x.guessed || /\b(batter(y|ies)|systems?|launchers?|missiles?|interceptors?|fighters|jets|tanks|bombers|frigates|destroyers|carriers|helicopters|drones)\b/.test(x.word)).map(x => milNorm(x.word).trim()).join(' ') + ' '; } catch (e) { }
     const asItem = t => itemTxt.includes(' ' + t + ' ') || itemTxt.includes(' ' + t + 's ');
     myUnits().forEach(u => {
         const n = milNorm(u.name).trim(), toks = n.split(' ').filter(Boolean); let best = 0;
