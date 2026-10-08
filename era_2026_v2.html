@@ -9307,7 +9307,7 @@ PCN:Adamstown,-25.07,-130.10,0.0001`;
                 army().units.forEach(u => {
                     if (u.path && u.path.to && u.path.to.baseId === id) u.path.to.baseId = null;
                     if (u.baseId !== id) return;
-                    const sea = !!(typeof BRIG !== 'undefined' && BRIG[u.type] && BRIG[u.type].sea), fits = b => (sea ? b.type === 'naval' : b.type !== 'naval') && baseLoad(b) + u.troops <= baseCap(b);
+                    const sea = !!(typeof BRIG !== 'undefined' && BRIG[u.type] && BRIG[u.type].sea), fits = b => typeof baseFits === 'function' ? baseFits(b, [u]).ok : (sea ? b.type === 'naval' : b.type !== 'naval') && baseLoad(b) + u.troops <= baseCap(b);
                     const b = others.filter(fits).sort((a, c) => (a.type === site.type ? 0 : 1) - (c.type === site.type ? 0 : 1) || km(a, site) - km(c, site))[0];
                     const training = u.status === 'training';
                     if (b) { u.baseId = b.id; u.lat = b.lat; u.lng = b.lng; if (!training) u.status = 'garrison'; }
@@ -20327,7 +20327,7 @@ function armyInit() {
     const A = army(), me = state.playerIso; if (!me || A.init === me) return;
     A.units = A.units.filter(u => u.owner !== me); A.init = me; A.sel = []; A.typeSeq = {};
     // make sure you have bases at home: the capital and your two largest cities
-    const home = myBases().filter(s => (s.host || s.owner) === me);
+    const home = myBases().filter(s => (s.host || s.owner) === me && s.type === 'base');      // army bases: naval and air bases do not house brigades
     if (home.length < 3) {
         const cities = CITIES.filter(c => c[1] === me).sort((a, b) => (b[5] ? 1e9 : b[4] || 0) - (a[5] ? 1e9 : a[4] || 0)).slice(0, 3);
         cities.forEach((c, i) => {
@@ -20472,28 +20472,52 @@ function selectUnits(ids, add) { const A = army(); A.sel = add ? [...new Set(A.s
 function selectBaseUnits(baseId) { selectUnits(army().units.filter(u => u.baseId === baseId && u.status !== 'training').map(u => u.id)); try { map.closePopup(); } catch (e) { } }
 function clearSel() { army().sel = []; armyRefreshMap(); }
 function selUnits() { const A = army(); A.sel = A.sel.filter(id => unitById(id)); return A.sel.map(unitById); }
+let SC_MODE = '', SC_SIG = '';
 function renderSelCard() {
     let d = document.getElementById('sel-card');
     const U = selUnits();
-    if (!U.length || state.phase !== 'playing') { if (d) d.style.display = 'none'; return; }
+    if (!U.length || state.phase !== 'playing') { if (d) d.style.display = 'none'; SC_SIG = ''; if (!U.length) SC_MODE = ''; return; }
     if (!d) { d = document.createElement('div'); d.id = 'sel-card'; (document.getElementById('ui-layer') || document.body).appendChild(d); }
-    const tot = k => U.reduce((s, u) => s + (u[k] || 0), 0);
-    const bases = myBases();
+    const act = U.filter(u => u.status !== 'training'), bases = basesFor(act);
+    // rebuilt only when something on the card changed — the game clock never closes an open dropdown or wipes a name being typed
+    const sig = JSON.stringify([SC_MODE, U.map(u => [u.id, u.name, u.status, u.baseId, u.path ? u.path.to.label : '', ASSET_KEYS.map(([k]) => u[k] || 0)]), bases.map(b => [b.id, b.level, baseLoads(b).n])]);
+    const ae = document.activeElement, typing = ae && d.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName);
+    if ((sig === SC_SIG || typing) && d.style.display !== 'none' && d.innerHTML) {
+        d.querySelectorAll('[data-where]').forEach(el => { const u = unitById(el.dataset.where); if (u) { const t = unitWhere(u); if (el.textContent !== t) el.textContent = t; } });
+        return;
+    }
+    SC_SIG = sig;
+    const tot = {}; ASSET_KEYS.forEach(([k]) => tot[k] = U.reduce((s, u) => s + (u[k] || 0), 0));
+    const one = U.length === 1 ? U[0] : null, ren = SC_MODE.startsWith('rename:') ? unitById(SC_MODE.slice(7)) : null;
+    const hasAD = U.some(u => AD_KEYS.some(k => (u[k] || 0) > 0));
+    let form = '';
+    if (ren) form = `<div class="sc-form"><span>Rename</span><input id="sc-name" maxlength="60" value="${esc(ren.name)}" style="flex:1" onkeydown="if(event.key==='Enter')scRename('${ren.id}')"><button type="button" class="gs-btn gs-btn-primary" onclick="scRename('${ren.id}')">✓</button><button type="button" class="gs-btn" onclick="SC_MODE='';renderSelCard()">✕</button></div>`;
+    else if (SC_MODE === 'merge' && U.length > 1) form = `<div class="sc-form"><span>Merge ${U.length} formations into</span><input id="sc-name" maxlength="60" value="${esc(mergeDefaultName(U))}" style="flex:1" onkeydown="if(event.key==='Enter')scMerge()"><button type="button" class="gs-btn gs-btn-primary" onclick="scMerge()">⧉ Merge</button><button type="button" class="gs-btn" onclick="SC_MODE='';renderSelCard()">✕</button></div>`;
+    else if (SC_MODE === 'split' && one) form = splitFormHTML(one, true);
+    const opt = b => { const here = act.every(u => u.baseId === b.id), fit = here || baseFits(b, act.filter(u => u.baseId !== b.id)).ok; return `<option value="${b.id}" ${fit ? '' : 'disabled'}>${esc(b.name)} — ${esc(baseCapText(b))}${here ? ' (here)' : fit ? '' : ' (no room)'}</option>`; };
+    const want = act.length ? [...new Set(act.map(baseTypesFor).reduce((a, t) => a.filter(x => t.includes(x))))].map(t => BASE_TYPE_WORD[t] + 's').join(' / ') : '';
     d.innerHTML = `<div class="sc-h"><b>${U.length} unit${U.length > 1 ? 's' : ''} selected</b><button type="button" onclick="clearSel()" title="Deselect (Esc)">✕</button></div>
-        <div class="sc-stats">${ASSET_KEYS.filter(([k]) => tot(k)).map(([k, l]) => `${tot(k).toLocaleString()} ${l}`).join(' · ')}</div>
-        <div class="sc-list">${U.slice(0, 6).map(u => `<div>${unitSvg(symFor(u), false)} ${esc(u.name)} <span>${esc(unitWhere(u))}</span></div>`).join('')}${U.length > 6 ? `<div>+${U.length - 6} more</div>` : ''}</div>
+        <div class="sc-tot">${compHTML(tot)}</div>
+        <div class="sc-list">${U.slice(0, 6).map(u => `<div class="sc-u">${unitSvg(symFor(u), false)}<div class="sc-n">${esc(u.name)}<button type="button" class="icn" title="Rename" onclick="SC_MODE='rename:${u.id}';renderSelCard()">✎</button></div><div class="sc-w" data-where="${u.id}">${esc(unitWhere(u))}</div><div>${compHTML(u, { h: 13, cls: 'sm' })}</div></div>`).join('')}${U.length > 6 ? `<div class="mr-sub">+${U.length - 6} more</div>` : ''}</div>
         <div class="sc-act">
-            <button type="button" class="gs-btn" onclick="armyMoveMode()" title="Then click a destination (or right-click the map)">➜ Move</button>
-            <select class="gs-btn" onchange="if(this.value){sendToBase(this.value);this.value=''}"><option value="">⌂ Into base…</option>${bases.map(b => `<option value="${b.id}">${esc(b.name)} (${fmtK(baseLoad(b))}/${fmtK(baseCap(b))})</option>`).join('')}</select>
-            <button type="button" class="gs-btn" onclick="armyHalt()" title="Stop where they are">■ Halt</button>
-        </div>
-        <div class="sc-tip">Right-click the map to move · Shift+click to add units · Shift+drag to box-select</div>`;
+            <button type="button" class="gs-btn" onclick="armyMoveMode()" title="Then click a destination (or right-click the map)" ${act.length ? '' : 'disabled'}>➜ Move</button>
+            <select class="gs-btn" title="Station the selected units at a base of the right type" onchange="if(this.value){sendToBase(this.value);this.value=''}" ${act.length ? '' : 'disabled'}><option value="">⌂ Into base…</option>${bases.length ? bases.map(opt).join('') : `<option value="" disabled>No ${esc(want || 'base')} of yours</option>`}</select>
+            ${U.some(u => u.status === 'moving') ? `<button type="button" class="gs-btn" onclick="armyHalt()" title="Stop where they are">■ Halt</button>` : ''}
+            ${U.length > 1 ? `<button type="button" class="gs-btn" onclick="SC_MODE='merge';renderSelCard()" title="Join these formations into one (any mix: troops with tanks, ships with aircraft…)">⧉ Merge</button>` : ''}
+            ${one && one.status !== 'training' ? `<button type="button" class="gs-btn" onclick="SC_MODE=SC_MODE==='split'?'':'split';renderSelCard()" title="Split off a detachment">✂ Split</button>` : ''}
+            ${hasAD ? `<button type="button" class="gs-btn" onclick="refillAD(selUnits().map(u=>u.id))" title="Reload the batteries' interceptors from the reserve">⟳ Refill</button>` : ''}
+            ${act.length === U.length ? `<button type="button" class="gs-btn" onclick="if(confirm('Stand down ${U.length > 1 ? 'these ' + U.length + ' formations' : 'this formation'} and return everything to the national reserve?'))selUnits().map(u=>u.id).forEach(disbandUnit)" title="Return troops and equipment to the national reserve">⤓ To reserve</button>` : ''}
+        </div>${form}
+        <div class="sc-tip">Right-click the map to move · Shift+click to add units · Shift+drag to box-select${want ? ' · based at ' + esc(want) : ''}</div>`;
     d.style.display = '';
 }
+function scRename(id) { const el = document.getElementById('sc-name'); if (el && renameUnit(id, el.value)) { SC_MODE = ''; renderSelCard(); } }
+function scMerge() { const el = document.getElementById('sc-name'); const r = mergeUnits(selUnits(), el ? el.value : ''); if (r) { SC_MODE = ''; SC_SIG = ''; renderSelCard(); } }
+function mergeDefaultName(U) { const k = U.slice().sort((a, b) => unitPower(b) - unitPower(a))[0]; return k ? k.name.replace(/ — Detachment [A-Z]+$/, '') : ''; }
 function unitWhere(u) {
     if (u.status === 'training') return `training · ready ${fmtDate(dateIn(Math.max(0, u.readyDay - state.dayIndex)))}`;
     if (u.baseId) { const b = (state.sites || []).find(s => s.id === u.baseId); return b ? 'at ' + b.name : 'garrison'; }
-    if (u.status === 'moving' && u.path) return `→ ${u.path.to.label || 'destination'} (${Math.max(1, Math.ceil(km(u, u.path.to) / BRIG[u.type].speed))}d)`;
+    if (u.status === 'moving' && u.path) return `→ ${u.path.to.label || 'destination'} (${Math.max(1, Math.ceil(milPathLeft(u) / Math.max(1, unitSpeed(u))))}d)`;
     const nc = nearestCity(u.lat, u.lng, 300); return nc ? 'near ' + nc.name : 'in the field';
 }
 
@@ -20516,7 +20540,7 @@ function armyMoveTo(ll, toBase) {
     const chk = toBase ? { ok: true } : moveCheck(ll);
     if (!chk.ok) { flashReply('⛔ ' + esc(chk.why)); return; }
     // warships sail: they go to sea areas or into naval bases, never inland
-    if (U.some(u => BRIG[u.type].sea) && (toBase ? toBase.type !== 'naval' : !!countryAtLL(ll))) {
+    if (U.some(u => unitDomain(u) === 'sea') && (toBase ? toBase.type !== 'naval' : !!countryAtLL(ll))) {
         flashReply(toBase ? `⛔ ${esc(toBase.name)} is not a naval base — warships can only dock at naval bases.` : '⛔ Warships can only move at sea or into a naval base. Click on the water (or use "Into base…" with a naval base).'); return;
     }
     const nc = nearestCity(ll.lat, ll.lng, 200), label = toBase ? toBase.name : nc ? `near ${nc.name}` : 'the selected position';
@@ -20525,7 +20549,7 @@ function armyMoveTo(ll, toBase) {
         u.baseId = null; u.status = 'moving'; u.path = { to: { lat: off.lat, lng: off.lng, label, baseId: toBase ? toBase.id : null }, iso: chk.iso || null };
     });
     playClick();
-    const days = Math.max(...U.map(u => Math.max(1, Math.ceil(km(u, ll) / BRIG[u.type].speed))));
+    const days = Math.max(...U.map(u => Math.max(1, Math.ceil(km(u, ll) / unitSpeed(u)))));
     logEvent(`🪖 ${U.length > 1 ? U.length + ' units' : esc(U[0].name)} ordered to ${esc(label)} (≈${days} day${days > 1 ? 's' : ''}).${chk.ally ? ` Stationed with ${esc(shortName(chk.iso))}'s consent.` : chk.war ? ' Moving into the war zone.' : ''}`, 'neutral');
     if (chk.ally) addRel(state.playerIso, chk.iso, 1);
     ARMY_MOVE_MODE = false; try { map.getContainer().style.cursor = ''; } catch (e) { }
@@ -20533,8 +20557,10 @@ function armyMoveTo(ll, toBase) {
 }
 function sendToBase(baseId) {
     const b = (state.sites || []).find(s => s.id === baseId); if (!b) return;
-    const U = selUnits().filter(u => u.status !== 'training'), need = U.filter(u => u.baseId !== b.id).reduce((s, u) => s + u.troops, 0);
-    if (baseLoad(b) + need > baseCap(b)) { flashReply(`⚠ ${esc(b.name)} can hold ${baseCap(b).toLocaleString()} troops (now ${baseLoad(b).toLocaleString()}). Expand the base first, or send fewer units.`); return; }
+    const U = selUnits().filter(u => u.status !== 'training'), go = U.filter(u => u.baseId !== b.id);
+    if (!go.length) { flashReply(`They are already at ${esc(b.name)}.`); return; }
+    // army bases take ground forces, air bases aircraft, naval bases warships — and each has room for so many troops, aircraft and ships
+    const fit = baseFits(b, go); if (!fit.ok) { flashReply('⚠ ' + esc(fit.why)); return; }
     armyMoveTo({ lat: b.lat, lng: b.lng }, b);
 }
 function armyHalt() { selUnits().forEach(u => { if (u.status === 'moving') { u.status = 'deployed'; u.path = null; } }); armyRefreshMap(); }
@@ -20546,11 +20572,11 @@ function armyTick() {              // runs on every game-clock tick; movement fo
     A.units.forEach(u => {
         if (u.status === 'training' && state.dayIndex >= u.readyDay) { u.status = u.baseId ? 'garrison' : 'deployed'; changed = true; logEvent(`🎖 ${esc(u.name)} has finished training (${u.troops.toLocaleString()} troops).`, 'good'); }
         if (u.status !== 'moving' || !u.path) return;
-        const step = BRIG[u.type].speed * dt, d = km(u, u.path.to);
+        const step = unitSpeed(u) * dt, d = km(u, u.path.to);
         if (d <= step) {
             u.lat = u.path.to.lat; u.lng = u.path.to.lng;
             const b = u.path.to.baseId && (state.sites || []).find(s => s.id === u.path.to.baseId);
-            if (b && isMilBase(b) && baseLoad(b) + u.troops <= baseCap(b)) { u.baseId = b.id; u.status = 'garrison'; }
+            if (b && isMilBase(b) && baseFits(b, [u]).ok) { u.baseId = b.id; u.status = 'garrison'; }
             else u.status = u.path.iso && atWarWith(u.path.iso) ? 'engaged' : 'deployed';
             if (u.owner === state.playerIso) logEvent(`🪖 ${esc(u.name)} arrived ${esc(u.path.to.label || '')}.`, 'neutral');
             u.path = null;
@@ -20625,46 +20651,57 @@ function openMilPanel(tab) {
 function closeMilPanel() { const m = document.getElementById('mil-modal'); if (m) m.classList.add('hidden'); }
 function renderMilPanel() {
     const box = document.getElementById('mil-body'); if (!box || document.getElementById('mil-modal').classList.contains('hidden')) return;
-    const U = myUnits(), B = myBases(), tot = k => U.reduce((s, u) => s + (u[k] || 0), 0);
+    const U = myUnits(), B = myBases(), R = resOf();
     let rank = '—'; try { rank = '#' + worldRanks().mil[state.playerIso]; } catch (e) { }
-    const tabs = [['forces', `Forces (${U.length})`], ['bases', `Bases (${B.length})`], ['recruit', 'Recruit'], ['world', 'World forces']];
+    if (!state.armyUpkeep) try { armyMonthlyUpkeep(true); } catch (e) { }
+    const tabs = [['forces', `Forces (${U.length})`], ['reserve', `Reserve`], ['procure', 'Procure'], ['production', 'Production'], ['bases', `Bases (${B.length})`], ['airdef', 'Air defence'], ['world', 'World forces']]
+        .filter(([k]) => typeof MIL_TAB_HTML[k] === 'function' || ['forces', 'bases', 'world'].includes(k));
+    if (!tabs.some(t => t[0] === MIL_TAB)) MIL_TAB = 'forces';
+    const tot = {}; ASSET_KEYS.forEach(([k]) => tot[k] = U.reduce((s, u) => s + (u[k] || 0), 0));
     const NI = milInventory(state.playerIso);
-    let h = `<div class="mil-sum">${[['troops', 'troops in formations'], ['tanks', 'tanks'], ['ifv', 'IFVs / APCs'], ['guns', 'artillery'], ['sam', 'SAM launchers'], ['helis', 'helicopters'], ['jets', 'combat jets'], ['carriers', 'aircraft carriers'], ['destroyers', 'destroyers'], ['frigates', 'frigates']].map(([k, l]) => `<div><b>${tot(k).toLocaleString()}</b><span>${l}</span></div>`).join('')}<div><b>${rank}</b><span>military rank</span></div></div>
-        <div class="mil-note">National armed forces: ${NI.troops.toLocaleString()} active troops · ${NI.tanks.toLocaleString()} tanks · ${NI.jets.toLocaleString()} combat jets · ${NI.helis.toLocaleString()} helicopters · ${NI.ships.toLocaleString()} naval vessels (${NI.carriers} carriers, ${NI.destroyers} destroyers, ${NI.frigates} frigates)${NI.est ? ' (estimated)' : ' (approx., 2025)'}. Formations above are the deployable part you command on the map.</div>
-        <div class="mil-note">Upkeep ≈ ${formatVal(state.armyUpkeep || 0)}/month · Treasury ${formatVal(nationIso(state.playerIso).treasury)}</div>
-        <div class="mil-tabs">${tabs.map(([k, l]) => `<button type="button" class="cc-tab${MIL_TAB === k ? ' cc-tab-active' : ''}" onclick="MIL_TAB='${k}';renderMilPanel()">${l}</button>`).join('')}</div>`;
+    let h = `<div class="wm-card" style="margin-top:8px"><div class="mr-sub" style="margin-bottom:3px">In ${U.length} formation${U.length === 1 ? '' : 's'} (on the map and in bases)</div>${compHTML(tot, { h: 20 })}
+            <div class="mr-sub" style="margin:6px 0 3px">In the national reserve — <a href="#" onclick="MIL_TAB='reserve';renderMilPanel();return false" style="color:#d1ad5b">form units from it</a></div>${compHTML(R, { h: 20 })}</div>
+        <div class="mil-note">Military rank <b style="color:#f3d98a">${rank}</b> · national armed forces ${NI.troops.toLocaleString()} troops, ${NI.tanks.toLocaleString()} tanks, ${NI.jets.toLocaleString()} combat aircraft, ${NI.ships.toLocaleString()} vessels · upkeep ≈ ${formatVal(state.armyUpkeep || 0)}/month · treasury ${formatVal(nationIso(state.playerIso).treasury)}</div>
+        ${MIL_MSG ? `<div class="mil-msg${MIL_MSG[0] ? '' : ' bad'}">${MIL_MSG[1]}</div>` : ''}
+        <div class="mil-tabs" style="flex-wrap:wrap">${tabs.map(([k, l]) => `<button type="button" class="cc-tab${MIL_TAB === k ? ' cc-tab-active' : ''}" onclick="MIL_TAB='${k}';MIL_MSG=null;renderMilPanel()">${l}</button>`).join('')}</div>`;
+    MIL_MSG = null;
     if (MIL_TAB === 'forces') {
         h += U.length ? `<div class="mil-list">${U.map(u => `<div class="mil-row${army().sel.includes(u.id) ? ' sel' : ''}">
             <label><input type="checkbox" ${army().sel.includes(u.id) ? 'checked' : ''} ${u.status === 'training' ? 'disabled' : ''} onchange="milToggle('${u.id}',this.checked)"> ${unitSvg(symFor(u), false)}</label>
-            <div class="mr-main"><b>${esc(u.name)}</b><div class="mr-sub">${esc(unitKit(u))} · readiness ${Math.round(u.ready || 100)}%</div><div class="mr-sub">${esc(unitWhere(u))}</div></div>
-            <div class="mr-act"><button type="button" class="gs-btn" onclick="milFocus('${u.id}')" title="Show on map">◎</button><button type="button" class="gs-btn" onclick="milReinforcePrompt('${u.id}')" title="Add troops">＋</button><button type="button" class="gs-btn" ${u.status === 'training' ? 'disabled' : ''} onclick="MIL_SPLIT=MIL_SPLIT==='${u.id}'?'':'${u.id}';renderMilPanel()" title="Divide this formation into smaller ones">✂</button></div></div>${MIL_SPLIT === u.id ? splitFormHTML(u) : ''}`).join('')}</div>
-            <div class="mil-acts"><button type="button" class="gs-btn" onclick="selectUnits(myUnits().filter(u=>u.status!=='training').map(u=>u.id));renderMilPanel()">Select all</button><button type="button" class="gs-btn" onclick="clearSel();renderMilPanel()">Clear</button><button type="button" class="gs-btn" onclick="closeMilPanel();armyMoveMode()">➜ Move selected</button><button type="button" class="gs-btn" onclick="mergeSelected()" title="Join the selected formations of the same type that are in the same place">⧉ Merge selected</button></div>`
-            : `<div class="mil-note">No brigades yet. Recruit some in the Recruit tab.</div>`;
+            <div class="mr-main"><b>${esc(u.name)}</b> <button type="button" class="gs-btn" style="padding:0 5px;font-size:10px" onclick="MIL_EDIT=MIL_EDIT==='ren:${u.id}'?'':'ren:${u.id}';renderMilPanel()" title="Rename">✎</button>
+                <div style="margin:2px 0">${compHTML(u, { h: 14, cls: 'sm' })}</div><div class="mr-sub">${esc(unitWhere(u))} · readiness ${Math.round(u.ready || 100)}%</div></div>
+            <div class="mr-act"><button type="button" class="gs-btn" onclick="milFocus('${u.id}')" title="Show on map">◎</button><button type="button" class="gs-btn" ${u.status === 'training' ? 'disabled' : ''} onclick="MIL_EDIT=MIL_EDIT==='add:${u.id}'?'':'add:${u.id}';renderMilPanel()" title="Reinforce from the national reserve">＋</button><button type="button" class="gs-btn" ${u.status === 'training' ? 'disabled' : ''} onclick="MIL_EDIT=MIL_EDIT==='spl:${u.id}'?'':'spl:${u.id}';renderMilPanel()" title="Split off a detachment">✂</button><button type="button" class="gs-btn" ${u.status === 'training' ? 'disabled' : ''} onclick="disbandUnit('${u.id}')" title="Stand down: everything returns to the national reserve">⤓</button></div></div>${MIL_EDIT === 'spl:' + u.id ? splitFormHTML(u) : MIL_EDIT === 'add:' + u.id ? addFormHTML(u) : MIL_EDIT === 'ren:' + u.id ? `<div class="mil-split"><div class="mil-acts"><input class="mil-in" id="mil-ren" maxlength="60" value="${esc(u.name)}" style="width:260px" onkeydown="if(event.key==='Enter'){renameUnit('${u.id}',this.value);MIL_EDIT='';renderMilPanel()}"><button type="button" class="gs-btn gs-btn-primary" onclick="renameUnit('${u.id}',document.getElementById('mil-ren').value);MIL_EDIT='';renderMilPanel()">✓ Rename</button></div></div>` : ''}`).join('')}</div>
+            <div class="mil-acts"><button type="button" class="gs-btn" onclick="selectUnits(myUnits().filter(u=>u.status!=='training').map(u=>u.id));renderMilPanel()">Select all</button><button type="button" class="gs-btn" onclick="clearSel();renderMilPanel()">Clear</button><button type="button" class="gs-btn" onclick="closeMilPanel();armyMoveMode()">➜ Move selected</button>
+            <input class="mil-in" id="mil-merge-name" maxlength="60" placeholder="name for the merged formation" style="width:200px"><button type="button" class="gs-btn" onclick="mergeUnits(selUnits(), (document.getElementById('mil-merge-name')||{}).value)" title="Join the selected formations (any mix) that are in the same base or place">⧉ Merge selected</button></div>`
+            : `<div class="mil-note">No formations yet. Form one from the national reserve in the Reserve tab.</div>`;
     } else if (MIL_TAB === 'bases') {
-        h += B.length ? B.map(b => { const load = baseLoad(b), cap = baseCap(b), us = unitsAt(b);
+        h += B.length ? B.map(b => { const C = baseCaps(b), L = baseLoads(b), us = unitsAt(b), pct = Math.max(L.troops / C.troops, b.type === 'airbase' ? L.air / Math.max(1, C.air) : 0, b.type === 'naval' ? L.ships / Math.max(1, C.ships) : 0);
+            const gar = {}; ASSET_KEYS.forEach(([k]) => gar[k] = us.reduce((s, u) => s + (u[k] || 0), 0));
             return `<div class="wm-card"><div class="wm-ctop"><b>${esc(b.name)}</b><span class="mr-sub">${esc(SITE_TYPES[b.type] ? SITE_TYPES[b.type].name : b.type)} · level ${b.level || 1}${b.expandDay ? ' · expanding (' + (b.expandDay - state.dayIndex) + 'd)' : ''}${(b.host || b.owner) !== state.playerIso ? ' · in ' + esc(shortName(b.host)) : ''}</span></div>
-                <div class="mil-cap"><div style="width:${Math.min(100, 100 * load / cap)}%;background:${load > cap * 0.9 ? '#e0866b' : '#7fd4ff'}"></div></div>
-                <div class="mr-sub">${load.toLocaleString()} / ${cap.toLocaleString()} troops · ${us.length} unit${us.length === 1 ? '' : 's'}${us.length ? ': ' + us.map(u => esc(u.name.replace(/ Brigade| Group/, ''))).join(', ') : ''}</div>
+                <div class="mil-cap"><div style="width:${Math.min(100, 100 * pct)}%;background:${pct > 0.9 ? '#e0866b' : '#7fd4ff'}"></div></div>
+                <div class="mr-sub">${esc(baseCapText(b))} · holds ${b.type === 'naval' ? 'warships (and air defence)' : b.type === 'airbase' ? 'aircraft and helicopters (and air defence)' : 'ground forces, helicopters, air defence'} · ${us.length} unit${us.length === 1 ? '' : 's'}${us.length ? ': ' + us.map(u => esc(u.name)).join(', ') : ''}</div>
+                ${us.length ? `<div style="margin-top:3px">${compHTML(gar, { h: 14, cls: 'sm' })}</div>` : ''}
                 <div class="mil-acts"><button type="button" class="gs-btn" onclick="selectBaseUnits('${b.id}');renderMilPanel()" ${us.length ? '' : 'disabled'}>Select garrison</button>
                 <button type="button" class="gs-btn" onclick="expandBase('${b.id}')" ${b.expandDay || (b.level || 1) >= 6 ? 'disabled' : ''} title="+${Math.round(100 / (b.level || 1))}% capacity">🏗 Expand · ${formatVal(expandCost(b))}</button>
-                <button type="button" class="gs-btn" onclick="MIL_TAB='recruit';MIL_RBASE='${b.id}';renderMilPanel()">🎖 Recruit here</button>
+                <button type="button" class="gs-btn" onclick="MIL_TAB='reserve';MIL_FORM.base='${b.id}';renderMilPanel()">🎖 Form unit here</button>
                 <button type="button" class="gs-btn" onclick="sendToBase('${b.id}')" ${army().sel.length ? '' : 'disabled'} title="Move the selected units into this base">⌂ Move selected here</button>
                 <button type="button" class="gs-btn" onclick="milFocusLL(${b.lat},${b.lng})">◎</button></div></div>`; }).join('')
-            : `<div class="mil-note">You have no military bases. Build one with an order like "Build a military base near …".</div>`;
+            : `<div class="mil-note">You have no military bases. Build one in the Build tab or with an order like "Build an army base near …".</div>`;
     } else if (MIL_TAB === 'world') {
         h += worldForcesHTML();
-    } else {
-        const T = BRIG[MIL_RTYPE] || BRIG.infantry, tr = MIL_RTROOPS || T.troops, n = MIL_RCOUNT || 1;
-        h += `<div class="mil-form">
-            <div class="mil-types">${Object.keys(BRIG).map(k => `<button type="button" class="mil-type${MIL_RTYPE === k ? ' on' : ''}" onclick="MIL_RTYPE='${k}';MIL_RTROOPS=0;renderMilPanel()">${unitSvg(BRIG[k].sym, MIL_RTYPE === k)}<b>${BRIG[k].name}</b><span>${BRIG[k].troops.toLocaleString()} troops${BRIG[k].tanks ? ' · ' + BRIG[k].tanks + ' tanks' : ''}${BRIG[k].ifv ? ' · ' + BRIG[k].ifv + ' IFV' : ''}${BRIG[k].guns ? ' · ' + BRIG[k].guns + ' guns' : ''}${BRIG[k].sam ? ' · ' + BRIG[k].sam + ' SAM' : ''}</span></button>`).join('')}</div>
-            <div class="mil-fields"><label>Troops per unit <input type="number" min="100" step="100" value="${tr}" oninput="MIL_RTROOPS=+this.value;milCostUpd()"></label>
-            <label>Units <input type="number" min="1" max="20" value="${n}" oninput="MIL_RCOUNT=+this.value;milCostUpd()"></label>
-            <label>Train at <select onchange="MIL_RBASE=this.value;milCostUpd()">${B.map(b => `<option value="${b.id}" ${MIL_RBASE === b.id ? 'selected' : ''}>${esc(b.name)} (${fmtK(baseLoad(b))}/${fmtK(baseCap(b))})</option>`).join('')}</select></label></div>
-            <div id="mil-cost" class="mil-note"></div>
-            <button type="button" class="gs-btn mil-go" onclick="recruit(MIL_RTYPE, MIL_RTROOPS || BRIG[MIL_RTYPE].troops, MIL_RBASE || (myBases()[0]||{}).id, MIL_RCOUNT || 1)">🎖 Recruit</button></div>` + buyFormHTML();
-    }
-    box.innerHTML = h; if (MIL_TAB === 'recruit') { milCostUpd(); milBuyUpd(); }
+    } else if (MIL_TAB_HTML[MIL_TAB]) h += MIL_TAB_HTML[MIL_TAB]();
+    box.innerHTML = h;
+    try { if (MIL_TAB === 'reserve') milFormUpd(); if (MIL_TAB_AFTER[MIL_TAB]) MIL_TAB_AFTER[MIL_TAB](); } catch (e) { console.warn('mil panel', e); }
 }
+// re-render on the game clock only when the player is not typing in the panel
+function milPanelRefresh() {
+    const m = document.getElementById('mil-modal'); if (!m || m.classList.contains('hidden')) return;
+    const ae = document.activeElement; if (ae && m.contains(ae) && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName)) return;
+    if (MIL_EDIT) return;
+    renderMilPanel();
+}
+const MIL_TAB_HTML = {}, MIL_TAB_AFTER = {};
+let MIL_EDIT = '', MIL_MSG = null, MIL_FORM = { comp: {}, name: '', base: '', crew: true };
 let MIL_RTYPE = 'infantry', MIL_RTROOPS = 0, MIL_RCOUNT = 1, MIL_RBASE = '', MIL_SPLIT = '', MIL_WSORT = 'rank';
 
 // ---------- buying equipment for a formation you already have ----------
@@ -20729,34 +20766,76 @@ function equipDeliveries() {
 }
 
 // ---------- dividing and joining formations ----------
-function splitFormHTML(u) {
+function splitFormHTML(u, card) {
+    // split off any part of a formation (any asset), name the detachment; on the map card or in the Forces list
     const ks = ASSET_KEYS.filter(([k]) => (u[k] || 0) > 0);
-    return `<div class="mil-split"><div class="mr-sub" style="margin-bottom:4px">Split off a new formation from <b>${esc(u.name)}</b> — choose how much of each it takes:</div>
-        <div class="mil-fields">${ks.map(([k, l]) => `<label>${esc(l)} (of ${u[k].toLocaleString()}) <input type="number" min="0" max="${u[k]}" step="1" id="spl-${k}" value="${Math.floor(u[k] / 2)}"></label>`).join('')}</div>
+    const inp = ([k, l]) => `<label>${esc(l)} <span class="mr-sub">of ${u[k].toLocaleString()}</span><input type="number" min="0" max="${u[k]}" step="1" id="spl-${k}" value="${Math.floor(u[k] / 2)}" class="mil-in" style="width:${card ? 74 : 110}px"></label>`;
+    if (card) return `<div class="sc-form"><div style="width:100%;font-size:10.5px;color:#cdbf95">Split off a detachment from <b>${esc(u.name)}</b>:</div>${ks.map(inp).join('')}
+        <input id="spl-name" maxlength="60" placeholder="name (optional)" value="" style="flex:1;min-width:120px"><button type="button" class="gs-btn gs-btn-primary" onclick="splitFromForm('${u.id}')">✂ Split off</button>
+        <span style="font-size:10.5px;color:#cdbf95">or evenly into</span><input type="number" id="spl-n" min="2" max="20" value="2" style="width:44px"><button type="button" class="gs-btn" onclick="splitEven('${u.id}', +document.getElementById('spl-n').value)">parts</button></div>`;
+    return `<div class="mil-split"><div class="mr-sub" style="margin-bottom:4px">Split off a new formation from <b>${esc(u.name)}</b> — choose how much of each it takes (crews come along automatically):</div>
+        <div class="mil-fields">${ks.map(inp).join('')}<label>Name <input class="mil-in" id="spl-name" maxlength="60" placeholder="optional" style="width:170px"></label></div>
         <div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary" onclick="splitFromForm('${u.id}')">✂ Split off</button>
         <span class="mr-sub" style="align-self:center">or divide everything evenly into</span><input type="number" id="spl-n" min="2" max="20" value="2" class="tc-in" style="width:56px"><button type="button" class="gs-btn" onclick="splitEven('${u.id}', +document.getElementById('spl-n').value)">formations</button>
-        <button type="button" class="gs-btn" onclick="MIL_SPLIT='';renderMilPanel()">Cancel</button></div></div>`;
+        <button type="button" class="gs-btn" onclick="MIL_EDIT='';renderMilPanel()">Cancel</button></div></div>`;
+}
+// reinforce a formation with troops and equipment from the national reserve
+function addFormHTML(u) {
+    const R = resOf(), ks = ASSET_KEYS.filter(([k]) => (R[k] || 0) > 0);
+    if (!ks.length) return `<div class="mil-split"><div class="mr-sub">The national reserve is empty — buy or produce equipment and recruit soldiers in the Procure tab.</div></div>`;
+    return `<div class="mil-split"><div class="mr-sub" style="margin-bottom:4px">Reinforce <b>${esc(u.name)}</b> from the national reserve:</div>
+        <div class="mil-fields">${ks.map(([k, l]) => `<label>${esc(l)} <span class="mr-sub">(${(R[k] || 0).toLocaleString()} in reserve)</span><input type="number" min="0" max="${R[k]}" value="0" id="add-${k}" class="mil-in" style="width:110px"></label>`).join('')}</div>
+        <div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary" onclick="addFromForm('${u.id}')">＋ Add to ${esc(u.name)}</button><button type="button" class="gs-btn" onclick="MIL_EDIT='';renderMilPanel()">Cancel</button></div></div>`;
+}
+function addFromForm(id) {
+    const parts = {}; ASSET_KEYS.forEach(([k]) => { const el = document.getElementById('add-' + k); if (el) parts[k] = +el.value || 0; });
+    if (reinforceFromReserve(id, parts)) { MIL_EDIT = ''; renderMilPanel(); }
+}
+function reinforceFromReserve(id, parts, quiet) {
+    const u = unitById(id), c = milCleanComp(parts); if (!u) return false;
+    const fail = w => { if (!quiet) flashReply('⚠ ' + esc(w)); return false; };
+    if (!Object.keys(c).length) return fail('Choose what to add.');
+    if (!resHas(c)) return fail('The reserve does not hold that much.');
+    const probe = Object.assign({}, u); ASSET_KEYS.forEach(([k]) => probe[k] = (u[k] || 0) + (c[k] || 0));
+    AD_KEYS.forEach(k => { const m = ASSET[k].msl; if (probe[m] > probe[k] * ASSET[k].mag) { c[m] = Math.max(0, probe[k] * ASSET[k].mag - (u[m] || 0)); probe[m] = (u[m] || 0) + c[m]; } });
+    if (u.baseId) { const b = (state.sites || []).find(s => s.id === u.baseId); if (b) { const f = baseFits(b, [probe]); if (!f.ok) return fail(f.why); } }
+    resTake(c); ASSET_KEYS.forEach(([k]) => u[k] = probe[k]);
+    milRetype(u);
+    u.ready = Math.max(70, (u.ready || 100) - 5);
+    if (!quiet) { playClick(); milNote(`🎖 ${esc(u.name)} reinforced from the reserve: +${esc(Object.keys(c).filter(k => c[k]).map(k => milPl(c[k], k)).join(', '))}.`, 'neutral'); }
+    armyRefreshMap(); return true;
 }
 function detachName(u) { const A = army(), base = u.name.replace(/ — Detachment [A-Z]+$/, ''); const used = A.units.filter(x => x.name.startsWith(base + ' — Detachment ')).length; return `${base} — Detachment ${String.fromCharCode(65 + (used % 26))}`; }
-function splitUnit(id, parts) {
+function splitUnit(id, parts, name, quiet) {
     const u = unitById(id); if (!u) return false;
-    const T = BRIG[u.type], ks = ASSET_KEYS.map(a => a[0]);
+    const fail = w => { if (!quiet) flashReply('⚠ ' + esc(w)); return false; };
+    if (u.status === 'training') return fail('Units in training cannot be split.');
+    const ks = ASSET_KEYS.map(a => a[0]);
     ks.forEach(k => parts[k] = clamp(Math.round(+parts[k] || 0), 0, u[k] || 0));
-    if (!ks.some(k => parts[k] > 0)) { flashReply('⚠ The new formation needs at least something: troops, vehicles, aircraft or ships.'); return false; }
-    if (!ks.some(k => (u[k] || 0) - parts[k] > 0)) { flashReply('⚠ That would move everything — leave something in the original formation.'); return false; }
-    if (T.sea && !SHIP_KEYS.some(k => parts[k] > 0)) { flashReply('⚠ A naval detachment needs at least one ship.'); return false; }
-    if (T.sea && SHIP_KEYS.every(k => (u[k] || 0) - parts[k] <= 0)) { flashReply('⚠ Leave at least one ship in the original group.'); return false; }
-    if ((u.troops || 0) > 0 && !parts.troops && ks.some(k => k !== 'troops' && parts[k] > 0)) { flashReply('⚠ Vehicles, aircraft and ships need crews — give the new formation some troops too.'); return false; }
-    const A = army(), nu = Object.assign({}, u, { id: 'u' + (++A.seq), name: detachName(u), path: u.path ? JSON.parse(JSON.stringify(u.path)) : null });
+    if (!ks.some(k => parts[k] > 0)) return fail('The new formation needs at least something: troops, vehicles, aircraft or ships.');
+    // crews go with their vehicles, aircraft and ships when the formation has the people
+    const need = crewNeed(parts), have = u.troops || 0;
+    if (parts.troops < need && have > 0) parts.troops = Math.min(have, need);
+    if (!ks.some(k => (u[k] || 0) - parts[k] > 0)) return fail('That would move everything — leave something in the original formation.');
+    const sea = unitDomain(u) === 'sea';
+    if (sea && !SHIP_KEYS.some(k => parts[k] > 0) && SHIP_KEYS.every(k => (u[k] || 0) - parts[k] > 0) && ks.some(k => !SHIP_KEYS.includes(k) && parts[k] > 0) && !u.baseId) return fail('At sea, only ships can leave a naval group — dock at a naval base first to take troops or aircraft off.');
+    // missiles stay with their batteries
+    AD_KEYS.forEach(k => { const m = ASSET[k].msl; parts[m] = Math.min(parts[m], parts[k] * ASSET[k].mag); });
+    const A = army(), nu = Object.assign({}, u, { id: 'u' + (++A.seq), name: String(name || '').replace(/[<>]/g, '').trim().slice(0, 60) || detachName(u), path: u.path ? JSON.parse(JSON.stringify(u.path)) : null });
     ks.forEach(k => { nu[k] = parts[k]; u[k] = (u[k] || 0) - parts[k]; });
-    if (!nu.baseId && u.status !== 'moving') { nu.lat += 0.08; nu.lng += 0.1; }
+    [u, nu].forEach(milRetype);
+    // a detachment that cannot stay in this kind of base (jets off a carrier in port, ships at an army base) waits beside it
+    let note = '';
+    if (nu.baseId) { const b = (state.sites || []).find(s => s.id === nu.baseId); if (b && !baseTypesFor(nu).includes(b.type)) { nu.baseId = null; nu.status = 'deployed'; nu.lat += 0.06; nu.lng += 0.08; note = ` It waits beside ${b.name} — send it to ${baseTypesFor(nu).map(t => 'a ' + BASE_TYPE_WORD[t]).join(' or ')}.`; } }
+    if (!nu.baseId && u.status !== 'moving' && !note) { nu.lat += 0.08; nu.lng += 0.1; }
     A.units.push(nu);
-    logEvent(`🪖 ${esc(nu.name)} formed from ${esc(u.name)}: ${esc(unitKit(nu))}.`, 'neutral');
-    return true;
+    if (!quiet) milNote(`✂ ${esc(nu.name)} split off from ${esc(u.name)}: ${esc(unitKit(nu))}.${esc(note)}`, 'neutral');
+    return nu;
 }
 function splitFromForm(id) {
     const parts = {}; ASSET_KEYS.forEach(([k]) => { const el = document.getElementById('spl-' + k); parts[k] = el ? +el.value : 0; });
-    playClick(); if (splitUnit(id, parts)) { MIL_SPLIT = ''; armyRefreshMap(); renderMilPanel(); }
+    const nm = (document.getElementById('spl-name') || {}).value;
+    playClick(); if (splitUnit(id, parts, nm)) { MIL_EDIT = ''; SC_MODE = ''; SC_SIG = ''; armyRefreshMap(); renderMilPanel(); }
 }
 function splitEven(id, n) {
     const u = unitById(id); n = Math.round(+n); if (!u || !(n >= 2)) return;
@@ -20764,25 +20843,34 @@ function splitEven(id, n) {
     if (n < 2) { flashReply('⚠ This formation is too small to divide.'); return; }
     playClick();
     for (let i = n; i >= 2; i--) { const parts = {}; ASSET_KEYS.forEach(([k]) => parts[k] = Math.floor((u[k] || 0) / i)); if (!splitUnit(id, parts)) break; }
-    MIL_SPLIT = ''; armyRefreshMap(); renderMilPanel();
+    MIL_EDIT = ''; SC_MODE = ''; SC_SIG = ''; armyRefreshMap(); renderMilPanel();
 }
-function mergeSelected() {
-    const U = selUnits().filter(u => u.status !== 'training' && u.status !== 'moving');
-    const groups = {};
-    U.forEach(u => { const k = u.type + '|' + (u.baseId || Math.round(u.lat * 4) + ',' + Math.round(u.lng * 4)); (groups[k] = groups[k] || []).push(u); });
-    let merged = 0;
-    Object.values(groups).forEach(g => {
-        if (g.length < 2) return;
-        const keep = g[0];
-        g.slice(1).forEach(x => { ASSET_KEYS.forEach(([k]) => keep[k] = (keep[k] || 0) + (x[k] || 0)); keep.ready = Math.min(keep.ready || 100, x.ready || 100); army().units.splice(army().units.indexOf(x), 1); merged++; });
-        keep.name = keep.name.replace(/ — Detachment [A-Z]+$/, '');
-        logEvent(`🪖 ${g.length} formations merged into ${esc(keep.name)}: ${esc(unitKit(keep))}.`, 'neutral');
-    });
-    playClick();
-    if (!merged) flashReply('⚠ Select two or more formations of the same type that are in the same base or place (moving units cannot merge).');
-    army().sel = army().sel.filter(id => unitById(id)); armyRefreshMap(); renderMilPanel();
+// join formations of any kind (troops with tanks, ships with aircraft, AD with a brigade) that stand in the same base or place
+function mergeUnits(U, name, quiet) {
+    const fail = w => { if (!quiet) flashReply('⚠ ' + esc(w)); return false; };
+    U = (U || []).filter(Boolean);
+    if (U.length < 2) return fail('Select two or more formations to merge.');
+    if (U.some(u => u.status === 'training')) return fail('Formations still in training cannot merge yet.');
+    if (U.some(u => u.status === 'moving')) return fail('Halt the moving formations first — units merge where they stand.');
+    const k0 = U[0], same = U.every(u => (k0.baseId ? u.baseId === k0.baseId : !u.baseId && km(u, k0) <= 40));
+    if (!same) return fail('Formations merge in the same base, or within ~40 km of each other in the field. Move them together first.');
+    const keep = U.slice().sort((a, b) => unitPower(b) - unitPower(a))[0], sum = {};
+    ASSET_KEYS.forEach(([k]) => sum[k] = U.reduce((s, u) => s + (u[k] || 0), 0));
+    if (keep.baseId) { const b = (state.sites || []).find(s => s.id === keep.baseId); if (b && !baseTypesFor(sum).includes(b.type)) return fail(`The merged formation (${domainWord(sum)}) could not stay at ${b.name}, ${b.type === 'naval' ? 'a naval base' : b.type === 'airbase' ? 'an air base' : 'an army base'}.`); }
+    const A = army();
+    U.forEach(x => { if (x !== keep) { A.units.splice(A.units.indexOf(x), 1); keep.ready = Math.min(keep.ready || 100, x.ready || 100); } });
+    ASSET_KEYS.forEach(([k]) => keep[k] = sum[k]);
+    if (U.some(u => u.type !== keep.type)) keep.type = typeForComp(sum); else milRetype(keep);
+    keep.name = String(name || '').replace(/[<>]/g, '').trim().slice(0, 60) || keep.name.replace(/ — Detachment [A-Z]+$/, '');
+    A.sel = [keep.id];
+    if (!quiet) { playClick(); milNote(`⧉ ${U.length} formations merged into ${esc(keep.name)}: ${esc(unitKit(keep))}.`, 'neutral'); }
+    armyRefreshMap(); renderMilPanel();
+    return keep;
 }
-
+function mergeSelected(name) { return mergeUnits(selUnits(), name); }
+// a formation whose make-up changed takes the type that fits it (speed, icon, base rules follow the assets anyway)
+function typeDomain(t) { const T = BRIG[t]; return !T ? 'land' : T.sea ? 'sea' : ['airwing', 'airgroup'].includes(t) ? 'air' : t === 'aviation' ? 'heli' : 'land'; }
+function milRetype(x) { const T = BRIG[x.type]; if (!T || T.custom || unitDomain(x) !== typeDomain(x.type) || (x.type === 'armored' && !x.tanks)) x.type = typeForComp(x); }
 // ---------- every country's armed forces ----------
 function worldForcesHTML() {
     const R = worldRanks(), me = state.playerIso;
@@ -20847,7 +20935,7 @@ function milReinforcePrompt(id) {
     const _tm = tickMoves;
     tickMoves = function () { const r = _tm.apply(this, arguments); try { if (state.phase === 'playing') armyTick(); } catch (e) { console.warn('army', e); } return r; };
     const _dt = dailyTick;
-    dailyTick = function () { const r = _dt.apply(this, arguments); try { if (state.phase === 'playing') { armyDaily(); equipDeliveries(); if (state.dayIndex % 2 === 0) renderMilPanel(); } } catch (e) { console.warn('army daily', e); } return r; };
+    dailyTick = function () { const r = _dt.apply(this, arguments); try { if (state.phase === 'playing') { armyDaily(); equipDeliveries(); if (state.dayIndex % 2 === 0) milPanelRefresh(); } } catch (e) { console.warn('army daily', e); } return r; };
     const _me = monthlyEconomy;
     monthlyEconomy = function () { const r = _me.apply(this, arguments); try { armyMonthly(); } catch (e) { console.warn('army monthly', e); } return r; };
     const _sg = showGameUI;
@@ -20862,9 +20950,10 @@ function milReinforcePrompt(id) {
     sitePopupHTML = function (site) {
         let h = _sp(site);
         try { if (site.owner === state.playerIso && isMilBase(site) && state.army) { const us = unitsAt(site);
-            h = h.replace(/<\/div>\s*$/, `<div class="sp-mil"><div class="mr-sub">${baseLoad(site).toLocaleString()} / ${baseCap(site).toLocaleString()} troops · ${us.length} unit${us.length === 1 ? '' : 's'}</div>
+            h = h.replace(/<\/div>\s*$/, `<div class="sp-mil"><div class="mr-sub">${esc(baseCapText(site))} · ${us.length} unit${us.length === 1 ? '' : 's'}</div>
                 <button type="button" class="gs-btn" onclick="selectBaseUnits('${site.id}')" ${us.length ? '' : 'disabled'}>Select garrison</button>
                 <button type="button" class="gs-btn" onclick="sendToBase('${site.id}')">⌂ Move selected here</button>
+                <button type="button" class="gs-btn" onclick="MIL_FORM.base='${site.id}';openMilPanel('reserve')">🎖 Form unit here</button>
                 <button type="button" class="gs-btn" onclick="openMilPanel('bases')">⚔ Manage</button></div></div>`); } } catch (e) { }
         return h;
     };
@@ -20950,7 +21039,7 @@ function baseFits(b, units) {
     if (!b || !isMilBase(b)) return { ok: false, why: 'That is not a usable military base.' };
     for (const u of units) if (!baseTypesFor(u).includes(b.type)) {
         const want = baseTypesFor(u).map(t => BASE_TYPE_WORD[t]).join(' or ');
-        return { ok: false, why: `${u.name || 'This formation'} (${domainWord(u)}) is based at ${want === 'naval base' ? 'a naval base' : want === 'air base' ? 'an air base' : 'an ' + want}, not at ${b.type === 'airbase' ? 'an' : 'a'} ${BASE_TYPE_WORD[b.type] || b.type}.` };
+        return { ok: false, why: `${u.name || 'This formation'} (${domainWord(u)}) is based at ${want === 'army base' ? 'an army base' : want === 'naval base' ? 'a naval base' : want === 'air base' ? 'an air base' : 'an ' + want}, not at ${b.type === 'airbase' ? 'an air base' : b.type === 'naval' ? 'a naval base' : 'an army base'}.` };
     }
     const C = baseCaps(b), L = baseLoads(b, units);
     const add = { troops: units.reduce((s, u) => s + (u.troops || 0), 0), air: units.reduce((s, u) => s + unitAircraft(u), 0), ships: units.reduce((s, u) => s + shipsOf(u), 0) };
@@ -21253,7 +21342,7 @@ function milSpritesInit() {
         .mil-res { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 5px; margin: 8px 0; }
         .mil-res > div { background: rgba(0,0,0,.25); border: 1px solid #3b3726; padding: 5px 6px; display: flex; gap: 6px; align-items: center; }
         .mil-res > div.z { opacity: .4; } .mil-res svg { flex-shrink: 0; } .mil-res b { display: block; font: 600 14px 'Oswald','Arial Narrow',Arial,sans-serif; color: #f3d98a; line-height: 1.05; }
-        .mil-res span { font-size: 9.5px; color: #ab9f80; text-transform: uppercase; letter-spacing: .04em; line-height: 1.1; }
+        .mil-res span { display: block; font-size: 10px; color: #ab9f80; line-height: 1.15; }
         .mil-grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
         .mil-grid2 label { font-size: 11px; color: #cdbf95; display: flex; flex-direction: column; gap: 2px; }
         .mil-grid2 input, .mil-grid2 select, .mil-in { background: #15160f; border: 1px solid #5c5236; color: #ecdcae; padding: 4px 6px; font-size: 12px; width: 100%; }
@@ -21323,6 +21412,72 @@ moveIcon = function (mv) {
     const hd = mv.from && mv.to ? milHeading(mv.status === 'returning' ? mv.from : mv.from, mv.to) : 0;
     return L.divIcon({ className: 'site-pin', html: `<div class="brig mvb ${cls}${mine ? ' mine' : ' foreign'}" title="${esc(mv.name || '')}">${milMarkerSvg(MOVE_SYM[mv.unitType] || 'inf', side, hd, 30)}</div>`, iconSize: [30, 30], iconAnchor: [15, 15], popupAnchor: [0, -13] });
 };
+
+// ---------- the Reserve tab: the national stockpile and the "Form unit" dialog ----------
+const RES_ORDER = ['troops', 'tanks', 'ifv', 'guns', 'helis', 'jets', 'stealth', 'bombers', 'drones', 'carriers', 'destroyers', 'frigates', 'adSR', 'adMR', 'adLR', 'mslSR', 'mslMR', 'mslLR'];
+function milIncomingHTML() {
+    const A = army(), L = (A.orders || []).filter(o => o.dest === 'reserve').sort((a, b) => a.day - b.day);
+    const rows = L.slice(0, 12).map(o => `<div class="mr-sub">${sprIcon(ASSET[o.key] ? ASSET[o.key].spr : 'soldier', 13)} +${esc(milPl(o.n, o.key))} · ${o.src === 'recruit' ? 'in training' : 'import from ' + esc(shortName(o.seller || ''))} · ${fmtDate(dateIn(Math.max(0, o.day - state.dayIndex)))}</div>`);
+    try { milProdIncoming().forEach(t => rows.push(`<div class="mr-sub">${t}</div>`)); } catch (e) { }
+    return rows.length ? `<div class="wm-card"><div class="wm-ctop"><b>Incoming</b><span class="mr-sub">purchases, recruits and factory output on their way into the reserve</span></div>${rows.join('')}${L.length > 12 ? `<div class="mr-sub">+${L.length - 12} more</div>` : ''}</div>` : '';
+}
+MIL_TAB_HTML.reserve = function () {
+    const R = resOf(), F = MIL_FORM;
+    const tiles = RES_ORDER.map(k => { const n = R[k] || 0, spr = ASSET[k].spr; return `<div class="${n ? '' : 'z'}">${sprIcon(spr, 22)}<div><b>${k === 'troops' ? fmtK(n) : n.toLocaleString()}</b><span>${esc(assetLabel(k))}</span></div></div>`; }).join('');
+    const avail = RES_ORDER.filter(k => (R[k] || 0) > 0);
+    Object.keys(F.comp).forEach(k => { if (!(R[k] > 0)) delete F.comp[k]; else F.comp[k] = Math.min(F.comp[k], R[k]); });
+    const form = avail.length ? `<div class="wm-card"><div class="wm-ctop"><b>🎖 Form a unit</b><span class="mr-sub">take any mix from the reserve — troops with tanks make a battalion; aircraft go to air bases, warships to naval bases</span></div>
+        <div class="mil-grid2" style="margin-top:6px">${avail.map(k => `<label>${esc(assetLabel(k))} <span class="mr-sub">${(R[k] || 0).toLocaleString()} available</span><input type="number" min="0" max="${R[k]}" step="${k === 'troops' ? 100 : 1}" value="${F.comp[k] || 0}" oninput="MIL_FORM.comp['${k}']=Math.max(0,Math.min(${R[k]},Math.round(+this.value||0)));milFormUpd()"></label>`).join('')}</div>
+        <div class="mil-grid2" style="margin-top:8px"><label>Name <input id="mf-name" maxlength="60" placeholder="e.g. Iron Wolves Battalion" value="${esc(F.name || '')}" oninput="MIL_FORM.name=this.value;milFormUpd()"></label>
+        <label>Station at <select id="mf-base" onchange="MIL_FORM.base=this.value;milFormUpd()"></select></label>
+        <label style="flex-direction:row;align-items:center;gap:6px;margin-top:14px"><input type="checkbox" style="width:auto" ${F.crew !== false ? 'checked' : ''} onchange="MIL_FORM.crew=this.checked;milFormUpd()"> crews from the reserve's troops</label></div>
+        <div id="mf-info" class="mil-note" style="margin:6px 0"></div>
+        <div class="mil-acts"><button type="button" class="gs-btn gs-btn-primary mil-go" onclick="milFormGo()">🎖 Form & station</button><button type="button" class="gs-btn" onclick="MIL_FORM={comp:{},name:'',base:MIL_FORM.base,crew:true};renderMilPanel()">Clear</button></div></div>`
+        : `<div class="mil-note">The reserve is empty. Recruit soldiers and buy or produce equipment in the Procure tab; deliveries land here.</div>`;
+    return `<div class="mil-note">The national reserve holds every soldier and weapon that is not in a formation: purchases, recruits and factory output arrive here first. Organise them into named units and station them at your bases.</div>
+        <div class="mil-res">${tiles}</div>${milIncomingHTML()}${form}`;
+};
+// live update of the form: which bases fit this mix, crews, speed — without re-rendering the panel
+function milFormUpd() {
+    const sel = document.getElementById('mf-base'), info = document.getElementById('mf-info'); if (!sel || !info) return;
+    const F = MIL_FORM, comp = milCleanComp(F.comp), need = crewNeed(comp);
+    if ((comp.troops || 0) < need && F.crew !== false) comp.troops = need;
+    const probe = Object.assign({ name: F.name || 'The new formation' }, comp), has = Object.keys(comp).length;
+    const bs = has ? basesFor([probe]) : myBases();
+    sel.innerHTML = bs.length ? bs.map(b => { const fit = !has || baseFits(b, [probe]).ok; return `<option value="${b.id}" ${fit ? '' : 'disabled'} ${F.base === b.id ? 'selected' : ''}>${esc(b.name)} — ${esc(baseCapText(b))}${fit ? '' : ' (no room)'}</option>`; }).join('') : `<option value="">no ${esc(baseTypesFor(probe).map(t => BASE_TYPE_WORD[t]).join(' / '))} of yours</option>`;
+    if (!bs.some(b => b.id === F.base && (!has || baseFits(b, [probe]).ok))) { const b = bs.find(x => !has || baseFits(x, [probe]).ok); F.base = b ? b.id : ''; if (b) sel.value = b.id; }
+    if (!has) { info.innerHTML = 'Choose quantities above.'; return; }
+    const R = resOf(), short = Object.keys(comp).filter(k => (R[k] || 0) < comp[k]);
+    info.innerHTML = `${compHTML(comp, { h: 16 })}<br>→ <b>${esc(F.name || milDefaultNamePreview(comp))}</b> · ${esc(domainWord(probe))} · ${unitSpeed(probe).toLocaleString()} km/day · power ${unitPower(probe).toFixed(2)}`
+        + (need ? ` · crews needed ${need.toLocaleString()}${F.crew === false && (milCleanComp(F.comp).troops || 0) < need ? ' <span style="color:#e8a08a">(add troops)</span>' : ''}` : '')
+        + (short.length ? `<br><span style="color:#e8a08a">Not enough in the reserve: ${short.map(k => esc(assetLabel(k))).join(', ')}</span>` : '')
+        + (!bs.length ? `<br><span style="color:#e8a08a">You need ${esc(baseTypesFor(probe).map(t => 'a ' + BASE_TYPE_WORD[t]).join(' or '))} for it — build one in the Build tab.</span>` : '');
+}
+function milDefaultNamePreview(c) { const A = army(), keep = JSON.stringify(A.nameSeq || {}); const n = milDefaultName(c); A.nameSeq = JSON.parse(keep); return n; }
+function milFormGo() {
+    const r = formUnit({ comp: MIL_FORM.comp, name: MIL_FORM.name, baseId: MIL_FORM.base, autoCrew: MIL_FORM.crew !== false, quiet: true });
+    MIL_MSG = r.ok ? [true, `🎖 <b>${esc(r.unit.name)}</b> formed at ${esc((state.sites.find(s => s.id === r.unit.baseId) || {}).name || '')}: ${esc(unitKit(r.unit))}.`] : [false, '⚠ ' + esc(r.why)];
+    if (r.ok) { playClick(); milNote(`🎖 ${esc(r.unit.name)} formed from the reserve: ${esc(unitKit(r.unit))}.`, 'good'); MIL_FORM = { comp: {}, name: '', base: MIL_FORM.base, crew: MIL_FORM.crew }; }
+    renderMilPanel();
+}
+// how far a moving formation still has to go along its route (km)
+function milPathLeft(u) {
+    if (!u.path) return 0;
+    const pts = (u.path.pts && u.path.pts.length) ? u.path.pts : [[u.path.to.lat, u.path.to.lng]];
+    let d = 0, p = u; pts.forEach(q => { const n = { lat: q[0], lng: q[1] }; d += km(p, n); p = n; }); return d;
+}
+// ---------- air-defence reloads: interceptors from the reserve into the batteries ----------
+function adMagRoom(u) { const o = {}; AD_KEYS.forEach(k => { const m = ASSET[k].msl; o[m] = Math.max(0, (u[k] || 0) * ASSET[k].mag - (u[m] || 0)); }); return o; }
+function refillAD(ids, quiet) {
+    const U = (ids && ids.length ? ids.map(unitById) : myUnits()).filter(u => u && AD_KEYS.some(k => (u[k] || 0) > 0));
+    const R = resOf(), got = { mslSR: 0, mslMR: 0, mslLR: 0 }, missing = { mslSR: 0, mslMR: 0, mslLR: 0 };
+    U.forEach(u => { const room = adMagRoom(u); Object.keys(room).forEach(m => { const n = Math.min(room[m], R[m] || 0); if (n > 0) { u[m] = (u[m] || 0) + n; R[m] -= n; got[m] += n; } missing[m] += room[m] - Math.max(0, n); }); });
+    const g = Object.keys(got).filter(m => got[m]), miss = Object.keys(missing).filter(m => missing[m] > 0);
+    const msg = !U.length ? 'No air-defence batteries selected.' : g.length ? `⟳ Reloaded ${g.map(m => `${got[m]} ${m.slice(3)} interceptors`).join(', ')}.${miss.length ? ` Still short: ${miss.map(m => `${missing[m]} ${m.slice(3)}`).join(', ')} — buy or produce more interceptor missiles.` : ''}` : miss.length ? `⚠ No interceptors left in the reserve (${miss.map(m => `${missing[m]} ${m.slice(3)} needed`).join(', ')}). Buy them abroad or produce them at a missile factory (Procure tab).` : 'All batteries are fully loaded.';
+    if (!quiet) { flashReply(msg); if (g.length) milNote(msg, 'neutral'); }
+    if (g.length) { SC_SIG = ''; armyRefreshMap(); renderMilPanel(); }
+    return { ok: g.length > 0, got, missing, msg };
+}
 
 // ---- intel panel: the armed forces of the selected country ----
 function milStripHTML(iso) {
