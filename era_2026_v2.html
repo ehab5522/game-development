@@ -20262,6 +20262,13 @@ function nsaAddBtn(label, order) { return `<button type="button" class="gs-btn" 
 const NSA_LBL = { 'stat-approval': 'Support', 'stat-gdp': 'Shadow economy', 'stat-growth': 'Fighters', 'stat-treasury': 'War chest', 'stat-pop': 'Under control', 'stat-gdp-capita': 'Heat' };
 function nsaBodyClass() {
     const on = nsaActive(); document.body.classList.toggle('nso', on);
+    try { if (typeof TIPS !== 'undefined' && !TIPS['res:War chest']) Object.assign(TIPS, {
+        'res:Support': 'Support\nHow much of the population in the areas you hold backs the movement (0–100%). Extortion, heat and civilian losses lower it; aid to locals, clinics, propaganda and victories raise it.',
+        'res:Shadow economy': 'Shadow economy\nThe yearly output of the land you control — the base of black-market trade, smuggling and extortion. It grows with the land you hold.',
+        'res:Fighters': 'Fighters\nArmed members of your cells. New ones come from the recruit pool (organically every month, or through recruitment drives at safehouses and camps).',
+        'res:War chest': 'War chest\nThe movement\'s money: illicit income minus fighters\' pay and site upkeep. Orders, recruitment and new sites are paid from it.',
+        'res:Under control': 'Under control\nPeople living in the areas your fighters hold.',
+        'res:Heat': 'Heat\nHow hard the government and foreign intelligence are hunting you (0–100). High heat exposes safehouses and camps, brings raids and sanctions, and makes cells wither. Lie low to cool down.' }); } catch (e) { }
     Object.keys(NSA_LBL).forEach(id => { const v = document.getElementById(id), l = v && v.parentElement && v.parentElement.querySelector('.gs-res-lbl'); if (!l) return; if (l.dataset.orig === undefined) l.dataset.orig = l.textContent; l.textContent = on ? NSA_LBL[id] : l.dataset.orig; });
     const sw = (sel, html) => { const b = document.querySelector(sel); if (!b) return; if (b.dataset.orig === undefined) b.dataset.orig = b.innerHTML; b.innerHTML = on ? html : b.dataset.orig; };
     sw('#top-right-controls button[onclick="openSociety()"]', '🏴<span class="tb-lbl"> Movement</span>');
