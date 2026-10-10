@@ -17682,7 +17682,7 @@ const NUKE_SELLERS = { smuggle: { name: 'Smuggling network', price: 30e6, risk: 
 // balance: own enrichment ≈ $8M per EU over a plant's first 3 years; legal reactor fuel $4M per EU (≈ $8M a month per reactor,
 // close to a real 1 GW plant's fuel bill), ×1.5 when bought automatically at short notice; black market $22–30M per EU and risky.
 const NUKE_LEU_PRICE = 4e6, NUKE_BM_MONTH = 50, NUKE_WEST = ['USA', 'GBR', 'FRA', 'DEU', 'JPN', 'CAN', 'AUS', 'ITA', 'KOR', 'NLD'];
-['nuke'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
+['nuke', 'bmSanc'].forEach(k => { if (!SAVE_FIELDS.includes(k)) SAVE_FIELDS.push(k); });
 
 function nukeSeed() {
     const me = state.playerIso, S = NUKE_START[me];
@@ -17917,7 +17917,8 @@ function nukeReact(type, ctx = {}) {
             const sn = ctx.seller === 'smuggle' ? 'a nuclear smuggling network' : esc(shortName(ctx.seller));
             logEvent(`☢ Western intelligence services expose a black-market purchase of enriched uranium by ${nm} from ${sn}. The IAEA demands an explanation.`, 'bad');
             [['USA', -10], ['ISR', -14], ['GBR', -6], ['FRA', -6], ['DEU', -6]].forEach(([x, d]) => { if (x !== me) addRel(me, x, d); });
-            state.sanctionsOnMe = (state.sanctionsOnMe || 0) + 2;
+            // lighter: +1 per exposure, and black-market exposures alone never pile up more than 6 sanction points
+            state.bmSanc = state.bmSanc || 0; if (state.bmSanc < 6) { state.sanctionsOnMe = (state.sanctionsOnMe || 0) + 1; state.bmSanc++; }
             if (ctx.seller !== 'smuggle' && WORLD[ctx.seller]) { ['USA', 'GBR', 'FRA'].forEach(x => addRel(ctx.seller, x, -8)); addRel(me, ctx.seller, -3); }
             angry(['USA', 'ISR'].filter(x => x !== me), 12); fear(riv, 10);
             say('USA', 'sanctions', 'black-market uranium');
@@ -24173,6 +24174,34 @@ async function aiInterpretArmy(o) {
         }
     } catch (e) { console.warn('ai army apply', e); }
     try { renderQueue(); updateCapacity(); } catch (e) { }
+}
+// ---------- plain-language idioms the classifier misreads: rephrase them to orders it already understands ----------
+function orderIdiom(text) {
+    let t = String(text || ''); const s = t.toLowerCase();
+    // "flatten / level / raze their air base in Israel" → a strike (demolition stays for your own buildings: no foreign country named)
+    if (/\b(flatten|level|obliterate|raze|wipe out|annihilate)\b/.test(s)) { let f = []; try { f = detectCountries(t).filter(x => x.iso !== state.playerIso); } catch (e) { } if (f.length || /\b(their|enemy|hostile)\b/.test(s)) t = t.replace(/\b(flatten|level|obliterate|raze|wipe out|annihilate)\b/i, 'strike'); }
+    // "scrap / abolish the tax on bread" → a tax cut (a policy, not a spending order)
+    t = t.replace(/\b(scrap|abolish|eliminate|remove|drop|axe)\s+(the\s+)?((?:[a-z-]+\s+){0,2})tax(es)?\s+on\b/i, 'cut taxes on');
+    // "flatten / fight / tame inflation" → tighter money
+    if (/\binflation\b/.test(s) && /\b(flatten|reduce|fight|curb|tame|lower|bring down|tackle|beat|control|stop|cut)\b/.test(s) && !/\binterest rates?\b/.test(s)) t = 'raise interest rates';
+    // "negotiate / mediate a ceasefire between Israel and Hamas" → the Gaza peace track
+    if (/\b(ceasefire|truce|peace|mediate|armistice)\b/.test(s)) t = t.replace(/\bhamas\b/ig, 'Gaza').replace(/\b(negotiate|broker|mediate|seek|push for|call for)\b/i, 'Propose');
+    return t;
+}
+// "scrap / withdraw from / tear up the nuclear deal" → a diplomatic step, free (not a military posture)
+const DEAL_EXIT_RX = /\b(scrap|withdraw from|pull out of|exit|leave|quit|tear up|abandon|denounce|cancel|renounce|walk away from)\b.*\b(deal|agreement|accord|treaty|jcpoa|pact|framework)\b/i;
+{
+    const _co = classifyOrder;
+    classifyOrder = function (text) {
+        try {
+            if (!(typeof nsaActive === 'function' && nsaActive()) && DEAL_EXIT_RX.test(String(text || '')) && !/\btrade\b/i.test(String(text || ''))) {
+                const b = classifyOrderBase(text);
+                return { ...b, cat: 'diplomacy', kind: 'engage', covert: false, intel: null, targets: (b.targets || []).map(x => ({ ...x, stance: 'hostile' })) };
+            }
+            const t2 = orderIdiom(text); if (t2 !== text) return _co.call(this, t2);
+        } catch (e) { console.warn('idiom', e); }
+        return _co.apply(this, arguments);
+    };
 }
 {
     const _co = classifyOrder;
